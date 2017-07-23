@@ -99,6 +99,7 @@ impl FieldShape {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common;
 
     #[test]
     fn test_field_shape_grp() {
@@ -125,6 +126,33 @@ mod tests {
             assert_eq!(n, 4);
             assert_eq!(sum, 4 + 7 + 10 + 13);
             assert_eq!(grp.start, 4);
+        }
+    }
+
+    #[test]
+    fn test_field_shape() {
+        {
+            let clues_vec = vec![
+                vec![true , true , true , true ],
+                vec![true , false, false, false],
+                vec![true , false, false, false],
+                vec![true , true , false, false],
+                vec![true , false, false, false],
+                vec![true , false, false, false],
+            ];
+            let clues = common::vec_to_grid(&clues_vec);
+            let shape = FieldShape::new(&clues);
+
+            assert_eq!(shape.group_to_cells.len(), 9);
+
+            let (g1, g2) = shape.cell_to_groups[Coord { y: 4, x: 1 }];
+            let h1 = shape.clue_locations[g1 as usize];
+            let h2 = shape.clue_locations[g2 as usize];
+            assert!(match (h1, h2) {
+                (ClueLocation::Horizontal(16), ClueLocation::Vertical(13))
+              | (ClueLocation::Vertical(13), ClueLocation::Horizontal(16)) => true,
+                _ => false
+            });
         }
     }
 }
