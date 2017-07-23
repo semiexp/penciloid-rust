@@ -19,6 +19,7 @@ impl Iterator for FieldShapeGrp {
         }
     }
 }
+#[derive(Clone, Copy)]
 pub enum ClueLocation {
     Horizontal(i32),
     Vertical(i32)
@@ -50,9 +51,9 @@ impl FieldShape {
                             step: 1
                         });
                         clue_locations.push(ClueLocation::Horizontal(start - 1));
+                        current_grp_id += 1;
                     }
                     start = -1;
-                    current_grp_id += 1;
                 } else {
                     if start == -1 {
                         start = y * width + x;
@@ -74,14 +75,14 @@ impl FieldShape {
                             step: width
                         });
                         clue_locations.push(ClueLocation::Vertical(start - width));
+                        current_grp_id += 1;
                     }
                     start = -1;
-                    current_grp_id += 1;
                 } else {
                     if start == -1 {
                         start = y * width + x;
                     }
-                    cell_to_groups[Coord { y: y, x: x }].0 = current_grp_id;
+                    cell_to_groups[Coord { y: y, x: x }].1 = current_grp_id;
                 }
             }
         }
