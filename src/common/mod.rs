@@ -145,7 +145,7 @@ impl<T: Clone> IndexMut<usize> for Grid<T> {
 }
 
 #[cfg(test)]
-mod tests_common {
+mod tests {
     use super::*;
 
     #[test]
