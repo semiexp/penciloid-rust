@@ -1,0 +1,129 @@
+use super::super::{Grid, Coord};
+
+#[derive(Clone, Copy)]
+pub struct FieldShapeGrp {
+    start: i32,
+    end: i32,
+    step: i32
+}
+impl Iterator for FieldShapeGrp {
+    type Item = i32;
+    fn next(&mut self) -> Option<i32> {
+        let ret = self.start;
+        self.start += self.step;
+
+        if ret < self.end {
+            Some(ret)
+        } else {
+            None
+        }
+    }
+}
+pub enum ClueLocation {
+    Horizontal(i32),
+    Vertical(i32)
+}
+pub struct FieldShape {
+    pub has_clue: Grid<bool>,
+    pub cell_to_groups: Grid<(i32, i32)>,
+    pub group_to_cells: Vec<FieldShapeGrp>,
+    pub clue_locations: Vec<ClueLocation>
+}
+impl FieldShape {
+    fn new(has_clue: &Grid<bool>) -> FieldShape {
+        let height = has_clue.height();
+        let width = has_clue.width();
+        let mut cell_to_groups = Grid::new(height, width, (-1, -1));
+        let mut group_to_cells = vec![];
+        let mut clue_locations = vec![];
+        let mut current_grp_id = 0;
+
+        // compute horizontal groups        
+        for y in 0..height {
+            let mut start = -1;
+            for x in 0..(width+1) {
+                if x == width || has_clue[Coord { y: y, x: x }] {
+                    if start != -1 {
+                        group_to_cells.push(FieldShapeGrp {
+                            start: start,
+                            end: y * width + x,
+                            step: 1
+                        });
+                        clue_locations.push(ClueLocation::Horizontal(start - 1));
+                    }
+                    start = -1;
+                    current_grp_id += 1;
+                } else {
+                    if start == -1 {
+                        start = y * width + x;
+                    }
+                    cell_to_groups[Coord { y: y, x: x }].0 = current_grp_id;
+                }
+            }
+        }
+
+        // compute vertical groups        
+        for x in 0..width {
+            let mut start = -1;
+            for y in 0..(height+1) {
+                if y == height || has_clue[Coord { y: y, x: x }] {
+                    if start != -1 {
+                        group_to_cells.push(FieldShapeGrp {
+                            start: start,
+                            end: y * width + x,
+                            step: width
+                        });
+                        clue_locations.push(ClueLocation::Vertical(start - width));
+                    }
+                    start = -1;
+                    current_grp_id += 1;
+                } else {
+                    if start == -1 {
+                        start = y * width + x;
+                    }
+                    cell_to_groups[Coord { y: y, x: x }].0 = current_grp_id;
+                }
+            }
+        }
+        
+        FieldShape {
+            has_clue: has_clue.clone(),
+            cell_to_groups: cell_to_groups,
+            group_to_cells: group_to_cells,
+            clue_locations: clue_locations
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_field_shape_grp() {
+        {
+            let mut n = 0;
+            let mut sum = 0;
+            let grp = FieldShapeGrp { start: 3, end: 6, step: 1 };
+            for i in grp {
+                n += 1;
+                sum += i;
+            }
+            assert_eq!(n, 3);
+            assert_eq!(sum, 3 + 4 + 5);
+            assert_eq!(grp.start, 3);
+        }
+        {
+            let mut n = 0;
+            let mut sum = 0;
+            let grp = FieldShapeGrp { start: 4, end: 16, step: 3 };
+            for i in grp {
+                n += 1;
+                sum += i;
+            }
+            assert_eq!(n, 4);
+            assert_eq!(sum, 4 + 7 + 10 + 13);
+            assert_eq!(grp.start, 4);
+        }
+    }
+}
