@@ -1,2 +1,2 @@
-# penciloid-rust
+# puzrs
 Pencil puzzle solvers in Rust
