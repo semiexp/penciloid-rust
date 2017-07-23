@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub, Mul};
+use std::ops::{Add, Sub, Mul, Index, IndexMut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Coord {
@@ -79,6 +79,71 @@ impl Mul<i32> for Dir {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Grid<T: Clone> {
+    height: i32,
+    width: i32,
+    data: Vec<T>
+}
+impl<T: Clone> Grid<T> {
+    pub fn new(height: i32, width: i32, default: T) -> Grid<T> {
+        Grid {
+            height: height,
+            width: width,
+            data: vec![default; (height * width) as usize]
+        }
+    }
+    pub fn height(&self) -> i32 {
+        self.height
+    }
+    pub fn width(&self) -> i32 {
+        self.width
+    }
+    fn index(&self, cd: Coord) -> usize {
+        (cd.y * self.width + cd.x) as usize
+    }
+    fn index_loop(&self, cd: LoopCoord) -> usize {
+        (cd.y * self.width + cd.x) as usize
+    }
+}
+impl<T: Clone> Index<Coord> for Grid<T> {
+    type Output = T;
+    fn index<'a>(&'a self, idx: Coord) -> &'a T {
+        let idx = self.index(idx);
+        &self.data[idx]
+    }
+}
+impl<T: Clone> IndexMut<Coord> for Grid<T> {
+    fn index_mut<'a>(&'a mut self, idx: Coord) -> &'a mut T {
+        let idx = self.index(idx);
+        &mut self.data[idx]
+    }
+}
+impl<T: Clone> Index<LoopCoord> for Grid<T> {
+    type Output = T;
+    fn index<'a>(&'a self, idx: LoopCoord) -> &'a T {
+        let idx = self.index_loop(idx);
+        &self.data[idx]
+    }
+}
+impl<T: Clone> IndexMut<LoopCoord> for Grid<T> {
+    fn index_mut<'a>(&'a mut self, idx: LoopCoord) -> &'a mut T {
+        let idx = self.index_loop(idx);
+        &mut self.data[idx]
+    }
+}
+impl<T: Clone> Index<usize> for Grid<T> {
+    type Output = T;
+    fn index<'a>(&'a self, idx: usize) -> &'a T {
+        &self.data[idx]
+    }
+}
+impl<T: Clone> IndexMut<usize> for Grid<T> {
+    fn index_mut<'a>(&'a mut self, idx: usize) -> &'a mut T {
+        &mut self.data[idx]
+    }
+}
+
 #[cfg(test)]
 mod tests_common {
     use super::*;
@@ -92,5 +157,18 @@ mod tests_common {
         assert_eq!(Dir { y: 1, x: 2 } + Dir { y: 3, x: 5 }, Dir { y: 4, x: 7 });
         assert_eq!(Dir { y: 1, x: 2 } - Dir { y: 3, x: 5 }, Dir { y: -2, x: -3 });
         assert_eq!(Dir { y: 1, x: 2 } * 3, Dir { y: 3, x: 6 });
+    }
+
+    #[test]
+    fn test_grid() {
+        let mut grid = Grid::new(3, 3, 0);
+        assert_eq!(grid.height(), 3);
+        assert_eq!(grid.width(), 3);
+        assert_eq!(grid[LoopCoord { y: 1, x: 1 }], 0);
+        grid[LoopCoord { y: 1, x: 1 }] = 4;
+        assert_eq!(grid[LoopCoord { y: 1, x: 1 }], 4);
+        assert_eq!(grid[LoopCoord { y: 1, x: 0 }], 0);
+        assert_eq!(grid[LoopCoord { y: 2, x: 0 }], 0);
+        assert_eq!(grid[4], 4);
     }
 }
