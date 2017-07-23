@@ -80,7 +80,7 @@ impl Mul<i32> for Dir {
 }
 
 #[derive(Debug, Clone)]
-struct Grid<T: Clone> {
+pub struct Grid<T: Clone> {
     height: i32,
     width: i32,
     data: Vec<T>
