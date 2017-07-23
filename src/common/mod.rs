@@ -143,7 +143,29 @@ impl<T: Clone> IndexMut<usize> for Grid<T> {
         &mut self.data[idx]
     }
 }
-
+#[cfg(test)]
+pub fn vec_to_grid<T>(v: &Vec<Vec<T>>) -> Grid<T> where T: Copy {
+    if v.len() == 0 {
+        panic!("Attempted to convert empty Vec to Grid");
+    }
+    let ref_len = v[0].len();
+    for r in v {
+        if r.len() != ref_len {
+            panic!("Each element in v must contain the same number of elements");
+        }
+    }
+    let mut flat = vec![];
+    for r in v {
+        for &x in r {
+            flat.push(x);
+        }
+    }
+    Grid {
+        height: v.len() as i32,
+        width: ref_len as i32,
+        data: flat
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
