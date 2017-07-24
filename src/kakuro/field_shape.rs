@@ -4,7 +4,7 @@ use super::super::{Grid, Coord};
 pub struct FieldShapeGrp {
     start: i32,
     end: i32,
-    step: i32
+    step: i32,
 }
 impl Iterator for FieldShapeGrp {
     type Item = i32;
@@ -12,23 +12,19 @@ impl Iterator for FieldShapeGrp {
         let ret = self.start;
         self.start += self.step;
 
-        if ret < self.end {
-            Some(ret)
-        } else {
-            None
-        }
+        if ret < self.end { Some(ret) } else { None }
     }
 }
 #[derive(Clone, Copy)]
 pub enum ClueLocation {
     Horizontal(i32),
-    Vertical(i32)
+    Vertical(i32),
 }
 pub struct FieldShape {
     pub has_clue: Grid<bool>,
     pub cell_to_groups: Grid<(i32, i32)>,
     pub group_to_cells: Vec<FieldShapeGrp>,
-    pub clue_locations: Vec<ClueLocation>
+    pub clue_locations: Vec<ClueLocation>,
 }
 impl FieldShape {
     fn new(has_clue: &Grid<bool>) -> FieldShape {
@@ -39,16 +35,16 @@ impl FieldShape {
         let mut clue_locations = vec![];
         let mut current_grp_id = 0;
 
-        // compute horizontal groups        
+        // compute horizontal groups
         for y in 0..height {
             let mut start = -1;
-            for x in 0..(width+1) {
+            for x in 0..(width + 1) {
                 if x == width || has_clue[Coord { y: y, x: x }] {
                     if start != -1 {
                         group_to_cells.push(FieldShapeGrp {
                             start: start,
                             end: y * width + x,
-                            step: 1
+                            step: 1,
                         });
                         clue_locations.push(ClueLocation::Horizontal(start - 1));
                         current_grp_id += 1;
@@ -63,16 +59,16 @@ impl FieldShape {
             }
         }
 
-        // compute vertical groups        
+        // compute vertical groups
         for x in 0..width {
             let mut start = -1;
-            for y in 0..(height+1) {
+            for y in 0..(height + 1) {
                 if y == height || has_clue[Coord { y: y, x: x }] {
                     if start != -1 {
                         group_to_cells.push(FieldShapeGrp {
                             start: start,
                             end: y * width + x,
-                            step: width
+                            step: width,
                         });
                         clue_locations.push(ClueLocation::Vertical(start - width));
                         current_grp_id += 1;
@@ -86,12 +82,12 @@ impl FieldShape {
                 }
             }
         }
-        
+
         FieldShape {
             has_clue: has_clue.clone(),
             cell_to_groups: cell_to_groups,
             group_to_cells: group_to_cells,
-            clue_locations: clue_locations
+            clue_locations: clue_locations,
         }
     }
 }
@@ -106,7 +102,11 @@ mod tests {
         {
             let mut n = 0;
             let mut sum = 0;
-            let grp = FieldShapeGrp { start: 3, end: 6, step: 1 };
+            let grp = FieldShapeGrp {
+                start: 3,
+                end: 6,
+                step: 1,
+            };
             for i in grp {
                 n += 1;
                 sum += i;
@@ -118,7 +118,11 @@ mod tests {
         {
             let mut n = 0;
             let mut sum = 0;
-            let grp = FieldShapeGrp { start: 4, end: 16, step: 3 };
+            let grp = FieldShapeGrp {
+                start: 4,
+                end: 16,
+                step: 3,
+            };
             for i in grp {
                 n += 1;
                 sum += i;
@@ -149,9 +153,9 @@ mod tests {
             let h1 = shape.clue_locations[g1 as usize];
             let h2 = shape.clue_locations[g2 as usize];
             assert!(match (h1, h2) {
-                (ClueLocation::Horizontal(16), ClueLocation::Vertical(13))
-              | (ClueLocation::Vertical(13), ClueLocation::Horizontal(16)) => true,
-                _ => false
+                (ClueLocation::Horizontal(16), ClueLocation::Vertical(13)) |
+                (ClueLocation::Vertical(13), ClueLocation::Horizontal(16)) => true,
+                _ => false,
             });
         }
     }
