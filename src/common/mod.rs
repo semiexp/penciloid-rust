@@ -99,10 +99,10 @@ impl<T: Clone> Grid<T> {
     pub fn width(&self) -> i32 {
         self.width
     }
-    fn index(&self, cd: Coord) -> usize {
+    pub fn index(&self, cd: Coord) -> usize {
         (cd.y * self.width + cd.x) as usize
     }
-    fn index_loop(&self, cd: LoopCoord) -> usize {
+    pub fn index_loop(&self, cd: LoopCoord) -> usize {
         (cd.y * self.width + cd.x) as usize
     }
 }
