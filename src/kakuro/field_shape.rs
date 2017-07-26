@@ -27,7 +27,7 @@ pub struct FieldShape {
     pub clue_locations: Vec<ClueLocation>,
 }
 impl FieldShape {
-    fn new(has_clue: &Grid<bool>) -> FieldShape {
+    pub fn new(has_clue: &Grid<bool>) -> FieldShape {
         let height = has_clue.height();
         let width = has_clue.width();
         let mut cell_to_groups = Grid::new(height, width, (-1, -1));
