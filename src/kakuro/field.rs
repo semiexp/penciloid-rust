@@ -132,7 +132,26 @@ impl<'a> Field<'a> {
     }
     fn check_group(&mut self, gid: i32) {
         let grp = self.grps[gid as usize];
-        let (_, allowed) = self.dic.at(grp.unmet_num, grp.unmet_sum, grp.unused);
+        let (imperative, allowed) = self.dic.at(grp.unmet_num, grp.unmet_sum, grp.unused);
+        if imperative != 0 {
+            let mut uniq = 0;
+            let mut mult = 0;
+            for c in self.shape.group_to_cells[gid as usize] {
+                if self.val[c as usize] == UNDECIDED {
+                    mult |= uniq & self.cand[c as usize];
+                    uniq |= self.cand[c as usize];
+                }
+            }
+            uniq &= imperative & !mult;
+            if uniq != 0 {
+                for c in self.shape.group_to_cells[gid as usize] {
+                    if self.val[c as usize] == UNDECIDED && (self.cand[c as usize] & uniq) != 0 {
+                        let val = ((self.cand[c as usize] & uniq).trailing_zeros() + 1) as i32;
+                        self.decide_int(c as usize, val);
+                    }
+                }
+            }
+        }
         for c in self.shape.group_to_cells[gid as usize] {
             if self.val[c as usize] == UNDECIDED {
                 self.limit_cand(c as usize, allowed);
