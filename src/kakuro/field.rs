@@ -129,10 +129,16 @@ impl<'a> Field<'a> {
         if current_cand.count_ones() == 1 {
             self.decide_int(loc, (current_cand.trailing_zeros() + 1) as i32);
         }
+
+        let (g1, g2) = self.shape.cell_to_groups[loc];
+        self.check_group(g1);
+        self.check_group(g2);
     }
     fn check_group(&mut self, gid: i32) {
         let grp = self.grps[gid as usize];
         let (imperative, allowed) = self.dic.at(grp.unmet_num, grp.unmet_sum, grp.unused);
+
+        // unique position technique
         if imperative != 0 {
             let mut uniq = 0;
             let mut mult = 0;
@@ -152,9 +158,51 @@ impl<'a> Field<'a> {
                 }
             }
         }
+
+        // candidate limitation
         for c in self.shape.group_to_cells[gid as usize] {
             if self.val[c as usize] == UNDECIDED {
                 self.limit_cand(c as usize, allowed);
+            }
+        }
+
+        // two-cells propagation (TODO: improve complexity)
+        let grp = self.grps[gid as usize];
+        if grp.unmet_num == 2 {
+            let mut c1 = -1;
+            let mut c2 = -1;
+            for c in self.shape.group_to_cells[gid as usize] {
+                if self.val[c as usize] == UNDECIDED {
+                    if c1 == -1 {
+                        c1 = c;
+                    } else {
+                        c2 = c;
+                    }
+                }
+            }
+            for i in 1..(MAX_VAL + 1) {
+                if (self.cand[c1 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                    self.limit_cand(c2 as usize, !(1 << (grp.unmet_sum - i - 1) as Cand));
+                }
+                if (self.cand[c2 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                    self.limit_cand(c1 as usize, !(1 << (grp.unmet_sum - i - 1) as Cand));
+                }
+            }
+        }
+        
+        // naked pair (TODO: improve complexity)
+        for c in self.shape.group_to_cells[gid as usize] {
+            if self.val[c as usize] != -1 { continue; }
+            for d in self.shape.group_to_cells[gid as usize] {
+                if self.val[d as usize] != -1 { continue; }
+                if c != d && self.cand[c as usize] == self.cand[d as usize] && self.cand[c as usize].count_ones() == 2 {
+                    for e in self.shape.group_to_cells[gid as usize] {
+                        if c != e && d != e {
+                            let lim = !self.cand[c as usize];
+                            self.limit_cand(e as usize, lim);
+                        }
+                    }
+                }
             }
         }
     }
