@@ -143,6 +143,60 @@ impl<T: Clone> IndexMut<usize> for Grid<T> {
         &mut self.data[idx]
     }
 }
+
+pub struct FiniteSearchQueue {
+    top: i32,
+    end: i32,
+    size: i32,
+    queue: Vec<i32>,
+    stored: Vec<bool>,
+    is_started: bool,
+}
+impl FiniteSearchQueue {
+    pub fn new(max_elem: i32) -> FiniteSearchQueue {
+        FiniteSearchQueue {
+            top: 0,
+            end: 0,
+            size: max_elem + 1,
+            queue: vec![0; max_elem as usize + 1],
+            stored: vec![false; max_elem as usize],
+            is_started: false,
+        }
+    }
+    pub fn is_started(&self) -> bool {
+        self.is_started
+    }
+    pub fn start(&mut self) {
+        self.is_started = true;
+    }
+    pub fn finish(&mut self) {
+        self.is_started = false;
+    }
+    pub fn push(&mut self, v: i32) {
+        if !self.stored[v as usize] {
+            self.stored[v as usize] = true;
+            let loc = self.end;
+            self.end += 1;
+            if self.end == self.size {
+                self.end = 0;
+            }
+            self.queue[loc as usize] = v;
+        }
+    }
+    pub fn pop(&mut self) -> i32 {
+        let ret = self.queue[self.top as usize];
+        self.top += 1;
+        if self.top == self.size {
+            self.top = 0;
+        }
+        self.stored[ret as usize] = false;
+        ret
+    }
+    pub fn empty(&mut self) -> bool {
+        self.top == self.end
+    }
+}
+
 #[cfg(test)]
 pub fn vec_to_grid<T>(v: &Vec<Vec<T>>) -> Grid<T>
 where
