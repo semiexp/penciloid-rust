@@ -245,7 +245,6 @@ impl<'a> Field<'a> {
             min_sum += cand.trailing_zeros() + 1;
             max_sum += 32 - cand.leading_zeros();
         }
-        let mut lim_list = vec![];
         for c in self.shape.group_to_cells[gid as usize] {
             if self.val[c as usize] != -1 { continue; }
             let cand = self.cand[c as usize];
@@ -261,11 +260,8 @@ impl<'a> Field<'a> {
                 lim &= !((1 << (current_min as Cand - 1)) - 1);
             }
             if lim != CAND_ALL {
-                lim_list.push((c, lim));
+                self.limit_cand(c as usize, lim);
             }
-        }
-        for (c, l) in lim_list {
-            self.limit_cand(c as usize, l);
         }
     }
 }
