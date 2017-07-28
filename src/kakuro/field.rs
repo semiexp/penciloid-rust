@@ -205,6 +205,39 @@ impl<'a> Field<'a> {
                 }
             }
         }
+
+        // min-max method
+        let grp = self.grps[gid as usize];
+        let mut min_sum = 0;
+        let mut max_sum = 0;
+        for c in self.shape.group_to_cells[gid as usize] {
+            if self.val[c as usize] != -1 { continue; }
+            let cand = self.cand[c as usize];
+            min_sum += cand.trailing_zeros() + 1;
+            max_sum += 32 - cand.leading_zeros();
+        }
+        let mut lim_list = vec![];
+        for c in self.shape.group_to_cells[gid as usize] {
+            if self.val[c as usize] != -1 { continue; }
+            let cand = self.cand[c as usize];
+
+            let current_max = grp.unmet_sum - (min_sum - (cand.trailing_zeros() + 1)) as i32;
+            let current_min = grp.unmet_sum - (max_sum - (32 - cand.leading_zeros())) as i32;
+
+            let mut lim = CAND_ALL;
+            if current_max <= 8 {
+                lim &= (1 << current_max as Cand) - 1;
+            }
+            if current_min >= 2 {
+                lim &= !((1 << (current_min as Cand - 1)) - 1);
+            }
+            if lim != CAND_ALL {
+                lim_list.push((c, lim));
+            }
+        }
+        for (c, l) in lim_list {
+            self.limit_cand(c as usize, l);
+        }
     }
 }
 
