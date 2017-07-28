@@ -130,8 +130,19 @@ impl<'a> Field<'a> {
         }
         self.grps[g2 as usize].unused &= !(1 << (val - 1) as Cand);
 
+        self.eliminate_cand_from_group(g1, val, loc as i32);
+        self.eliminate_cand_from_group(g2, val, loc as i32);
+
         self.queue.push(g1);
         self.queue.push(g2);
+    }
+    fn eliminate_cand_from_group(&mut self, grp: i32, rem_cand: i32, cur: i32) {
+        let cand = !(1 << (rem_cand - 1) as Cand);
+        for c in self.shape.group_to_cells[grp as usize] {
+            if c != cur {
+                self.limit_cand(c as usize, cand);
+            }
+        }
     }
     fn limit_cand(&mut self, loc: usize, lim: Cand) {
         if self.cand[loc] & lim == self.cand[loc] {
