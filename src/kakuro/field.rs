@@ -1,4 +1,4 @@
-use super::super::{Grid, Coord};
+use super::super::{Grid, Coord, FiniteSearchQueue};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -14,6 +14,7 @@ pub struct Field<'a> {
     val: Vec<i32>,
     cand: Vec<Cand>,
     inconsistent: bool,
+    queue: FiniteSearchQueue
 }
 impl<'a> Field<'a> {
     pub fn new(problem: &Grid<Clue>, dic: &'a Dictionary) -> Field<'a> {
@@ -31,6 +32,8 @@ impl<'a> Field<'a> {
             unmet_sum: 0,
             unused: 0,
         }; shape.group_to_cells.len()];
+        let n_groups = grps.len();
+
         for i in 0..shape.group_to_cells.len() {
             let loc = shape.clue_locations[i];
             let clue_val = match loc {
@@ -61,6 +64,7 @@ impl<'a> Field<'a> {
             val: vec![UNDECIDED; n_cells],
             cand: vec![CAND_ALL; n_cells],
             inconsistent: false,
+            queue: FiniteSearchQueue::new(n_groups as i32),
         }
     }
     pub fn inconsistent(&self) -> bool {
@@ -77,12 +81,26 @@ impl<'a> Field<'a> {
     }
     pub fn decide(&mut self, loc: Coord, val: i32) {
         let loc = self.location(loc);
+
+        self.queue.start();
         self.decide_int(loc, val);
+        while !self.queue.empty() {
+            let g = self.queue.pop();
+            self.check_group(g);
+        }
+        self.queue.finish();
+
     }
     pub fn check_all(&mut self) {
+        self.queue.start();
         for i in 0..(self.grps.len() as i32) {
-            self.check_group(i);
+            self.queue.push(i);
         }
+        while !self.queue.empty() {
+            let g = self.queue.pop();
+            self.check_group(g);
+        }
+        self.queue.finish();
     }
     fn location(&self, loc: Coord) -> usize {
         self.shape.has_clue.index(loc)
@@ -112,8 +130,8 @@ impl<'a> Field<'a> {
         }
         self.grps[g2 as usize].unused &= !(1 << (val - 1) as Cand);
 
-        self.check_group(g1);
-        self.check_group(g2);
+        self.queue.push(g1);
+        self.queue.push(g2);
     }
     fn limit_cand(&mut self, loc: usize, lim: Cand) {
         if self.cand[loc] & lim == self.cand[loc] {
@@ -131,8 +149,8 @@ impl<'a> Field<'a> {
         }
 
         let (g1, g2) = self.shape.cell_to_groups[loc];
-        self.check_group(g1);
-        self.check_group(g2);
+        self.queue.push(g1);
+        self.queue.push(g2);
     }
     fn check_group(&mut self, gid: i32) {
         let grp = self.grps[gid as usize];
