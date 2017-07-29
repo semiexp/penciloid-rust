@@ -300,4 +300,20 @@ mod tests {
         assert_eq!(field.val(Coord { y: 2, x: 2 }), 5);
         assert_eq!(field.inconsistent(), false);
     }
+
+    #[test]
+    fn test_inconsistent_field() {
+        let dic = Dictionary::default();
+        let mut problem_base = Grid::new(3, 3, Clue::NoClue);
+        problem_base[Coord { y: 0, x: 0 }] = Clue::Clue { horizontal: -1, vertical: -1 };
+        problem_base[Coord { y: 0, x: 1 }] = Clue::Clue { horizontal: -1, vertical: 3 };
+        problem_base[Coord { y: 0, x: 2 }] = Clue::Clue { horizontal: -1, vertical: 6 };
+        problem_base[Coord { y: 1, x: 0 }] = Clue::Clue { horizontal: 4, vertical: -1 };
+        problem_base[Coord { y: 2, x: 0 }] = Clue::Clue { horizontal: 5, vertical: -1 };
+
+        let mut field = Field::new(&problem_base, &dic);
+        field.check_all();
+
+        assert_eq!(field.inconsistent(), true);
+    }
 }
