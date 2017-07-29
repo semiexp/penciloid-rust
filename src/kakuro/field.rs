@@ -114,6 +114,12 @@ impl<'a> Field<'a> {
         }
 
         self.val[loc] = val;
+        if (self.cand[loc] & (1 << (val - 1))) == 0 {
+            self.inconsistent = true;
+            return;
+        }
+        self.cand[loc] = 1 << (val - 1);
+
         let (g1, g2) = self.shape.cell_to_groups[loc];
         self.grps[g1 as usize].unmet_num -= 1;
         self.grps[g1 as usize].unmet_sum -= val;
@@ -166,6 +172,10 @@ impl<'a> Field<'a> {
     fn check_group(&mut self, gid: i32) {
         let grp = self.grps[gid as usize];
         let (imperative, allowed) = self.dic.at(grp.unmet_num, grp.unmet_sum, grp.unused);
+        if (imperative, allowed) == dictionary::IMPOSSIBLE {
+            self.inconsistent = true;
+            return;
+        }
 
         // unique position technique
         if imperative != 0 {
