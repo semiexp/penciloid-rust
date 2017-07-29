@@ -4,7 +4,7 @@ use super::{MAX_VAL, MAX_SUM, Cand, CAND_ALL};
 pub struct Dictionary {
     data: Vec<(Cand, Cand)>,
 }
-const IMPOSSIBLE: (Cand, Cand) = (CAND_ALL, 0);
+pub const IMPOSSIBLE: (Cand, Cand) = (CAND_ALL, 0);
 
 impl Dictionary {
     pub fn at(&self, len: i32, sum: i32, available: Cand) -> (Cand, Cand) {

@@ -15,7 +15,7 @@ pub enum Clue {
 }
 
 pub use self::field_shape::*;
-pub use self::dictionary::*;
+pub use self::dictionary::Dictionary;
 pub use self::field::*;
 
 use super::{Grid, Coord};
