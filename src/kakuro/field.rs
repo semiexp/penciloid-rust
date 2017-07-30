@@ -14,15 +14,21 @@ pub struct Field<'a> {
     val: Vec<i32>,
     cand: Vec<Cand>,
     inconsistent: bool,
+    solved: bool,
+    undecided_cells: u32,
+    total_cands: u32,
     queue: FiniteSearchQueue
 }
 impl<'a> Field<'a> {
     pub fn new(problem: &Grid<Clue>, dic: &'a Dictionary) -> Field<'a> {
         let n_cells = (problem.height() * problem.width()) as usize;
         let mut has_clue = Grid::new(problem.height(), problem.width(), false);
+        let mut n_nonclue_cells = 0;
         for i in 0..n_cells {
             if let Clue::Clue { vertical: _, horizontal: _ } = problem[i] {
                 has_clue[i] = true;
+            } else {
+                n_nonclue_cells += 1;
             }
         }
         let shape = FieldShape::new(&has_clue);
@@ -64,11 +70,23 @@ impl<'a> Field<'a> {
             val: vec![UNDECIDED; n_cells],
             cand: vec![CAND_ALL; n_cells],
             inconsistent: false,
+            solved: false,
+            undecided_cells: n_nonclue_cells,
+            total_cands: n_nonclue_cells * 9,
             queue: FiniteSearchQueue::new(n_groups as i32),
         }
     }
     pub fn inconsistent(&self) -> bool {
         self.inconsistent
+    }
+    pub fn solved(&self) -> bool {
+        self.solved
+    }
+    pub fn undecided_cells(&self) -> u32 {
+        self.undecided_cells
+    }
+    pub fn total_cands(&self) -> u32 {
+        self.total_cands
     }
     pub fn height(&self) -> i32 {
         self.shape.has_clue.height()
@@ -114,10 +132,15 @@ impl<'a> Field<'a> {
         }
 
         self.val[loc] = val;
+        self.undecided_cells -= 1;
+        if self.undecided_cells == 0 {
+            self.solved = true;
+        }
         if (self.cand[loc] & (1 << (val - 1))) == 0 {
             self.inconsistent = true;
             return;
         }
+        self.total_cands -= self.cand[loc].count_ones() - 1;
         self.cand[loc] = 1 << (val - 1);
 
         let (g1, g2) = self.shape.cell_to_groups[loc];
@@ -154,6 +177,7 @@ impl<'a> Field<'a> {
         if self.cand[loc] & lim == self.cand[loc] {
             return;
         }
+        self.total_cands -= (self.cand[loc] & !lim).count_ones();
         self.cand[loc] &= lim;
 
         let current_cand = self.cand[loc];
@@ -301,7 +325,10 @@ mod tests {
         assert_eq!(field.val(Coord { y: 1, x: 2 }), 3);
         assert_eq!(field.val(Coord { y: 2, x: 1 }), 2);
         assert_eq!(field.val(Coord { y: 2, x: 2 }), 5);
+        assert_eq!(field.solved(), true);
         assert_eq!(field.inconsistent(), false);
+        assert_eq!(field.undecided_cells(), 0);
+        assert_eq!(field.total_cands(), 4);
     }
 
     #[test]
