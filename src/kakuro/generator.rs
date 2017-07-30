@@ -51,7 +51,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     match (grp_val_loc[g1][v as usize], grp_val_loc[g2][v as usize]) {
                         (None, None) => move_cand.push(vec![(c, answer[loc], v)]),
                         (Some(c1), None) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c1].1 as usize][answer[loc] as usize] == None {
+                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
                                     (c1, v, answer[loc]),
@@ -59,7 +59,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                             }
                         },
                         (None, Some(c2)) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c2].0 as usize][answer[loc] as usize] == None {
+                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c2].0][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
                                     (c2, v, answer[loc]),
@@ -67,8 +67,8 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                             }
                         },
                         (Some(c1), Some(c2)) => {
-                            if grp_val_loc[field_shape.cell_to_groups[c1].1 as usize][answer[loc] as usize] == None &&
-                               grp_val_loc[field_shape.cell_to_groups[c2].0 as usize][answer[loc] as usize] == None {
+                            if grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize] == None &&
+                               grp_val_loc[field_shape.cell_to_groups[c2].0][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
                                     (c1, v, answer[loc]),
