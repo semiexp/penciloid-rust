@@ -204,7 +204,6 @@ impl<'a> Field<'a> {
                 self.limit_cand(c as usize, allowed);
             }
         }
-
         // two-cells propagation (TODO: improve complexity)
         let grp = self.grps[gid as usize];
         if grp.unmet_num == 2 {
@@ -219,22 +218,26 @@ impl<'a> Field<'a> {
                     }
                 }
             }
+            let mut c1_lim = CAND_ALL;
+            let mut c2_lim = CAND_ALL;
             for i in 1..(MAX_VAL + 1) {
                 if (self.cand[c1 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
-                    self.limit_cand(c2 as usize, !(1 << (grp.unmet_sum - i - 1) as Cand));
+                    c2_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
                 }
                 if (self.cand[c2 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
-                    self.limit_cand(c1 as usize, !(1 << (grp.unmet_sum - i - 1) as Cand));
+                    c1_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
                 }
             }
+            self.limit_cand(c1 as usize, c1_lim);
+            self.limit_cand(c2 as usize, c2_lim);
         }
-        
+
         // naked pair (TODO: improve complexity)
         for c in self.shape.group_to_cells[gid as usize] {
-            if self.val[c as usize] != -1 { continue; }
+            if self.val[c as usize] != -1 || self.cand[c as usize].count_ones() != 2 { continue; }
             for d in self.shape.group_to_cells[gid as usize] {
                 if self.val[d as usize] != -1 { continue; }
-                if c != d && self.cand[c as usize] == self.cand[d as usize] && self.cand[c as usize].count_ones() == 2 {
+                if c != d && self.cand[c as usize] == self.cand[d as usize] {
                     for e in self.shape.group_to_cells[gid as usize] {
                         if c != e && d != e {
                             let lim = !self.cand[c as usize];
