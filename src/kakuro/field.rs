@@ -146,17 +146,10 @@ impl<'a> Field<'a> {
         let (g1, g2) = self.shape.cell_to_groups[loc];
         self.grps[g1 as usize].unmet_num -= 1;
         self.grps[g1 as usize].unmet_sum -= val;
-        if (self.grps[g1 as usize].unused & (1 << (val - 1) as Cand)) == 0 {
-            self.inconsistent = true;
-            return;
-        }
         self.grps[g1 as usize].unused &= !(1 << (val - 1) as Cand);
+        
         self.grps[g2 as usize].unmet_num -= 1;
         self.grps[g2 as usize].unmet_sum -= val;
-        if (self.grps[g2 as usize].unused & (1 << (val - 1) as Cand)) == 0 {
-            self.inconsistent = true;
-            return;
-        }
         self.grps[g2 as usize].unused &= !(1 << (val - 1) as Cand);
 
         self.eliminate_cand_from_group(g1, val, loc as i32);
