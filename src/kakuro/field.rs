@@ -147,7 +147,7 @@ impl<'a> Field<'a> {
         self.grps[g1 as usize].unmet_num -= 1;
         self.grps[g1 as usize].unmet_sum -= val;
         self.grps[g1 as usize].unused &= !(1 << (val - 1) as Cand);
-        
+
         self.grps[g2 as usize].unmet_num -= 1;
         self.grps[g2 as usize].unmet_sum -= val;
         self.grps[g2 as usize].unused &= !(1 << (val - 1) as Cand);
@@ -275,6 +275,8 @@ impl<'a> Field<'a> {
             min_sum += cand.trailing_zeros() + 1;
             max_sum += 32 - cand.leading_zeros();
         }
+        let mut update_list = [(0, 0); MAX_VAL as usize];
+        let mut update_size = 0;
         for c in self.shape.group_to_cells[gid as usize] {
             if self.val[c as usize] != -1 { continue; }
             let cand = self.cand[c as usize];
@@ -290,8 +292,12 @@ impl<'a> Field<'a> {
                 lim &= !((1 << (current_min as Cand - 1)) - 1);
             }
             if lim != CAND_ALL {
-                self.limit_cand(c as usize, lim);
+                update_list[update_size] = (c, lim);
+                update_size += 1;
             }
+        }
+        for i in 0..update_size {
+            self.limit_cand(update_list[i].0 as usize, update_list[i].1);
         }
     }
 }
