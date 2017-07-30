@@ -43,11 +43,11 @@ impl<'a> Field<'a> {
         for i in 0..shape.group_to_cells.len() {
             let loc = shape.clue_locations[i];
             let clue_val = match loc {
-                ClueLocation::Vertical(v) => match problem[v as usize] {
+                ClueLocation::Vertical(v) => match problem[v] {
                     Clue::NoClue => panic!("unexpected condition"),
                     Clue::Clue { vertical: v, horizontal: _ } => v,
                 },
-                ClueLocation::Horizontal(h) => match problem[h as usize] {
+                ClueLocation::Horizontal(h) => match problem[h] {
                     Clue::NoClue => panic!("unexpected condition"),
                     Clue::Clue { vertical: _, horizontal: h } => h,
                 },
@@ -73,7 +73,7 @@ impl<'a> Field<'a> {
             solved: false,
             undecided_cells: n_nonclue_cells,
             total_cands: n_nonclue_cells * 9,
-            queue: FiniteSearchQueue::new(n_groups as i32),
+            queue: FiniteSearchQueue::new(n_groups),
         }
     }
     pub fn inconsistent(&self) -> bool {
@@ -111,7 +111,7 @@ impl<'a> Field<'a> {
     }
     pub fn check_all(&mut self) {
         self.queue.start();
-        for i in 0..(self.grps.len() as i32) {
+        for i in 0..self.grps.len() {
             self.queue.push(i);
         }
         while !self.queue.empty() {
@@ -144,25 +144,25 @@ impl<'a> Field<'a> {
         self.cand[loc] = 1 << (val - 1);
 
         let (g1, g2) = self.shape.cell_to_groups[loc];
-        self.grps[g1 as usize].unmet_num -= 1;
-        self.grps[g1 as usize].unmet_sum -= val;
-        self.grps[g1 as usize].unused &= !(1 << (val - 1) as Cand);
+        self.grps[g1].unmet_num -= 1;
+        self.grps[g1].unmet_sum -= val;
+        self.grps[g1].unused &= !(1 << (val - 1) as Cand);
 
-        self.grps[g2 as usize].unmet_num -= 1;
-        self.grps[g2 as usize].unmet_sum -= val;
-        self.grps[g2 as usize].unused &= !(1 << (val - 1) as Cand);
+        self.grps[g2].unmet_num -= 1;
+        self.grps[g2].unmet_sum -= val;
+        self.grps[g2].unused &= !(1 << (val - 1) as Cand);
 
-        self.eliminate_cand_from_group(g1, val, loc as i32);
-        self.eliminate_cand_from_group(g2, val, loc as i32);
+        self.eliminate_cand_from_group(g1, val, loc);
+        self.eliminate_cand_from_group(g2, val, loc);
 
         self.queue.push(g1);
         self.queue.push(g2);
     }
-    fn eliminate_cand_from_group(&mut self, grp: i32, rem_cand: i32, cur: i32) {
+    fn eliminate_cand_from_group(&mut self, grp: usize, rem_cand: i32, cur: usize) {
         let cand = !(1 << (rem_cand - 1) as Cand);
-        for c in self.shape.group_to_cells[grp as usize] {
+        for c in self.shape.group_to_cells[grp] {
             if c != cur {
-                self.limit_cand(c as usize, cand);
+                self.limit_cand(c, cand);
             }
         }
     }
@@ -186,8 +186,8 @@ impl<'a> Field<'a> {
         self.queue.push(g1);
         self.queue.push(g2);
     }
-    fn check_group(&mut self, gid: i32) {
-        let grp = self.grps[gid as usize];
+    fn check_group(&mut self, gid: usize) {
+        let grp = self.grps[gid];
         let (imperative, allowed) = self.dic.at(grp.unmet_num, grp.unmet_sum, grp.unused);
         if (imperative, allowed) == dictionary::IMPOSSIBLE {
             self.inconsistent = true;
@@ -198,67 +198,69 @@ impl<'a> Field<'a> {
         if imperative != 0 {
             let mut uniq = 0;
             let mut mult = 0;
-            for c in self.shape.group_to_cells[gid as usize] {
-                if self.val[c as usize] == UNDECIDED {
-                    mult |= uniq & self.cand[c as usize];
-                    uniq |= self.cand[c as usize];
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] == UNDECIDED {
+                    mult |= uniq & self.cand[c];
+                    uniq |= self.cand[c];
                 }
             }
             uniq &= imperative & !mult;
             if uniq != 0 {
-                for c in self.shape.group_to_cells[gid as usize] {
-                    if self.val[c as usize] == UNDECIDED && (self.cand[c as usize] & uniq) != 0 {
-                        let val = ((self.cand[c as usize] & uniq).trailing_zeros() + 1) as i32;
-                        self.decide_int(c as usize, val);
+                for c in self.shape.group_to_cells[gid] {
+                    if self.val[c] == UNDECIDED && (self.cand[c] & uniq) != 0 {
+                        let val = ((self.cand[c] & uniq).trailing_zeros() + 1) as i32;
+                        self.decide_int(c, val);
                     }
                 }
             }
         }
 
         // candidate limitation
-        for c in self.shape.group_to_cells[gid as usize] {
-            if self.val[c as usize] == UNDECIDED {
-                self.limit_cand(c as usize, allowed);
+        for c in self.shape.group_to_cells[gid] {
+            if self.val[c] == UNDECIDED {
+                self.limit_cand(c, allowed);
             }
         }
         // two-cells propagation (TODO: improve complexity)
-        let grp = self.grps[gid as usize];
+        let grp = self.grps[gid];
         if grp.unmet_num == 2 {
-            let mut c1 = -1;
-            let mut c2 = -1;
-            for c in self.shape.group_to_cells[gid as usize] {
-                if self.val[c as usize] == UNDECIDED {
-                    if c1 == -1 {
-                        c1 = c;
+            let mut c1 = None;
+            let mut c2 = None;
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] == UNDECIDED {
+                    if c1 == None {
+                        c1 = Some(c);
                     } else {
-                        c2 = c;
+                        c2 = Some(c);
                     }
                 }
             }
+            let c1 = c1.unwrap();
+            let c2 = c2.unwrap();
             let mut c1_lim = CAND_ALL;
             let mut c2_lim = CAND_ALL;
             for i in 1..(MAX_VAL + 1) {
-                if (self.cand[c1 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                if (self.cand[c1] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
                     c2_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
                 }
-                if (self.cand[c2 as usize] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                if (self.cand[c2] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
                     c1_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
                 }
             }
-            self.limit_cand(c1 as usize, c1_lim);
-            self.limit_cand(c2 as usize, c2_lim);
+            self.limit_cand(c1, c1_lim);
+            self.limit_cand(c2, c2_lim);
         }
 
         // naked pair (TODO: improve complexity)
-        for c in self.shape.group_to_cells[gid as usize] {
-            if self.val[c as usize] != -1 || self.cand[c as usize].count_ones() != 2 { continue; }
-            for d in self.shape.group_to_cells[gid as usize] {
-                if self.val[d as usize] != -1 { continue; }
-                if c != d && self.cand[c as usize] == self.cand[d as usize] {
-                    for e in self.shape.group_to_cells[gid as usize] {
+        for c in self.shape.group_to_cells[gid] {
+            if self.val[c] != -1 || self.cand[c].count_ones() != 2 { continue; }
+            for d in self.shape.group_to_cells[gid] {
+                if self.val[d] != -1 { continue; }
+                if c != d && self.cand[c] == self.cand[d] {
+                    for e in self.shape.group_to_cells[gid] {
                         if c != e && d != e {
-                            let lim = !self.cand[c as usize];
-                            self.limit_cand(e as usize, lim);
+                            let lim = !self.cand[c];
+                            self.limit_cand(e, lim);
                         }
                     }
                 }
@@ -266,20 +268,20 @@ impl<'a> Field<'a> {
         }
 
         // min-max method
-        let grp = self.grps[gid as usize];
+        let grp = self.grps[gid];
         let mut min_sum = 0;
         let mut max_sum = 0;
-        for c in self.shape.group_to_cells[gid as usize] {
-            if self.val[c as usize] != -1 { continue; }
-            let cand = self.cand[c as usize];
+        for c in self.shape.group_to_cells[gid] {
+            if self.val[c] != -1 { continue; }
+            let cand = self.cand[c];
             min_sum += cand.trailing_zeros() + 1;
             max_sum += 32 - cand.leading_zeros();
         }
         let mut update_list = [(0, 0); MAX_VAL as usize];
         let mut update_size = 0;
-        for c in self.shape.group_to_cells[gid as usize] {
-            if self.val[c as usize] != -1 { continue; }
-            let cand = self.cand[c as usize];
+        for c in self.shape.group_to_cells[gid] {
+            if self.val[c] != -1 { continue; }
+            let cand = self.cand[c];
 
             let current_max = grp.unmet_sum - (min_sum - (cand.trailing_zeros() + 1)) as i32;
             let current_min = grp.unmet_sum - (max_sum - (32 - cand.leading_zeros())) as i32;
@@ -297,7 +299,7 @@ impl<'a> Field<'a> {
             }
         }
         for i in 0..update_size {
-            self.limit_cand(update_list[i].0 as usize, update_list[i].1);
+            self.limit_cand(update_list[i].0, update_list[i].1);
         }
     }
 }

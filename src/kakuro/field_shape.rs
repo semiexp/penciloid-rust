@@ -2,13 +2,13 @@ use super::super::{Grid, Coord};
 
 #[derive(Clone, Copy)]
 pub struct FieldShapeGrp {
-    start: i32,
-    end: i32,
-    step: i32,
+    start: usize,
+    end: usize,
+    step: usize,
 }
 impl Iterator for FieldShapeGrp {
-    type Item = i32;
-    fn next(&mut self) -> Option<i32> {
+    type Item = usize;
+    fn next(&mut self) -> Option<usize> {
         let ret = self.start;
         self.start += self.step;
 
@@ -17,12 +17,12 @@ impl Iterator for FieldShapeGrp {
 }
 #[derive(Clone, Copy)]
 pub enum ClueLocation {
-    Horizontal(i32),
-    Vertical(i32),
+    Horizontal(usize),
+    Vertical(usize),
 }
 pub struct FieldShape {
     pub has_clue: Grid<bool>,
-    pub cell_to_groups: Grid<(i32, i32)>,
+    pub cell_to_groups: Grid<(usize, usize)>,
     pub group_to_cells: Vec<FieldShapeGrp>,
     pub clue_locations: Vec<ClueLocation>,
 }
@@ -30,29 +30,29 @@ impl FieldShape {
     pub fn new(has_clue: &Grid<bool>) -> FieldShape {
         let height = has_clue.height();
         let width = has_clue.width();
-        let mut cell_to_groups = Grid::new(height, width, (-1, -1));
+        let mut cell_to_groups = Grid::new(height, width, (0, 0));
         let mut group_to_cells = vec![];
         let mut clue_locations = vec![];
         let mut current_grp_id = 0;
 
         // compute horizontal groups
         for y in 0..height {
-            let mut start = -1;
+            let mut start = None;
             for x in 0..(width + 1) {
                 if x == width || has_clue[Coord { y: y, x: x }] {
-                    if start != -1 {
+                    if let Some(s) = start {
                         group_to_cells.push(FieldShapeGrp {
-                            start: start,
-                            end: y * width + x,
+                            start: s,
+                            end: (y * width + x) as usize,
                             step: 1,
                         });
-                        clue_locations.push(ClueLocation::Horizontal(start - 1));
+                        clue_locations.push(ClueLocation::Horizontal(s - 1));
                         current_grp_id += 1;
                     }
-                    start = -1;
+                    start = None;
                 } else {
-                    if start == -1 {
-                        start = y * width + x;
+                    if start == None {
+                        start = Some((y * width + x) as usize);
                     }
                     cell_to_groups[Coord { y: y, x: x }].0 = current_grp_id;
                 }
@@ -61,22 +61,22 @@ impl FieldShape {
 
         // compute vertical groups
         for x in 0..width {
-            let mut start = -1;
+            let mut start = None;
             for y in 0..(height + 1) {
                 if y == height || has_clue[Coord { y: y, x: x }] {
-                    if start != -1 {
+                    if let Some(s) = start {
                         group_to_cells.push(FieldShapeGrp {
-                            start: start,
-                            end: y * width + x,
-                            step: width,
+                            start: s,
+                            end: (y * width + x) as usize,
+                            step: width as usize,
                         });
-                        clue_locations.push(ClueLocation::Vertical(start - width));
+                        clue_locations.push(ClueLocation::Vertical(s - width as usize));
                         current_grp_id += 1;
                     }
-                    start = -1;
+                    start = None;
                 } else {
-                    if start == -1 {
-                        start = y * width + x;
+                    if start == None {
+                        start = Some((y * width + x) as usize);
                     }
                     cell_to_groups[Coord { y: y, x: x }].1 = current_grp_id;
                 }

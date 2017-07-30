@@ -24,7 +24,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     for step in 0..n_step {
         let mut move_cand: Vec<Vec<(usize, i32, i32)>> = vec![];
 
-        let mut grp_val_loc = vec![[-1; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
+        let mut grp_val_loc = vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
         for y in 0..height {
             for x in 0..width {
                 let loc = Coord { y: y, x: x };
@@ -32,8 +32,8 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     continue;
                 }
                 let (g1, g2) = field_shape.cell_to_groups[loc];
-                grp_val_loc[g1 as usize][answer[loc] as usize] = has_clue.index(loc) as i32;
-                grp_val_loc[g2 as usize][answer[loc] as usize] = has_clue.index(loc) as i32;
+                grp_val_loc[g1][answer[loc] as usize] = Some(has_clue.index(loc));
+                grp_val_loc[g2][answer[loc] as usize] = Some(has_clue.index(loc));
             }
         }
         for y in 0..height {
@@ -48,31 +48,31 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     if answer[loc] == v {
                         continue;
                     }
-                    match (grp_val_loc[g1 as usize][v as usize], grp_val_loc[g2 as usize][v as usize]) {
-                        (-1, -1) => move_cand.push(vec![(c, answer[loc], v)]),
-                        (c1, -1) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c1 as usize].1 as usize][answer[loc] as usize] == -1 {
+                    match (grp_val_loc[g1][v as usize], grp_val_loc[g2][v as usize]) {
+                        (None, None) => move_cand.push(vec![(c, answer[loc], v)]),
+                        (Some(c1), None) => {
+                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c1].1 as usize][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
-                                    (c1 as usize, v, answer[loc]),
+                                    (c1, v, answer[loc]),
                                 ]);
                             }
                         },
-                        (-1, c2) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c2 as usize].0 as usize][answer[loc] as usize] == -1 {
+                        (None, Some(c2)) => {
+                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c2].0 as usize][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
-                                    (c2 as usize, v, answer[loc]),
+                                    (c2, v, answer[loc]),
                                 ]);
                             }
                         },
-                        (c1, c2) => {
-                            if grp_val_loc[field_shape.cell_to_groups[c1 as usize].1 as usize][answer[loc] as usize] == -1 &&
-                               grp_val_loc[field_shape.cell_to_groups[c2 as usize].0 as usize][answer[loc] as usize] == -1 {
+                        (Some(c1), Some(c2)) => {
+                            if grp_val_loc[field_shape.cell_to_groups[c1].1 as usize][answer[loc] as usize] == None &&
+                               grp_val_loc[field_shape.cell_to_groups[c2].0 as usize][answer[loc] as usize] == None {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
-                                    (c1 as usize, v, answer[loc]),
-                                    (c2 as usize, v, answer[loc]),
+                                    (c1, v, answer[loc]),
+                                    (c2, v, answer[loc]),
                                 ]);
                             }
                         },

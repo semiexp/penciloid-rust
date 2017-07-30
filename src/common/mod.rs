@@ -145,21 +145,21 @@ impl<T: Clone> IndexMut<usize> for Grid<T> {
 }
 
 pub struct FiniteSearchQueue {
-    top: i32,
-    end: i32,
-    size: i32,
-    queue: Vec<i32>,
+    top: usize,
+    end: usize,
+    size: usize,
+    queue: Vec<usize>,
     stored: Vec<bool>,
     is_started: bool,
 }
 impl FiniteSearchQueue {
-    pub fn new(max_elem: i32) -> FiniteSearchQueue {
+    pub fn new(max_elem: usize) -> FiniteSearchQueue {
         FiniteSearchQueue {
             top: 0,
             end: 0,
             size: max_elem + 1,
-            queue: vec![0; max_elem as usize + 1],
-            stored: vec![false; max_elem as usize],
+            queue: vec![0; max_elem + 1],
+            stored: vec![false; max_elem],
             is_started: false,
         }
     }
@@ -172,24 +172,24 @@ impl FiniteSearchQueue {
     pub fn finish(&mut self) {
         self.is_started = false;
     }
-    pub fn push(&mut self, v: i32) {
-        if !self.stored[v as usize] {
-            self.stored[v as usize] = true;
+    pub fn push(&mut self, v: usize) {
+        if !self.stored[v] {
+            self.stored[v] = true;
             let loc = self.end;
             self.end += 1;
             if self.end == self.size {
                 self.end = 0;
             }
-            self.queue[loc as usize] = v;
+            self.queue[loc] = v;
         }
     }
-    pub fn pop(&mut self) -> i32 {
-        let ret = self.queue[self.top as usize];
+    pub fn pop(&mut self) -> usize {
+        let ret = self.queue[self.top];
         self.top += 1;
         if self.top == self.size {
             self.top = 0;
         }
-        self.stored[ret as usize] = false;
+        self.stored[ret] = false;
         ret
     }
     pub fn empty(&mut self) -> bool {
