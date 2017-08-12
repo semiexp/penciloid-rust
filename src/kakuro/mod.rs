@@ -15,6 +15,26 @@ pub enum Clue {
     Clue { horizontal: i32, vertical: i32 },
 }
 
+#[derive(Clone, Copy)]
+pub struct FieldTechnique {
+    dictionary: bool,
+    unique_position: bool,
+    two_cells_propagation: bool,
+    naked_pair: bool,
+    min_max: bool,
+}
+
+impl FieldTechnique {
+    fn new() -> FieldTechnique {
+        FieldTechnique {
+            dictionary: true,
+            unique_position: true,
+            two_cells_propagation: true,
+            naked_pair: true,
+            min_max: true,
+        }
+    }
+}
 pub use self::field_shape::*;
 pub use self::dictionary::Dictionary;
 pub use self::field::*;

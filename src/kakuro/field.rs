@@ -17,7 +17,8 @@ pub struct Field<'a> {
     solved: bool,
     undecided_cells: u32,
     total_cands: u32,
-    queue: FiniteSearchQueue
+    queue: FiniteSearchQueue,
+    technique: FieldTechnique,
 }
 impl<'a> Field<'a> {
     pub fn new(problem: &Grid<Clue>, dic: &'a Dictionary) -> Field<'a> {
@@ -74,6 +75,7 @@ impl<'a> Field<'a> {
             undecided_cells: n_nonclue_cells,
             total_cands: n_nonclue_cells * 9,
             queue: FiniteSearchQueue::new(n_groups),
+            technique: FieldTechnique::new(),
         }
     }
     pub fn inconsistent(&self) -> bool {
@@ -96,6 +98,12 @@ impl<'a> Field<'a> {
     }
     pub fn val(&self, loc: Coord) -> i32 {
         self.val[self.location(loc)]
+    }
+    pub fn technique(&self) -> FieldTechnique {
+        self.technique
+    }
+    pub fn set_technique(&mut self, technique: FieldTechnique) {
+        self.technique = technique;
     }
     pub fn decide(&mut self, loc: Coord, val: i32) {
         let loc = self.location(loc);
@@ -195,7 +203,7 @@ impl<'a> Field<'a> {
         }
 
         // unique position technique
-        if imperative != 0 {
+        if self.technique.unique_position && imperative != 0 {
             let mut uniq = 0;
             let mut mult = 0;
             for c in self.shape.group_to_cells[gid] {
@@ -216,14 +224,16 @@ impl<'a> Field<'a> {
         }
 
         // candidate limitation
-        for c in self.shape.group_to_cells[gid] {
-            if self.val[c] == UNDECIDED {
-                self.limit_cand(c, allowed);
+        if self.technique.dictionary {
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] == UNDECIDED {
+                    self.limit_cand(c, allowed);
+                }
             }
         }
         // two-cells propagation (TODO: improve complexity)
         let grp = self.grps[gid];
-        if grp.unmet_num == 2 {
+        if self.technique.two_cells_propagation && grp.unmet_num == 2 {
             let mut c1 = None;
             let mut c2 = None;
             for c in self.shape.group_to_cells[gid] {
@@ -252,15 +262,17 @@ impl<'a> Field<'a> {
         }
 
         // naked pair (TODO: improve complexity)
-        for c in self.shape.group_to_cells[gid] {
-            if self.val[c] != -1 || self.cand[c].count_ones() != 2 { continue; }
-            for d in self.shape.group_to_cells[gid] {
-                if self.val[d] != -1 { continue; }
-                if c != d && self.cand[c] == self.cand[d] {
-                    for e in self.shape.group_to_cells[gid] {
-                        if c != e && d != e {
-                            let lim = !self.cand[c];
-                            self.limit_cand(e, lim);
+        if self.technique.naked_pair {
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] != -1 || self.cand[c].count_ones() != 2 { continue; }
+                for d in self.shape.group_to_cells[gid] {
+                    if self.val[d] != -1 { continue; }
+                    if c != d && self.cand[c] == self.cand[d] {
+                        for e in self.shape.group_to_cells[gid] {
+                            if c != e && d != e {
+                                let lim = !self.cand[c];
+                                self.limit_cand(e, lim);
+                            }
                         }
                     }
                 }
@@ -268,38 +280,40 @@ impl<'a> Field<'a> {
         }
 
         // min-max method
-        let grp = self.grps[gid];
-        let mut min_sum = 0;
-        let mut max_sum = 0;
-        for c in self.shape.group_to_cells[gid] {
-            if self.val[c] != -1 { continue; }
-            let cand = self.cand[c];
-            min_sum += cand.trailing_zeros() + 1;
-            max_sum += 32 - cand.leading_zeros();
-        }
-        let mut update_list = [(0, 0); MAX_VAL as usize];
-        let mut update_size = 0;
-        for c in self.shape.group_to_cells[gid] {
-            if self.val[c] != -1 { continue; }
-            let cand = self.cand[c];
+        if self.technique.min_max {
+            let grp = self.grps[gid];
+            let mut min_sum = 0;
+            let mut max_sum = 0;
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] != -1 { continue; }
+                let cand = self.cand[c];
+                min_sum += cand.trailing_zeros() + 1;
+                max_sum += 32 - cand.leading_zeros();
+            }
+            let mut update_list = [(0, 0); MAX_VAL as usize];
+            let mut update_size = 0;
+            for c in self.shape.group_to_cells[gid] {
+                if self.val[c] != -1 { continue; }
+                let cand = self.cand[c];
 
-            let current_max = grp.unmet_sum - (min_sum - (cand.trailing_zeros() + 1)) as i32;
-            let current_min = grp.unmet_sum - (max_sum - (32 - cand.leading_zeros())) as i32;
+                let current_max = grp.unmet_sum - (min_sum - (cand.trailing_zeros() + 1)) as i32;
+                let current_min = grp.unmet_sum - (max_sum - (32 - cand.leading_zeros())) as i32;
 
-            let mut lim = CAND_ALL;
-            if current_max <= 8 {
-                lim &= (1 << current_max as Cand) - 1;
+                let mut lim = CAND_ALL;
+                if current_max <= 8 {
+                    lim &= (1 << current_max as Cand) - 1;
+                }
+                if current_min >= 2 {
+                    lim &= !((1 << (current_min as Cand - 1)) - 1);
+                }
+                if lim != CAND_ALL {
+                    update_list[update_size] = (c, lim);
+                    update_size += 1;
+                }
             }
-            if current_min >= 2 {
-                lim &= !((1 << (current_min as Cand - 1)) - 1);
+            for i in 0..update_size {
+                self.limit_cand(update_list[i].0, update_list[i].1);
             }
-            if lim != CAND_ALL {
-                update_list[update_size] = (c, lim);
-                update_size += 1;
-            }
-        }
-        for i in 0..update_size {
-            self.limit_cand(update_list[i].0, update_list[i].1);
         }
     }
 }
