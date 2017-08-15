@@ -6,6 +6,11 @@ pub struct FieldShapeGrp {
     end: usize,
     step: usize,
 }
+impl FieldShapeGrp {
+    pub fn size(&self) -> usize {
+        (self.end - self.start) / self.step
+    }
+}
 impl Iterator for FieldShapeGrp {
     type Item = usize;
     fn next(&mut self) -> Option<usize> {
