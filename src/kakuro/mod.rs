@@ -2,6 +2,7 @@ mod field_shape;
 mod dictionary;
 mod field;
 mod generator;
+mod evaluator;
 
 const MAX_VAL: i32 = 9;
 const MAX_SUM: i32 = MAX_VAL * (MAX_VAL + 1) / 2;
@@ -39,6 +40,7 @@ pub use self::field_shape::*;
 pub use self::dictionary::Dictionary;
 pub use self::field::*;
 pub use self::generator::*;
+pub use self::evaluator::*;
 
 use super::{Grid, Coord};
 pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
