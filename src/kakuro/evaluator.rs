@@ -78,6 +78,7 @@ impl Evaluator {
             self.unique_decision();
             self.unique_decision();
             self.two_cells_propagation();
+            self.naked_pair();
 
             self.remove_unnecessary_move();
 
@@ -376,6 +377,41 @@ impl Evaluator {
                     }
                 } else {
                     unreachable!();
+                }
+            }
+        }
+    }
+    fn naked_pair(&mut self) {
+        for gi in 0..self.shape.group_to_cells.len() {
+            let mut two_cand_cells = vec![];
+            for c1 in self.shape.group_to_cells[gi] {
+                let mut oks = 0u32;
+                let mut score = 0.0f64;
+                for n in 1..(MAX_VAL + 1) {
+                    if let EvCand::Elim(s) = self.cand_score[c1][n as usize] {
+                        score += s;
+                    } else {
+                        oks |= 1u32 << n;
+                    }
+                }
+                if oks.count_ones() == 2 {
+                    two_cand_cells.push((c1, oks, score));
+                }
+            }
+            for i in 0..two_cand_cells.len() {
+                for j in (i + 1)..two_cand_cells.len() {
+                    if two_cand_cells[i].1 == two_cand_cells[j].1 {
+                        let mut elims = vec![];
+                        let x = two_cand_cells[i].1.trailing_zeros() as i32;
+                        let y = (two_cand_cells[i].1 ^ (1u32 << x)).trailing_zeros() as i32;
+                        for c in self.shape.group_to_cells[gi] {
+                            if two_cand_cells[i].0 != c && two_cand_cells[j].0 != c {
+                                elims.push((c, x));
+                                elims.push((c, y));
+                            }
+                        }
+                        self.move_cand.push(Move::Elim(two_cand_cells[i].2 + two_cand_cells[j].2, elims));
+                    }
                 }
             }
         }
