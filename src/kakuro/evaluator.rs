@@ -77,6 +77,7 @@ impl Evaluator {
             self.simple_elimination();
             self.unique_decision();
             self.unique_decision();
+            self.two_cells_propagation();
 
             self.remove_unnecessary_move();
 
@@ -333,6 +334,48 @@ impl Evaluator {
                     return;
                 } else if cand != -2 {
                     self.move_cand.push(Move::Decide(cost, i, cand));
+                }
+            }
+        }
+    }
+    fn two_cells_propagation(&mut self) {
+        for gi in 0..self.shape.group_to_cells.len() {
+            let mut used_mask = 0u32; // bit indices are 1-origin
+            let mut rem_sum = self.clue[gi];
+            let mut undet1 = None;
+            let mut undet2 = None;
+            let mut more_than_two = false;
+            for c in self.shape.group_to_cells[gi] {
+                if self.val[c] == UNDECIDED {
+                    if undet1 == None {
+                        undet1 = Some(c);
+                    } else if undet2 == None {
+                        undet2 = Some(c);
+                    } else {
+                        more_than_two = true;
+                    }
+                } else {
+                    rem_sum -= self.val[c];
+                }
+            }
+            if !more_than_two && undet2 != None {
+                if let (Some(c1), Some(c2)) = (undet1, undet2) {
+                    for n in 1..(MAX_VAL + 1) {
+                        if let EvCand::Elim(s) = self.cand_score[c1][n as usize] {
+                            let n2 = rem_sum - n;
+                            if 1 <= n2 && n2 <= MAX_VAL {
+                                self.move_cand.push(Move::Elim(s + 5.0f64, vec![(c2, n2)]));
+                            }
+                        }
+                        if let EvCand::Elim(s) = self.cand_score[c2][n as usize] {
+                            let n2 = rem_sum - n;
+                            if 1 <= n2 && n2 <= MAX_VAL {
+                                self.move_cand.push(Move::Elim(s + 5.0f64, vec![(c1, n2)]));
+                            }
+                        }
+                    }
+                } else {
+                    unreachable!();
                 }
             }
         }
