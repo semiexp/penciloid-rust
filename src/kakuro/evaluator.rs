@@ -203,10 +203,10 @@ impl Evaluator {
                     self.inconsistent = true;
                     return;
                 }
+                if max_allowed == max_cand_checked + 1 {
+                    allowed_cand &= !(1u32 << max_cand_checked);
+                }
                 if max_allowed < MAX_VAL {
-                    if max_allowed == max_cand_checked + 1 {
-                        allowed_cand &= !(1u32 << max_cand_checked);
-                    }
                     allowed_cand &= (2u32 << max_allowed) - 2u32;
                 }
                 if max_allowed == max_cand_checked {
@@ -239,10 +239,10 @@ impl Evaluator {
                     self.inconsistent = true;
                     return;
                 }
+                if min_allowed == min_cand_checked - 1 {
+                    allowed_cand &= !(1u32 << min_cand_checked);
+                }
                 if min_allowed > 1 {
-                    if min_allowed == min_cand_checked - 1 {
-                        allowed_cand &= !(1u32 << min_cand_checked);
-                    }
                     allowed_cand &= !((2u32 << (min_allowed - 1)) - 2u32);
                 }
                 if min_allowed == min_cand_checked {
