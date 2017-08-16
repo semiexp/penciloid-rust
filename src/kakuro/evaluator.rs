@@ -186,32 +186,33 @@ impl Evaluator {
                 let mut max_cand_checked = 0;
                 let mut low_bits = 0;
                 for i in 1..(MAX_VAL + 1) {
-                    if n_cand_checked == rem_cells - 1 {
-                        break;
-                    }
                     if (allowed_cand & (1u32 << i)) != 0 {
-                        sum_small += i;
-                        n_cand_checked += 1;
-                        max_cand_checked = i;
-                        low_bits |= 1u32 << i;
+                        if n_cand_checked == rem_cells - 1 {
+                            max_cand_checked = i;
+                            break;
+                        } else {
+                            sum_small += i;
+                            n_cand_checked += 1;
+                            low_bits |= 1u32 << i;
+                        }
                     }
                 }
                 let mut max_allowed = rem_sum - sum_small;
 
-                if max_allowed <= max_cand_checked {
+                if max_allowed < max_cand_checked {
                     self.inconsistent = true;
                     return;
                 }
                 if max_allowed < MAX_VAL {
-                    if max_allowed == max_cand_checked + 2 {
-                        allowed_cand &= !(1u32 << (max_cand_checked + 1));
+                    if max_allowed == max_cand_checked + 1 {
+                        allowed_cand &= !(1u32 << max_cand_checked);
                     }
                     allowed_cand &= (2u32 << max_allowed) - 2u32;
                 }
-                if max_allowed == max_cand_checked + 1 {
+                if max_allowed == max_cand_checked {
+                    required |= low_bits | (1u32 << max_cand_checked);
+                } else if max_allowed == max_cand_checked {
                     required |= low_bits | (1u32 << (max_cand_checked + 1));
-                } else if max_allowed == max_cand_checked + 2 {
-                    required |= low_bits | (1u32 << (max_cand_checked + 2));
                 }
             }
             {
@@ -221,32 +222,33 @@ impl Evaluator {
                 let mut high_bits = 0u32;
                 for i in 1..(MAX_VAL + 1) {
                     let i = MAX_VAL + 1 - i;
-                    if n_cand_checked == rem_cells - 1 {
-                        break;
-                    }
                     if (allowed_cand & (1u32 << i)) != 0 {
-                        sum_large += i;
-                        n_cand_checked += 1;
-                        min_cand_checked = i;
-                        high_bits |= 1u32 << i;
+                        if n_cand_checked == rem_cells - 1 {
+                            min_cand_checked = i;
+                            break;
+                        } else {
+                            sum_large += i;
+                            n_cand_checked += 1;
+                            high_bits |= 1u32 << i;
+                        }
                     }
                 }
                 let mut min_allowed = rem_sum - sum_large;
 
-                if min_allowed >= min_cand_checked {
+                if min_allowed > min_cand_checked {
                     self.inconsistent = true;
                     return;
                 }
                 if min_allowed > 1 {
-                    if min_allowed == min_cand_checked - 2 {
-                        allowed_cand &= !(1u32 << (min_cand_checked - 1));
+                    if min_allowed == min_cand_checked - 1 {
+                        allowed_cand &= !(1u32 << min_cand_checked);
                     }
                     allowed_cand &= !((2u32 << (min_allowed - 1)) - 2u32);
                 }
-                if min_allowed == min_cand_checked - 1 {
+                if min_allowed == min_cand_checked {
+                    required |= high_bits | (1u32 << min_cand_checked);
+                } else if min_allowed == min_cand_checked - 1 {
                     required |= high_bits | (1u32 << (min_cand_checked - 1));
-                } else if min_allowed == min_cand_checked - 2 {
-                    required |= high_bits | (1u32 << (min_cand_checked - 2));
                 }
             }
             
