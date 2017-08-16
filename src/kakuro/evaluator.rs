@@ -363,6 +363,12 @@ impl Evaluator {
             }
             if !more_than_two && undet2 != None {
                 if let (Some(c1), Some(c2)) = (undet1, undet2) {
+                    if rem_sum % 2 == 0 {
+                        let half = rem_sum / 2;
+                        if 1 <= half && half <= MAX_VAL {
+                            self.move_cand.push(Move::Elim(3.0f64, vec![(c1, half), (c2, half)]));
+                        }
+                    }
                     for n in 1..(MAX_VAL + 1) {
                         if let EvCand::Elim(s) = self.cand_score[c1][n as usize] {
                             let n2 = rem_sum - n;
