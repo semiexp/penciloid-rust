@@ -76,7 +76,7 @@ impl Evaluator {
             // apply possible eliminations
             self.simple_elimination();
             self.unique_decision();
-            self.unique_decision();
+            self.unique_elimination();
             self.two_cells_propagation();
             self.naked_pair();
 
