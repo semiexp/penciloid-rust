@@ -70,6 +70,7 @@ impl Evaluator {
                 n_undecided += 1;
             }
         }
+        let mut decided_locs = vec![];
         loop {
             self.move_cand.clear();
 
@@ -105,6 +106,8 @@ impl Evaluator {
                 }
             } else {
                 // use lowest_decision
+                self.apply_locality(&decided_locs);
+
                 let mut move_score = 0.0f64;
                 for mv in &self.move_cand {
                     if let &Move::Decide(score, _, _) = mv {
@@ -117,6 +120,7 @@ impl Evaluator {
                 self.total_score += move_score;
                 self.val[lowest_decision.1] = lowest_decision.2;
                 n_undecided -= 1;
+                decided_locs.push(lowest_decision.1);
             }
         }
         if n_undecided == 0 {
@@ -151,6 +155,37 @@ impl Evaluator {
             }
         }
         self.move_cand = new_cand;
+    }
+    fn apply_locality(&mut self, decided_locs: &Vec<usize>) {
+        let mut last_moves = vec![];
+        let last_cnt = if decided_locs.len() < 2 { decided_locs.len() } else { 2 };
+
+        for i in 0..last_cnt {
+            let loc = decided_locs[decided_locs.len() - 1 - i];
+            let y = loc as i32 / self.shape.has_clue.width();
+            let x = loc as i32 % self.shape.has_clue.width();
+            last_moves.push((y, x));
+        }
+        for mut m in &mut self.move_cand {
+            match m {
+                &mut Move::Decide(ref mut score, loc, _) => {
+                    let y = loc as i32 / self.shape.has_clue.width();
+                    let x = loc as i32 % self.shape.has_clue.width();
+                    for i in 0..last_cnt {
+                        let dist = (last_moves[i].0 - y).abs() + (last_moves[i].1 - x).abs();
+
+                        let mut dim = 1.0;
+                        if dist < 5 {
+                            //print!("{} -> ", score);
+                            dim *= 1.0f64 - (7 - dist) as f64 / 10.0f64;
+                            //println!("{}", score);
+                        }
+                        *score *= dim;
+                    }
+                },
+                _ => (),
+            }
+        }
     }
     fn simple_elimination(&mut self) {
         for gi in 0..self.shape.group_to_cells.len() {
