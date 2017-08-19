@@ -323,7 +323,8 @@ impl Evaluator {
                     }
                     if !twice {
                         if let Some(c) = pos {
-                            self.move_cand.push(Move::Decide(cost + 4.0, c, n));
+                            let multiplier = 1.0f64 + rem_cells as f64 / 10.0f64 + self.shape.group_to_cells[gi].size() as f64 / 15.0f64;
+                            self.move_cand.push(Move::Decide((cost + 3.0) * multiplier, c, n));
                         } else {
                             self.inconsistent = true;
                             return;
