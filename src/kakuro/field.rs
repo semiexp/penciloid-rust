@@ -37,7 +37,7 @@ impl<'a> Field<'a> {
         let mut grps = vec![FieldGrp {
             unmet_num: 0,
             unmet_sum: 0,
-            unused: 0,
+            unused: Cand(0),
         }; shape.group_to_cells.len()];
         let n_groups = grps.len();
 
@@ -144,21 +144,21 @@ impl<'a> Field<'a> {
         if self.undecided_cells == 0 {
             self.solved = true;
         }
-        if (self.cand[loc] & (1 << (val - 1))) == 0 {
+        if !self.cand[loc].is_set(val) {
             self.inconsistent = true;
             return;
         }
-        self.total_cands -= self.cand[loc].count_ones() - 1;
-        self.cand[loc] = 1 << (val - 1);
+        self.total_cands -= (self.cand[loc].count_set_cands() - 1) as u32;
+        self.cand[loc] = Cand::singleton(val);
 
         let (g1, g2) = self.shape.cell_to_groups[loc];
         self.grps[g1].unmet_num -= 1;
         self.grps[g1].unmet_sum -= val;
-        self.grps[g1].unused &= !(1 << (val - 1) as Cand);
+        self.grps[g1].unused = self.grps[g1].unused.exclude(val);
 
         self.grps[g2].unmet_num -= 1;
         self.grps[g2].unmet_sum -= val;
-        self.grps[g2].unused &= !(1 << (val - 1) as Cand);
+        self.grps[g2].unused = self.grps[g2].unused.exclude(val);
 
         self.eliminate_cand_from_group(g1, val, loc);
         self.eliminate_cand_from_group(g2, val, loc);
@@ -167,7 +167,7 @@ impl<'a> Field<'a> {
         self.queue.push(g2);
     }
     fn eliminate_cand_from_group(&mut self, grp: usize, rem_cand: i32, cur: usize) {
-        let cand = !(1 << (rem_cand - 1) as Cand);
+        let cand = !Cand::singleton(rem_cand);
         for c in self.shape.group_to_cells[grp] {
             if c != cur {
                 self.limit_cand(c, cand);
@@ -178,16 +178,16 @@ impl<'a> Field<'a> {
         if self.cand[loc] & lim == self.cand[loc] {
             return;
         }
-        self.total_cands -= (self.cand[loc] & !lim).count_ones();
+        self.total_cands -= ((self.cand[loc] & !lim).count_set_cands()) as u32;
         self.cand[loc] &= lim;
 
         let current_cand = self.cand[loc];
-        if current_cand == 0 {
+        if current_cand.is_empty() {
             self.inconsistent = true;
             return;
         }
-        if current_cand.count_ones() == 1 {
-            self.decide_int(loc, (current_cand.trailing_zeros() + 1) as i32);
+        if current_cand.count_set_cands() == 1 {
+            self.decide_int(loc, current_cand.smallest_set_cand());
         }
 
         let (g1, g2) = self.shape.cell_to_groups[loc];
@@ -203,9 +203,9 @@ impl<'a> Field<'a> {
         }
 
         // unique position technique
-        if self.technique.unique_position && imperative != 0 {
-            let mut uniq = 0;
-            let mut mult = 0;
+        if self.technique.unique_position && !imperative.is_empty() {
+            let mut uniq = Cand(0);
+            let mut mult = Cand(0);
             for c in self.shape.group_to_cells[gid] {
                 if self.val[c] == UNDECIDED {
                     mult |= uniq & self.cand[c];
@@ -213,10 +213,10 @@ impl<'a> Field<'a> {
                 }
             }
             uniq &= imperative & !mult;
-            if uniq != 0 {
+            if !uniq.is_empty() {
                 for c in self.shape.group_to_cells[gid] {
-                    if self.val[c] == UNDECIDED && (self.cand[c] & uniq) != 0 {
-                        let val = ((self.cand[c] & uniq).trailing_zeros() + 1) as i32;
+                    if self.val[c] == UNDECIDED && !((self.cand[c] & uniq).is_empty()) {
+                        let val = (self.cand[c] & uniq).smallest_set_cand();
                         self.decide_int(c, val);
                     }
                 }
@@ -231,6 +231,7 @@ impl<'a> Field<'a> {
                 }
             }
         }
+
         // two-cells propagation (TODO: improve complexity)
         let grp = self.grps[gid];
         if self.technique.two_cells_propagation && grp.unmet_num == 2 {
@@ -250,11 +251,11 @@ impl<'a> Field<'a> {
             let mut c1_lim = CAND_ALL;
             let mut c2_lim = CAND_ALL;
             for i in 1..(MAX_VAL + 1) {
-                if (self.cand[c1] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
-                    c2_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
+                if !self.cand[c1].is_set(i) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                    c2_lim = c2_lim.exclude(grp.unmet_sum - i);
                 }
-                if (self.cand[c2] & (1 << (i - 1) as Cand) == 0) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
-                    c1_lim &= !(1 << (grp.unmet_sum - i - 1) as Cand);
+                if !self.cand[c2].is_set(i) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                    c1_lim = c1_lim.exclude(grp.unmet_sum - i);
                 }
             }
             self.limit_cand(c1, c1_lim);
@@ -264,7 +265,7 @@ impl<'a> Field<'a> {
         // naked pair (TODO: improve complexity)
         if self.technique.naked_pair {
             for c in self.shape.group_to_cells[gid] {
-                if self.val[c] != -1 || self.cand[c].count_ones() != 2 { continue; }
+                if self.val[c] != -1 || self.cand[c].count_set_cands() != 2 { continue; }
                 for d in self.shape.group_to_cells[gid] {
                     if self.val[d] != -1 { continue; }
                     if c != d && self.cand[c] == self.cand[d] {
@@ -287,25 +288,20 @@ impl<'a> Field<'a> {
             for c in self.shape.group_to_cells[gid] {
                 if self.val[c] != -1 { continue; }
                 let cand = self.cand[c];
-                min_sum += cand.trailing_zeros() + 1;
-                max_sum += 32 - cand.leading_zeros();
+                min_sum += cand.smallest_set_cand();
+                max_sum += cand.largest_set_cand();
             }
-            let mut update_list = [(0, 0); MAX_VAL as usize];
+            let mut update_list = [(0, Cand(0)); MAX_VAL as usize];
             let mut update_size = 0;
             for c in self.shape.group_to_cells[gid] {
                 if self.val[c] != -1 { continue; }
                 let cand = self.cand[c];
 
-                let current_max = grp.unmet_sum - (min_sum - (cand.trailing_zeros() + 1)) as i32;
-                let current_min = grp.unmet_sum - (max_sum - (32 - cand.leading_zeros())) as i32;
+                let current_max = grp.unmet_sum - (min_sum - cand.smallest_set_cand());
+                let current_min = grp.unmet_sum - (max_sum - cand.largest_set_cand());
 
-                let mut lim = CAND_ALL;
-                if current_max <= 8 {
-                    lim &= (1 << current_max as Cand) - 1;
-                }
-                if current_min >= 2 {
-                    lim &= !((1 << (current_min as Cand - 1)) - 1);
-                }
+                let mut lim = CAND_ALL.limit_upper_bound(current_max).limit_lower_bound(current_min);
+
                 if lim != CAND_ALL {
                     update_list[update_size] = (c, lim);
                     update_size += 1;

@@ -1,3 +1,5 @@
+use std::ops::{BitAnd, BitOr, BitAndAssign, BitOrAssign, Not};
+
 mod field_shape;
 mod dictionary;
 mod field;
@@ -6,9 +8,81 @@ mod evaluator;
 
 const MAX_VAL: i32 = 9;
 const MAX_SUM: i32 = MAX_VAL * (MAX_VAL + 1) / 2;
-type Cand = u32;
-const CAND_ALL: Cand = (1 << MAX_VAL) - 1;
 const UNDECIDED: i32 = -1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cand(u32);
+const CAND_ALL: Cand = Cand((1 << MAX_VAL) - 1);
+
+impl Cand {
+    fn singleton(n: i32) -> Cand {
+        Cand(1u32 << (n - 1))
+    }
+    fn is_set(&self, n: i32) -> bool {
+        (self.0 & (1u32 << (n - 1))) != 0
+    }
+    fn is_empty(&self) -> bool {
+        self.0 == 0u32
+    }
+    fn count_set_cands(&self) -> i32 {
+        self.0.count_ones() as i32
+    }
+    fn smallest_set_cand(&self) -> i32 {
+        (self.0.trailing_zeros() + 1) as i32
+    }
+    fn largest_set_cand(&self) -> i32 {
+        (32 - self.0.leading_zeros()) as i32
+    }
+    fn exclude(&self, n: i32) -> Cand {
+        Cand(self.0 & !(1u32 << (n - 1)))
+    }
+    fn limit_upper_bound(&self, max: i32) -> Cand {
+        if max >= MAX_VAL {
+            *self
+        } else if max >= 1 {
+            Cand(self.0 & ((1u32 << max) - 1))
+        } else {
+            Cand(0)
+        }
+    }
+    fn limit_lower_bound(&self, min: i32) -> Cand {
+        if min <= 1 {
+            *self
+        } else if min <= MAX_VAL {
+            Cand(self.0 & !((1u32 << (min - 1)) - 1))
+        } else {
+            Cand(0)
+        }
+    }
+}
+impl BitAnd for Cand {
+    type Output = Cand;
+    fn bitand(self, rhs: Cand) -> Cand {
+        Cand(self.0 & rhs.0)
+    }
+}
+impl BitOr for Cand {
+    type Output = Cand;
+    fn bitor(self, rhs: Cand) -> Cand {
+        Cand(self.0 | rhs.0)
+    }
+}
+impl BitAndAssign for Cand {
+    fn bitand_assign(&mut self, rhs: Cand) {
+        *self = Cand(self.0 & rhs.0);
+    }
+}
+impl BitOrAssign for Cand {
+    fn bitor_assign(&mut self, rhs: Cand) {
+        *self = Cand(self.0 | rhs.0);
+    }
+}
+impl Not for Cand {
+    type Output = Cand;
+    fn not(self) -> Cand {
+        Cand(CAND_ALL.0 ^ self.0)
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum Clue {
@@ -79,4 +153,48 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
         }
     }
     ret
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cand() {
+        assert_eq!(Cand::singleton(1), Cand(0b1));
+        assert_eq!(Cand::singleton(2), Cand(0b10));
+        
+        assert_eq!(Cand(0b101).is_set(1), true);
+        assert_eq!(Cand(0b101).is_set(2), false);
+        assert_eq!(Cand(0b101).is_set(3), true);
+
+        assert_eq!(Cand(0b0).is_empty(), true);
+        assert_eq!(Cand(0b1).is_empty(), false);
+
+        assert_eq!(Cand(0b10000).count_set_cands(), 1);
+        assert_eq!(Cand(0b101101).count_set_cands(), 4);
+        
+        assert_eq!(Cand(0b10100).smallest_set_cand(), 3);
+        assert_eq!(Cand(0b10110).smallest_set_cand(), 2);
+        assert_eq!(Cand(0b10000).smallest_set_cand(), 5);
+
+        assert_eq!(Cand(0b1100).largest_set_cand(), 4);
+        assert_eq!(Cand(0b10110).largest_set_cand(), 5);
+        assert_eq!(Cand(0b10000).largest_set_cand(), 5);
+
+        assert_eq!(Cand(0b11010).exclude(2), Cand(0b11000));
+        assert_eq!(Cand(0b11010).exclude(3), Cand(0b11010));
+        
+        assert_eq!(Cand(0b11010).limit_upper_bound(5), Cand(0b11010));
+        assert_eq!(Cand(0b11010).limit_upper_bound(4), Cand(0b01010));
+        assert_eq!(Cand(0b11010).limit_upper_bound(3), Cand(0b00010));
+        assert_eq!(Cand(0b11010).limit_upper_bound(2), Cand(0b00010));
+        assert_eq!(Cand(0b11010).limit_upper_bound(1), Cand(0b00000));
+
+        assert_eq!(Cand(0b11010).limit_lower_bound(5), Cand(0b10000));
+        assert_eq!(Cand(0b11010).limit_lower_bound(4), Cand(0b11000));
+        assert_eq!(Cand(0b11010).limit_lower_bound(3), Cand(0b11000));
+        assert_eq!(Cand(0b11010).limit_lower_bound(2), Cand(0b11010));
+        assert_eq!(Cand(0b11010).limit_lower_bound(1), Cand(0b11010));        
+    }
 }
