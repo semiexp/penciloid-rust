@@ -189,15 +189,15 @@ impl Evaluator {
     }
     fn simple_elimination(&mut self) {
         for gi in 0..self.shape.group_to_cells.len() {
-            let mut used_mask = 0u32; // bit indices are 1-origin
-            let mut rem_sum = self.clue[gi];
+            let mut used = Cand(0);
             for c in self.shape.group_to_cells[gi] {
                 if self.val[c] != UNDECIDED {
-                    used_mask |= 1u32 << self.val[c];
-                    rem_sum -= self.val[c];
+                    used |= Cand::singleton(self.val[c]);
                 }
             }
-            let rem_cells = self.shape.group_to_cells[gi].size() as i32 - used_mask.count_ones() as i32;
+            let rem_sum = self.clue[gi] - used.cand_sum();
+            let rem_cells = self.shape.group_to_cells[gi].size() as i32 - used.count_set_cands();
+
             if rem_cells == 0 {
                 continue;
             }
@@ -212,84 +212,53 @@ impl Evaluator {
                 continue;
             }
 
-            let mut allowed_cand = ((2u32 << MAX_VAL) - 2u32) ^ used_mask;
-            let mut required = 0u32;
+            let mut allowed = !used;
+            let mut required = Cand(0);
             // eliminate too large candidates
             {
-                let mut sum_small = 0;
-                let mut n_cand_checked = 0;
-                let mut max_cand_checked = 0;
-                let mut low_bits = 0;
-                for i in 1..(MAX_VAL + 1) {
-                    if (allowed_cand & (1u32 << i)) != 0 {
-                        if n_cand_checked == rem_cells - 1 {
-                            max_cand_checked = i;
-                            break;
-                        } else {
-                            sum_small += i;
-                            n_cand_checked += 1;
-                            low_bits |= 1u32 << i;
-                        }
-                    }
-                }
-                let mut max_allowed = rem_sum - sum_small;
+                let (low, high) = allowed.take_smallest_k(rem_cells - 1);
+                let sum_small = low.cand_sum();
+                let max_cand_checked = high.smallest_set_cand();
+                let max_allowed = rem_sum - sum_small;
 
                 if max_allowed < max_cand_checked {
                     self.inconsistent = true;
                     return;
                 }
                 if max_allowed == max_cand_checked + 1 {
-                    allowed_cand &= !(1u32 << max_cand_checked);
+                    allowed = allowed.exclude(max_cand_checked);
                 }
-                if max_allowed < MAX_VAL {
-                    allowed_cand &= (2u32 << max_allowed) - 2u32;
-                }
+                allowed = allowed.limit_upper_bound(max_allowed);
                 if max_allowed == max_cand_checked {
-                    required |= low_bits | (1u32 << max_cand_checked);
+                    required |= low | Cand::singleton(max_cand_checked);
                 } else if max_allowed == max_cand_checked {
-                    required |= low_bits | (1u32 << (max_cand_checked + 1));
+                    required |= low | Cand::singleton(max_cand_checked + 1);
                 }
             }
             {
-                let mut sum_large = 0;
-                let mut n_cand_checked = 0;
-                let mut min_cand_checked = 0;
-                let mut high_bits = 0u32;
-                for i in 1..(MAX_VAL + 1) {
-                    let i = MAX_VAL + 1 - i;
-                    if (allowed_cand & (1u32 << i)) != 0 {
-                        if n_cand_checked == rem_cells - 1 {
-                            min_cand_checked = i;
-                            break;
-                        } else {
-                            sum_large += i;
-                            n_cand_checked += 1;
-                            high_bits |= 1u32 << i;
-                        }
-                    }
-                }
-                let mut min_allowed = rem_sum - sum_large;
+                let (high, low) = allowed.take_largest_k(rem_cells - 1);
+                let sum_large = high.cand_sum();
+                let min_cand_checked = low.largest_set_cand();
+                let min_allowed = rem_sum - sum_large;
 
                 if min_allowed > min_cand_checked {
                     self.inconsistent = true;
                     return;
                 }
                 if min_allowed == min_cand_checked - 1 {
-                    allowed_cand &= !(1u32 << min_cand_checked);
+                    allowed = allowed.exclude(min_cand_checked);
                 }
-                if min_allowed > 1 {
-                    allowed_cand &= !((2u32 << (min_allowed - 1)) - 2u32);
-                }
+                allowed = allowed.limit_lower_bound(min_allowed);
                 if min_allowed == min_cand_checked {
-                    required |= high_bits | (1u32 << min_cand_checked);
+                    required |= high | Cand::singleton(min_cand_checked);
                 } else if min_allowed == min_cand_checked - 1 {
-                    required |= high_bits | (1u32 << (min_cand_checked - 1));
+                    required |= high | Cand::singleton(min_cand_checked - 1);
                 }
             }
             
             let mut elims = vec![];
             for n in 1..(MAX_VAL + 1) {
-                if (allowed_cand & (1u32 << n)) == 0 {
+                if !allowed.is_set(n) {
                     for c in self.shape.group_to_cells[gi] {
                         if self.val[c] == UNDECIDED {
                             elims.push((c, n));
@@ -300,7 +269,7 @@ impl Evaluator {
             self.move_cand.push(Move::Elim(SMALL_LARGE_ELIMINATION, elims));
 
             for n in 1..(MAX_VAL + 1) {
-                if (required & (1u32 << n)) != 0 {
+                if required.is_set(n) {
                     let mut cost = 0.0f64;
                     let mut pos = None;
                     let mut twice = false;
