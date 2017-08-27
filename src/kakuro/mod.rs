@@ -54,6 +54,42 @@ impl Cand {
             Cand(0)
         }
     }
+    fn cand_sum(&self) -> i32 {
+        let mut val = *self;
+        let mut ret = 0;
+        while val.0 != 0 {
+            let smallest = val.smallest_set_cand();
+            val = val.exclude(smallest);
+            ret += smallest;
+        }
+        ret
+    }
+    fn take_smallest_k(&self, k: i32) -> (Cand, Cand) {
+        let mut small = Cand(0);
+        let mut large = *self;
+        for _ in 0..k {
+            if large.0 == 0 {
+                break;
+            }
+            let nxt = large.smallest_set_cand();
+            small |= Cand::singleton(nxt);
+            large = large.exclude(nxt);
+        }
+        (small, large)
+    }
+    fn take_largest_k(&self, k: i32) -> (Cand, Cand) {
+        let mut small = *self;
+        let mut large = Cand(0);
+        for _ in 0..k {
+            if small.0 == 0 {
+                break;
+            }
+            let nxt = small.largest_set_cand();
+            large |= Cand::singleton(nxt);
+            small = small.exclude(nxt);
+        }
+        (large, small)
+    }
 }
 impl BitAnd for Cand {
     type Output = Cand;
@@ -195,6 +231,14 @@ mod tests {
         assert_eq!(Cand(0b11010).limit_lower_bound(4), Cand(0b11000));
         assert_eq!(Cand(0b11010).limit_lower_bound(3), Cand(0b11000));
         assert_eq!(Cand(0b11010).limit_lower_bound(2), Cand(0b11010));
-        assert_eq!(Cand(0b11010).limit_lower_bound(1), Cand(0b11010));        
+        assert_eq!(Cand(0b11010).limit_lower_bound(1), Cand(0b11010));
+
+        assert_eq!(Cand(0b0).cand_sum(), 0);
+        assert_eq!(Cand(0b10110).cand_sum(), 10);
+        assert_eq!(Cand(0b100000000).cand_sum(), 9);
+        assert_eq!(Cand(0b111111111).cand_sum(), 45);
+
+        assert_eq!(Cand(0b1011011).take_smallest_k(2), (Cand(0b11), Cand(0b1011000)));
+        assert_eq!(Cand(0b1011011).take_largest_k(2), (Cand(0b1010000), Cand(0b1011)));
     }
 }
