@@ -218,41 +218,41 @@ impl Evaluator {
             {
                 let (low, high) = allowed.take_smallest_k(rem_cells - 1);
                 let sum_small = low.cand_sum();
-                let max_cand_checked = high.smallest_set_cand();
+                let kth_smallest = high.smallest_set_cand();
                 let max_allowed = rem_sum - sum_small;
 
-                if max_allowed < max_cand_checked {
+                if max_allowed < kth_smallest {
                     self.inconsistent = true;
                     return;
                 }
-                if max_allowed == max_cand_checked + 1 {
-                    allowed = allowed.exclude(max_cand_checked);
+                if max_allowed == kth_smallest + 1 {
+                    allowed = allowed.exclude(kth_smallest);
                 }
                 allowed = allowed.limit_upper_bound(max_allowed);
-                if max_allowed == max_cand_checked {
-                    required |= low | Cand::singleton(max_cand_checked);
-                } else if max_allowed == max_cand_checked + 1 {
-                    required |= low | Cand::singleton(max_cand_checked + 1);
+                if max_allowed == kth_smallest {
+                    required |= low | Cand::singleton(kth_smallest);
+                } else if max_allowed == kth_smallest + 1 {
+                    required |= low | Cand::singleton(kth_smallest + 1);
                 }
             }
             {
                 let (high, low) = allowed.take_largest_k(rem_cells - 1);
                 let sum_large = high.cand_sum();
-                let min_cand_checked = low.largest_set_cand();
+                let kth_largest = low.largest_set_cand();
                 let min_allowed = rem_sum - sum_large;
 
-                if min_allowed > min_cand_checked {
+                if min_allowed > kth_largest {
                     self.inconsistent = true;
                     return;
                 }
-                if min_allowed == min_cand_checked - 1 {
-                    allowed = allowed.exclude(min_cand_checked);
+                if min_allowed == kth_largest - 1 {
+                    allowed = allowed.exclude(kth_largest);
                 }
                 allowed = allowed.limit_lower_bound(min_allowed);
-                if min_allowed == min_cand_checked {
-                    required |= high | Cand::singleton(min_cand_checked);
-                } else if min_allowed == min_cand_checked - 1 {
-                    required |= high | Cand::singleton(min_cand_checked - 1);
+                if min_allowed == kth_largest {
+                    required |= high | Cand::singleton(kth_largest);
+                } else if min_allowed == kth_largest - 1 {
+                    required |= high | Cand::singleton(kth_largest - 1);
                 }
             }
             
