@@ -231,7 +231,7 @@ impl Evaluator {
                 allowed = allowed.limit_upper_bound(max_allowed);
                 if max_allowed == max_cand_checked {
                     required |= low | Cand::singleton(max_cand_checked);
-                } else if max_allowed == max_cand_checked {
+                } else if max_allowed == max_cand_checked + 1 {
                     required |= low | Cand::singleton(max_cand_checked + 1);
                 }
             }
