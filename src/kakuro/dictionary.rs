@@ -56,41 +56,26 @@ impl Dictionary {
                     let vals = Cand(vals);
                     if vals.count_set_cands() < len { continue; }
 
-                    let mut cand = vec![];
-                    for i in 1..(MAX_VAL + 1) {
-                        if vals.is_set(i) {
-                            cand.push(i);
-                        }
-                    }
                     let mut imperative = Cand(0);
                     let mut allowed = vals;
 
-                    let mut sum_low: i32 = 0;
-                    for i in 0..(len - 1)  {
-                        sum_low += cand[i as usize];
+                    let (low, high) = vals.take_smallest_k(len - 1);
+                    let high_max = sum - low.cand_sum();
+                    let kth_smallest = high.smallest_set_cand();
+
+                    let (high, low) = vals.take_largest_k(len - 1);
+                    let low_min = sum - high.cand_sum();
+                    let kth_largest = low.largest_set_cand();
+
+                    allowed = allowed.limit_upper_bound(high_max);
+                    if high_max == kth_smallest + 1 {
+                        allowed = allowed.exclude(kth_smallest);
                     }
-                    let high_max = sum - sum_low;
-                    if high_max < cand[(len - 1) as usize] { continue; }
-                    if high_max < MAX_VAL {
-                        allowed = allowed.limit_upper_bound(high_max);
-                    }
-                    if high_max == cand[(len - 1) as usize] + 1 {
-                        allowed = allowed.exclude(high_max - 1);
+                    allowed = allowed.limit_lower_bound(low_min);
+                    if low_min == kth_largest - 1 {
+                        allowed = allowed.exclude(kth_largest);
                     }
 
-                    cand.reverse();
-                    let mut sum_high: i32 = 0;
-                    for i in 0..(len - 1)  {
-                        sum_high += cand[i as usize];
-                    }
-                    let low_min = sum - sum_high;
-                    if low_min > cand[(len - 1) as usize] { continue; }
-                    if low_min > 1 {
-                        allowed = allowed.limit_lower_bound(low_min);
-                    }
-                    if low_min == cand[(len - 1) as usize] - 1 {
-                        allowed = allowed.exclude(low_min + 1);
-                    }
                     data[(((len * (MAX_SUM + 1) + sum) << MAX_VAL) | (vals.0 as i32)) as usize] = (imperative, allowed);
                 }
             }
