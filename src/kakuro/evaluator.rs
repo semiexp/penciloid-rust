@@ -187,6 +187,44 @@ impl Evaluator {
             }
         }
     }
+    fn simple_elimination_sub(used: Cand, len: i32, sum: i32) -> (Cand, Cand) { // (allowed, required)
+        let unused = !used;
+        let mut allowed = unused;
+        let mut required = Cand(0);
+        {
+            let (low, high) = unused.take_smallest_k(len - 1);
+            let sum_small = low.cand_sum();
+            let kth_smallest = high.smallest_set_cand();
+            let max_allowed = sum - sum_small;
+
+            if max_allowed == kth_smallest + 1 {
+                allowed = allowed.exclude(kth_smallest);
+            }
+            allowed = allowed.limit_upper_bound(max_allowed);
+            if max_allowed == kth_smallest {
+                required |= low | Cand::singleton(kth_smallest);
+            } else if max_allowed == kth_smallest + 1 {
+                required |= low | Cand::singleton(kth_smallest + 1);
+            }
+        }
+        {
+            let (high, low) = unused.take_largest_k(len - 1);
+            let sum_large = high.cand_sum();
+            let kth_largest = low.largest_set_cand();
+            let min_allowed = sum - sum_large;
+
+            if min_allowed == kth_largest - 1 {
+                allowed = allowed.exclude(kth_largest);
+            }
+            allowed = allowed.limit_lower_bound(min_allowed);
+            if min_allowed == kth_largest {
+                required |= high | Cand::singleton(kth_largest);
+            } else if min_allowed == kth_largest - 1 {
+                required |= high | Cand::singleton(kth_largest - 1);
+            }
+        }
+        (allowed, required)
+    }
     fn simple_elimination(&mut self) {
         for gi in 0..self.shape.group_to_cells.len() {
             let mut used = Cand(0);
@@ -212,49 +250,7 @@ impl Evaluator {
                 continue;
             }
 
-            let mut allowed = !used;
-            let mut required = Cand(0);
-            // eliminate too large candidates
-            {
-                let (low, high) = allowed.take_smallest_k(rem_cells - 1);
-                let sum_small = low.cand_sum();
-                let kth_smallest = high.smallest_set_cand();
-                let max_allowed = rem_sum - sum_small;
-
-                if max_allowed < kth_smallest {
-                    self.inconsistent = true;
-                    return;
-                }
-                if max_allowed == kth_smallest + 1 {
-                    allowed = allowed.exclude(kth_smallest);
-                }
-                allowed = allowed.limit_upper_bound(max_allowed);
-                if max_allowed == kth_smallest {
-                    required |= low | Cand::singleton(kth_smallest);
-                } else if max_allowed == kth_smallest + 1 {
-                    required |= low | Cand::singleton(kth_smallest + 1);
-                }
-            }
-            {
-                let (high, low) = allowed.take_largest_k(rem_cells - 1);
-                let sum_large = high.cand_sum();
-                let kth_largest = low.largest_set_cand();
-                let min_allowed = rem_sum - sum_large;
-
-                if min_allowed > kth_largest {
-                    self.inconsistent = true;
-                    return;
-                }
-                if min_allowed == kth_largest - 1 {
-                    allowed = allowed.exclude(kth_largest);
-                }
-                allowed = allowed.limit_lower_bound(min_allowed);
-                if min_allowed == kth_largest {
-                    required |= high | Cand::singleton(kth_largest);
-                } else if min_allowed == kth_largest - 1 {
-                    required |= high | Cand::singleton(kth_largest - 1);
-                }
-            }
+            let (allowed, required) = Evaluator::simple_elimination_sub(used, rem_cells, rem_sum);
             
             let mut elims = vec![];
             for n in 1..(MAX_VAL + 1) {
