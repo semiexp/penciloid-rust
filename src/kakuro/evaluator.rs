@@ -251,18 +251,25 @@ impl Evaluator {
             }
 
             let (allowed, required) = Evaluator::simple_elimination_sub(used, rem_cells, rem_sum);
-            
+            let (allowed_base, required_base) = Evaluator::simple_elimination_sub(Cand(0), self.shape.group_to_cells[gi].size() as i32, self.clue[gi]);
+
             let mut elims = vec![];
+            let mut elims_base = vec![];
             for n in 1..(MAX_VAL + 1) {
                 if !allowed.is_set(n) {
                     for c in self.shape.group_to_cells[gi] {
                         if self.val[c] == UNDECIDED {
-                            elims.push((c, n));
+                            if !allowed_base.is_set(n) {
+                                elims_base.push((c, n));
+                            } else {
+                                elims.push((c, n));
+                            }
                         }
                     }
                 }
             }
             self.move_cand.push(Move::Elim(SMALL_LARGE_ELIMINATION, elims));
+            self.move_cand.push(Move::Elim(SMALL_LARGE_ELIMINATION / 2.0f64, elims_base));
 
             for n in 1..(MAX_VAL + 1) {
                 if required.is_set(n) {
@@ -289,7 +296,11 @@ impl Evaluator {
                     if !twice {
                         if let Some(c) = pos {
                             let multiplier = 1.0f64 + rem_cells as f64 / 10.0f64 + self.shape.group_to_cells[gi].size() as f64 / 15.0f64;
-                            self.move_cand.push(Move::Decide((cost + 3.0) * multiplier, c, n));
+                            if required_base.is_set(n) {
+                                self.move_cand.push(Move::Decide((cost + 2.0) * multiplier / 1.5f64, c, n));
+                            } else {
+                                self.move_cand.push(Move::Decide((cost + 3.0) * multiplier, c, n));
+                            }
                         } else {
                             self.inconsistent = true;
                             return;
