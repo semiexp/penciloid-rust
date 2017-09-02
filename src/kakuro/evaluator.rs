@@ -13,6 +13,39 @@ enum Move {
     Elim(f64, Vec<(usize, i32)>),
 }
 
+#[derive(Clone, Copy)]
+pub struct EvaluatorParam {
+    unique_elimination: f64,
+    small_large_elimination: f64,
+    small_large_elimination_easy: f64,
+    small_large_decision_remaining_cells_penalty: f64,
+    small_large_decision_all_cells_penalty: f64,
+    small_large_decision_easy_multiplier: f64,
+    small_large_decision_additive_penalty: f64,
+    small_large_decision_easy_additive_penalty: f64,
+    two_cells_propagation_half_elimination: f64,
+    two_cells_propagation_propagate_penalty: f64,
+    decision_threshold: f64,
+}
+
+impl EvaluatorParam {
+    pub fn default() -> EvaluatorParam {
+        EvaluatorParam {
+            unique_elimination: 0.8f64,
+            small_large_elimination: 1.0f64,
+            small_large_elimination_easy: 0.5f64,
+            small_large_decision_remaining_cells_penalty: 0.1f64,
+            small_large_decision_all_cells_penalty: 0.06f64,
+            small_large_decision_easy_multiplier: 0.7f64,
+            small_large_decision_additive_penalty: 3.0f64,
+            small_large_decision_easy_additive_penalty: 2.0f64,
+            two_cells_propagation_half_elimination: 3.0f64,
+            two_cells_propagation_propagate_penalty: 5.0f64,
+            decision_threshold: 11.0f64,
+        }
+    }
+}
+
 pub struct Evaluator {
     n_cells: usize,
     shape: FieldShape,
@@ -22,13 +55,11 @@ pub struct Evaluator {
     total_score: f64,
     inconsistent: bool,
     move_cand: Vec<Move>,
+    param: EvaluatorParam,
 }
 
-const UNIQUE_ELIMINATION: f64 = 0.8f64;
-const SMALL_LARGE_ELIMINATION: f64 = 1.0f64;
-
 impl Evaluator {
-    pub fn new(problem: &Grid<Clue>) -> Evaluator {
+    pub fn new(problem: &Grid<Clue>, param: EvaluatorParam) -> Evaluator {
         let n_cells = (problem.height() * problem.width()) as usize;
 
         let mut has_clue = Grid::new(problem.height(), problem.width(), false);
@@ -61,6 +92,7 @@ impl Evaluator {
             total_score: 0.0f64,
             inconsistent: false,
             move_cand: vec![],
+            param: param,
         }
     }
     pub fn evaluate(&mut self) -> Option<f64> {
@@ -99,7 +131,7 @@ impl Evaluator {
                     }
                 }
             }
-            if lowest_elim.0 < lowest_decision.0 * 11.0f64 {
+            if lowest_elim.0 < lowest_decision.0 * self.param.decision_threshold {
                 // use elim
                 for (loc, v) in lowest_elim.1 {
                     self.cand_score[loc][v as usize] = EvCand::Elim(lowest_elim.0);
@@ -268,8 +300,8 @@ impl Evaluator {
                     }
                 }
             }
-            self.move_cand.push(Move::Elim(SMALL_LARGE_ELIMINATION, elims));
-            self.move_cand.push(Move::Elim(SMALL_LARGE_ELIMINATION / 2.0f64, elims_base));
+            self.move_cand.push(Move::Elim(self.param.small_large_elimination, elims));
+            self.move_cand.push(Move::Elim(self.param.small_large_elimination_easy, elims_base));
 
             for n in 1..(MAX_VAL + 1) {
                 if required.is_set(n) {
@@ -295,11 +327,13 @@ impl Evaluator {
                     }
                     if !twice {
                         if let Some(c) = pos {
-                            let multiplier = 1.0f64 + rem_cells as f64 / 10.0f64 + self.shape.group_to_cells[gi].size() as f64 / 15.0f64;
+                            let multiplier = 1.0f64
+                                + rem_cells as f64 * self.param.small_large_decision_remaining_cells_penalty
+                                + self.shape.group_to_cells[gi].size() as f64 * self.param.small_large_decision_all_cells_penalty;
                             if required_base.is_set(n) {
-                                self.move_cand.push(Move::Decide((cost + 2.0) * multiplier / 1.5f64, c, n));
+                                self.move_cand.push(Move::Decide((cost + self.param.small_large_decision_easy_additive_penalty) * multiplier * self.param.small_large_decision_easy_multiplier, c, n));
                             } else {
-                                self.move_cand.push(Move::Decide((cost + 3.0) * multiplier, c, n));
+                                self.move_cand.push(Move::Decide((cost + self.param.small_large_decision_additive_penalty) * multiplier, c, n));
                             }
                         } else {
                             self.inconsistent = true;
@@ -325,7 +359,7 @@ impl Evaluator {
                         mv.push((c, self.val[i]));
                     }
                 }
-                self.move_cand.push(Move::Elim(UNIQUE_ELIMINATION, mv));
+                self.move_cand.push(Move::Elim(self.param.unique_elimination, mv));
             }
         }
     }
@@ -378,20 +412,20 @@ impl Evaluator {
                     if rem_sum % 2 == 0 {
                         let half = rem_sum / 2;
                         if 1 <= half && half <= MAX_VAL {
-                            self.move_cand.push(Move::Elim(3.0f64, vec![(c1, half), (c2, half)]));
+                            self.move_cand.push(Move::Elim(self.param.two_cells_propagation_half_elimination, vec![(c1, half), (c2, half)]));
                         }
                     }
                     for n in 1..(MAX_VAL + 1) {
                         if let EvCand::Elim(s) = self.cand_score[c1][n as usize] {
                             let n2 = rem_sum - n;
                             if 1 <= n2 && n2 <= MAX_VAL {
-                                self.move_cand.push(Move::Elim(s + 5.0f64, vec![(c2, n2)]));
+                                self.move_cand.push(Move::Elim(s + self.param.two_cells_propagation_propagate_penalty, vec![(c2, n2)]));
                             }
                         }
                         if let EvCand::Elim(s) = self.cand_score[c2][n as usize] {
                             let n2 = rem_sum - n;
                             if 1 <= n2 && n2 <= MAX_VAL {
-                                self.move_cand.push(Move::Elim(s + 5.0f64, vec![(c1, n2)]));
+                                self.move_cand.push(Move::Elim(s + self.param.two_cells_propagation_propagate_penalty, vec![(c1, n2)]));
                             }
                         }
                     }
