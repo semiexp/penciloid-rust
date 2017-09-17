@@ -13,19 +13,19 @@ enum Move {
     Elim(f64, Vec<(usize, i32)>),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct EvaluatorParam {
-    unique_elimination: f64,
-    small_large_elimination: f64,
-    small_large_elimination_easy: f64,
-    small_large_decision_remaining_cells_penalty: f64,
-    small_large_decision_all_cells_penalty: f64,
-    small_large_decision_easy_multiplier: f64,
-    small_large_decision_additive_penalty: f64,
-    small_large_decision_easy_additive_penalty: f64,
-    two_cells_propagation_half_elimination: f64,
-    two_cells_propagation_propagate_penalty: f64,
-    decision_threshold: f64,
+    pub unique_elimination: f64,
+    pub small_large_elimination: f64,
+    pub small_large_elimination_easy: f64,
+    pub small_large_decision_remaining_cells_penalty: f64,
+    pub small_large_decision_all_cells_penalty: f64,
+    pub small_large_decision_easy_multiplier: f64,
+    pub small_large_decision_additive_penalty: f64,
+    pub small_large_decision_easy_additive_penalty: f64,
+    pub two_cells_propagation_half_elimination: f64,
+    pub two_cells_propagation_propagate_penalty: f64,
+    pub decision_threshold: f64,
 }
 
 impl EvaluatorParam {
