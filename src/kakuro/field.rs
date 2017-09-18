@@ -323,19 +323,19 @@ mod tests {
     fn test_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[Coord { y: 0, x: 0 }] = Clue::Clue { horizontal: -1, vertical: -1 };
-        problem_base[Coord { y: 0, x: 1 }] = Clue::Clue { horizontal: -1, vertical: 3 };
-        problem_base[Coord { y: 0, x: 2 }] = Clue::Clue { horizontal: -1, vertical: 8 };
-        problem_base[Coord { y: 1, x: 0 }] = Clue::Clue { horizontal: 4, vertical: -1 };
-        problem_base[Coord { y: 2, x: 0 }] = Clue::Clue { horizontal: 7, vertical: -1 };
+        problem_base[(Y(0), X(0))] = Clue::Clue { horizontal: -1, vertical: -1 };
+        problem_base[(Y(0), X(1))] = Clue::Clue { horizontal: -1, vertical: 3 };
+        problem_base[(Y(0), X(2))] = Clue::Clue { horizontal: -1, vertical: 8 };
+        problem_base[(Y(1), X(0))] = Clue::Clue { horizontal: 4, vertical: -1 };
+        problem_base[(Y(2), X(0))] = Clue::Clue { horizontal: 7, vertical: -1 };
 
         let mut field = Field::new(&problem_base, &dic);
         field.check_all();
 
-        assert_eq!(field.val(Coord { y: 1, x: 1 }), 1);
-        assert_eq!(field.val(Coord { y: 1, x: 2 }), 3);
-        assert_eq!(field.val(Coord { y: 2, x: 1 }), 2);
-        assert_eq!(field.val(Coord { y: 2, x: 2 }), 5);
+        assert_eq!(field.val((Y(1), X(1))), 1);
+        assert_eq!(field.val((Y(1), X(2))), 3);
+        assert_eq!(field.val((Y(2), X(1))), 2);
+        assert_eq!(field.val((Y(2), X(2))), 5);
         assert_eq!(field.solved(), true);
         assert_eq!(field.inconsistent(), false);
         assert_eq!(field.undecided_cells(), 0);
@@ -346,11 +346,11 @@ mod tests {
     fn test_inconsistent_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[Coord { y: 0, x: 0 }] = Clue::Clue { horizontal: -1, vertical: -1 };
-        problem_base[Coord { y: 0, x: 1 }] = Clue::Clue { horizontal: -1, vertical: 3 };
-        problem_base[Coord { y: 0, x: 2 }] = Clue::Clue { horizontal: -1, vertical: 6 };
-        problem_base[Coord { y: 1, x: 0 }] = Clue::Clue { horizontal: 4, vertical: -1 };
-        problem_base[Coord { y: 2, x: 0 }] = Clue::Clue { horizontal: 5, vertical: -1 };
+        problem_base[(Y(0), X(0))] = Clue::Clue { horizontal: -1, vertical: -1 };
+        problem_base[(Y(0), X(1))] = Clue::Clue { horizontal: -1, vertical: 3 };
+        problem_base[(Y(0), X(2))] = Clue::Clue { horizontal: -1, vertical: 6 };
+        problem_base[(Y(1), X(0))] = Clue::Clue { horizontal: 4, vertical: -1 };
+        problem_base[(Y(2), X(0))] = Clue::Clue { horizontal: 5, vertical: -1 };
 
         let mut field = Field::new(&problem_base, &dic);
         field.check_all();

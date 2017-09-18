@@ -145,11 +145,11 @@ mod tests {
         let mut grid = Grid::new(3, 3, 0);
         assert_eq!(grid.height(), 3);
         assert_eq!(grid.width(), 3);
-        assert_eq!(grid[LoopCoord { y: 1, x: 1 }], 0);
-        grid[LoopCoord { y: 1, x: 1 }] = 4;
-        assert_eq!(grid[LoopCoord { y: 1, x: 1 }], 4);
-        assert_eq!(grid[LoopCoord { y: 1, x: 0 }], 0);
-        assert_eq!(grid[LoopCoord { y: 2, x: 0 }], 0);
+        assert_eq!(grid[(Y(1), X(1))], 0);
+        grid[(Y(1), X(1))] = 4;
+        assert_eq!(grid[(Y(1), X(1))], 4);
+        assert_eq!(grid[(Y(1), X(0))], 0);
+        assert_eq!(grid[(Y(2), X(1))], 0);
         assert_eq!(grid[4], 4);
     }
 }
