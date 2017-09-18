@@ -1,4 +1,4 @@
-use super::super::{Grid, Coord};
+use super::super::{Grid, Y, X, Coord};
 
 #[derive(Clone, Copy)]
 pub struct FieldShapeGrp {
@@ -44,7 +44,7 @@ impl FieldShape {
         for y in 0..height {
             let mut start = None;
             for x in 0..(width + 1) {
-                if x == width || has_clue[Coord { y: y, x: x }] {
+                if x == width || has_clue[(Y(y), X(x))] {
                     if let Some(s) = start {
                         group_to_cells.push(FieldShapeGrp {
                             start: s,
@@ -59,7 +59,7 @@ impl FieldShape {
                     if start == None {
                         start = Some((y * width + x) as usize);
                     }
-                    cell_to_groups[Coord { y: y, x: x }].0 = current_grp_id;
+                    cell_to_groups[(Y(y), X(x))].0 = current_grp_id;
                 }
             }
         }
@@ -68,7 +68,7 @@ impl FieldShape {
         for x in 0..width {
             let mut start = None;
             for y in 0..(height + 1) {
-                if y == height || has_clue[Coord { y: y, x: x }] {
+                if y == height || has_clue[(Y(y), X(x))] {
                     if let Some(s) = start {
                         group_to_cells.push(FieldShapeGrp {
                             start: s,
@@ -83,7 +83,7 @@ impl FieldShape {
                     if start == None {
                         start = Some((y * width + x) as usize);
                     }
-                    cell_to_groups[Coord { y: y, x: x }].1 = current_grp_id;
+                    cell_to_groups[(Y(y), X(x))].1 = current_grp_id;
                 }
             }
         }
@@ -154,7 +154,7 @@ mod tests {
 
             assert_eq!(shape.group_to_cells.len(), 9);
 
-            let (g1, g2) = shape.cell_to_groups[Coord { y: 4, x: 1 }];
+            let (g1, g2) = shape.cell_to_groups[(Y(4), X(1))];
             let h1 = shape.clue_locations[g1 as usize];
             let h2 = shape.clue_locations[g2 as usize];
             assert!(match (h1, h2) {

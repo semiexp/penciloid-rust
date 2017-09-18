@@ -6,6 +6,7 @@ mod field;
 mod generator;
 mod evaluator;
 mod format;
+pub mod trainer;
 
 const MAX_VAL: i32 = 9;
 const MAX_SUM: i32 = MAX_VAL * (MAX_VAL + 1) / 2;
@@ -154,12 +155,12 @@ pub use self::generator::*;
 pub use self::evaluator::*;
 pub use self::format::*;
 
-use super::{Grid, Coord};
+use super::{Grid, Y, X};
 pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
     let mut has_clue = Grid::new(ans.height(), ans.width(), false);
     for y in 0..ans.height() {
         for x in 0..ans.width() {
-            let loc = Coord { y: y, x: x };
+            let loc = (Y(y), X(x));
             has_clue[loc] = !(1 <= ans[loc] && ans[loc] <= MAX_VAL);
         }
     }
@@ -167,10 +168,10 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
     let mut prob_base = Grid::new(ans.height(), ans.width(), (0, 0));
     for y in 0..ans.height() {
         for x in 0..ans.width() {
-            let val = ans[Coord { y: y, x: x }];
+            let val = ans[(Y(y), X(x))];
             if !(1 <= val && val <= MAX_VAL) { continue; }
 
-            let (g1, g2) = shape.cell_to_groups[Coord { y: y, x: x }];
+            let (g1, g2) = shape.cell_to_groups[(Y(y), X(x))];
             match shape.clue_locations[g1 as usize] {
                 ClueLocation::Horizontal(h) => prob_base[h as usize].0 += val,
                 ClueLocation::Vertical(v) => prob_base[v as usize].1 += val,
@@ -184,7 +185,7 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
     let mut ret = Grid::new(ans.height(), ans.width(), Clue::NoClue);
     for y in 0..ans.height() {
         for x in 0..ans.width() {
-            let loc = Coord { y: y, x: x };
+            let loc = (Y(y), X(x));
             let v = ans[loc];
             if (1 <= v && v <= MAX_VAL) { continue; }
             ret[loc] = Clue::Clue { horizontal: prob_base[loc].0, vertical: prob_base[loc].1 };

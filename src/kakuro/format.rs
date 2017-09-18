@@ -2,7 +2,7 @@ use std::io::BufRead;
 use std::num::ParseIntError;
 
 use format::{Error, next_valid_line};
-use common::{Coord, Grid};
+use common::{Y, X, Grid};
 use super::Clue;
 
 pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, Error> {
@@ -30,7 +30,7 @@ pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, 
         let clue_horizontal = try!(try!(row.next().ok_or(Error::Format)).trim().parse::<i32>());
         let clue_vertical = try!(try!(row.next().ok_or(Error::Format)).trim().parse::<i32>());
 
-        ret[Coord { y, x }] = Clue::Clue { horizontal: clue_horizontal, vertical: clue_vertical };
+        ret[(Y(y), X(x))] = Clue::Clue { horizontal: clue_horizontal, vertical: clue_vertical };
     }
 
     Ok(ret)

@@ -1,83 +1,12 @@
-use std::ops::{Add, Sub, Mul, Index, IndexMut};
+use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Coord {
-    pub y: i32,
-    pub x: i32,
-}
+pub struct Y(pub i32);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LoopCoord {
-    pub y: i32,
-    pub x: i32,
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Dir {
-    pub y: i32,
-    pub x: i32,
-}
-impl Add<Dir> for Coord {
-    type Output = Coord;
-    fn add(self, rhs: Dir) -> Coord {
-        Coord {
-            y: self.y + rhs.y,
-            x: self.x + rhs.x,
-        }
-    }
-}
-impl Sub<Dir> for Coord {
-    type Output = Coord;
-    fn sub(self, rhs: Dir) -> Coord {
-        Coord {
-            y: self.y - rhs.y,
-            x: self.x - rhs.x,
-        }
-    }
-}
-impl Add<Dir> for LoopCoord {
-    type Output = LoopCoord;
-    fn add(self, rhs: Dir) -> LoopCoord {
-        LoopCoord {
-            y: self.y + rhs.y,
-            x: self.x + rhs.x,
-        }
-    }
-}
-impl Sub<Dir> for LoopCoord {
-    type Output = LoopCoord;
-    fn sub(self, rhs: Dir) -> LoopCoord {
-        LoopCoord {
-            y: self.y - rhs.y,
-            x: self.x - rhs.x,
-        }
-    }
-}
-impl Add<Dir> for Dir {
-    type Output = Dir;
-    fn add(self, rhs: Dir) -> Dir {
-        Dir {
-            y: self.y + rhs.y,
-            x: self.x + rhs.x,
-        }
-    }
-}
-impl Sub<Dir> for Dir {
-    type Output = Dir;
-    fn sub(self, rhs: Dir) -> Dir {
-        Dir {
-            y: self.y - rhs.y,
-            x: self.x - rhs.x,
-        }
-    }
-}
-impl Mul<i32> for Dir {
-    type Output = Dir;
-    fn mul(self, rhs: i32) -> Dir {
-        Dir {
-            y: self.y * rhs,
-            x: self.x * rhs,
-        }
-    }
-}
+pub struct X(pub i32);
+
+pub type Coord = (Y, X);
 
 #[derive(Debug, Clone)]
 pub struct Grid<T: Clone> {
@@ -99,11 +28,8 @@ impl<T: Clone> Grid<T> {
     pub fn width(&self) -> i32 {
         self.width
     }
-    pub fn index(&self, cd: Coord) -> usize {
-        (cd.y * self.width + cd.x) as usize
-    }
-    pub fn index_loop(&self, cd: LoopCoord) -> usize {
-        (cd.y * self.width + cd.x) as usize
+    pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
+        (y * self.width + x) as usize
     }
 }
 impl<T: Clone> Index<Coord> for Grid<T> {
@@ -116,19 +42,6 @@ impl<T: Clone> Index<Coord> for Grid<T> {
 impl<T: Clone> IndexMut<Coord> for Grid<T> {
     fn index_mut<'a>(&'a mut self, idx: Coord) -> &'a mut T {
         let idx = self.index(idx);
-        &mut self.data[idx]
-    }
-}
-impl<T: Clone> Index<LoopCoord> for Grid<T> {
-    type Output = T;
-    fn index<'a>(&'a self, idx: LoopCoord) -> &'a T {
-        let idx = self.index_loop(idx);
-        &self.data[idx]
-    }
-}
-impl<T: Clone> IndexMut<LoopCoord> for Grid<T> {
-    fn index_mut<'a>(&'a mut self, idx: LoopCoord) -> &'a mut T {
-        let idx = self.index_loop(idx);
         &mut self.data[idx]
     }
 }
@@ -226,35 +139,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_common_types_operators() {
-        assert_eq!(
-            Coord { y: 1, x: 2 } + Dir { y: 3, x: 5 },
-            Coord { y: 4, x: 7 }
-        );
-        assert_eq!(
-            Coord { y: 1, x: 2 } - Dir { y: 3, x: 5 },
-            Coord { y: -2, x: -3 }
-        );
-        assert_eq!(
-            LoopCoord { y: 1, x: 2 } + Dir { y: 3, x: 5 },
-            LoopCoord { y: 4, x: 7 }
-        );
-        assert_eq!(
-            LoopCoord { y: 1, x: 2 } - Dir { y: 3, x: 5 },
-            LoopCoord { y: -2, x: -3 }
-        );
-        assert_eq!(
-            Dir { y: 1, x: 2 } + Dir { y: 3, x: 5 },
-            Dir { y: 4, x: 7 }
-        );
-        assert_eq!(
-            Dir { y: 1, x: 2 } - Dir { y: 3, x: 5 },
-            Dir { y: -2, x: -3 }
-        );
-        assert_eq!(Dir { y: 1, x: 2 } * 3, Dir { y: 3, x: 6 });
-    }
 
     #[test]
     fn test_grid() {

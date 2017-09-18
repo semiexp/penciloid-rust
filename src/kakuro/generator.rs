@@ -13,8 +13,8 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     let mut current_total_cands = (height * width * 9);
     for y in 0..height {
         for x in 0..width {
-            if !has_clue[Coord { y: y, x: x }] {
-                answer[Coord { y: y, x: x }] = (y + x) % MAX_VAL + 1;
+            if !has_clue[(Y(y), X(x))] {
+                answer[(Y(y), X(x))] = (y + x) % MAX_VAL + 1;
             }
         }
     }
@@ -29,7 +29,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
         let mut grp_val_loc = vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
         for y in 0..height {
             for x in 0..width {
-                let loc = Coord { y: y, x: x };
+                let loc = (Y(y), X(x));
                 if has_clue[loc] {
                     continue;
                 }
@@ -40,7 +40,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
         }
         for y in 0..height {
             for x in 0..width {
-                let loc = Coord { y: y, x: x };
+                let loc = (Y(y), X(x));
                 let c = has_clue.index(loc);
                 if has_clue[loc] {
                     continue;
@@ -119,8 +119,8 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
 
 fn check_connectivity(grid: &Grid<bool>) -> i32 { // returns the sum of sizes of non-largest components
     fn dfs(y: i32, x: i32, grid: &Grid<bool>, vis: &mut Grid<bool>) -> i32 {
-        if vis[Coord { y: y, x: x }] || grid[Coord { y: y, x: x }] { return 0; }
-        vis[Coord { y: y, x: x }] = true;
+        if vis[(Y(y), X(x))] || grid[(Y(y), X(x))] { return 0; }
+        vis[(Y(y), X(x))] = true;
         let mut ret = 1;
         if y > 0 { ret += dfs(y - 1, x, grid, vis); }
         if x > 0 { ret += dfs(y, x - 1, grid, vis); }
@@ -133,7 +133,7 @@ fn check_connectivity(grid: &Grid<bool>) -> i32 { // returns the sum of sizes of
     let mut largest = 0;
     for y in 0..grid.height() {
         for x in 0..grid.width() {
-            if !grid[Coord { y: y, x: x }] && !vis[Coord { y: y, x: x }] {
+            if !grid[(Y(y), X(x))] && !vis[(Y(y), X(x))] {
                 let sz = dfs(y, x, &grid, &mut vis);
                 sum += sz;
                 largest = std::cmp::max(largest, sz);
@@ -147,10 +147,10 @@ pub fn disconnectivity_score(grid: &Grid<bool>) -> i32 {
     let mut ret = 0;
     for y in 0..grid.height() {
         for x in 0..grid.width() {
-            if !grid[Coord { y: y, x: x }] {
-                grid[Coord { y: y, x: x }] = true;
+            if !grid[(Y(y), X(x))] {
+                grid[(Y(y), X(x))] = true;
                 ret += check_connectivity(&grid);
-                grid[Coord { y: y, x: x }] = false;
+                grid[(Y(y), X(x))] = false;
             }
         }
     }
@@ -162,25 +162,25 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
 
     let mut placement = Grid::new(height, width, false);
     for y in 0..height {
-        placement[Coord { y: y, x: 0 }] = true;
-        placement[Coord { y: y, x: width - 1 }] = true;
+        placement[(Y(y), X(0))] = true;
+        placement[(Y(y), X(width - 1))] = true;
     }
     for x in 0..width {
-        placement[Coord { y: 0, x: x }] = true;
-        placement[Coord { y: height - 1, x: x }] = true;
+        placement[(Y(0), X(x))] = true;
+        placement[(Y(height - 1), X(x))] = true;
     }
     loop {
         let mut cand = vec![];
         for y in 0..height {
             for x in 0..width {
-                let loc = Coord { y: y, x: x };
+                let loc = (Y(y), X(x));
                 if placement[loc] { continue; }
 
-                if x >= 2 && !placement[Coord { y: y, x: x - 1 }] && placement[Coord { y: y, x: x - 2 }] { continue; }
-                if x < width - 2 && !placement[Coord { y: y, x: x + 1 }] && placement[Coord { y: y, x: x + 2 }] { continue; }
-                if y >= 2 && !placement[Coord { y: y - 1, x: x }] && placement[Coord { y: y - 2, x: x }] { continue; }
-                if y < height - 2 && !placement[Coord { y: y + 1, x: x }] && placement[Coord { y: y + 2, x: x }] { continue; }
-                if height % 2 == 1 && width % 2 == 1 && !placement[Coord { y: height / 2, x: width / 2 }] {
+                if x >= 2 && !placement[(Y(y), X(x - 1))] && placement[(Y(y), X(x - 2))] { continue; }
+                if x < width - 2 && !placement[(Y(y), X(x + 1))] && placement[(Y(y), X(x + 2))] { continue; }
+                if y >= 2 && !placement[(Y(y - 1), X(x))] && placement[(Y(y - 2), X(x))] { continue; }
+                if y < height - 2 && !placement[(Y(y + 1), X(x))] && placement[(Y(y + 2), X(x))] { continue; }
+                if height % 2 == 1 && width % 2 == 1 && !placement[(Y(height / 2), X(width / 2))] {
                     if y == height / 2 && (x == width / 2 - 1 || x == width / 2 + 1) { continue; }
                     if x == width / 2 && (y == height / 2 - 1 || y == height / 2 + 1) { continue; }
                 }
@@ -190,25 +190,25 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
                 let mut wu = 0;
                 let mut wd = 0;
                 for d in 0..height {
-                    if placement[Coord { y: y, x: x - d }] {
+                    if placement[(Y(y), X(x - d))] {
                         wl = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[Coord { y: y, x: x + d }] {
+                    if placement[(Y(y), X(x + d))] {
                         wr = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[Coord { y: y - d, x: x }] {
+                    if placement[(Y(y - d), X(x))] {
                         wu = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[Coord { y: y + d, x: x }] {
+                    if placement[(Y(y + d), X(x))] {
                         wd = d;
                         break;
                     }
@@ -236,8 +236,8 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
 
         for _ in 0..10 {
             let (y, x) = wc.ind_sample(rng);
-            placement[Coord { y: y, x: x }] = true;
-            placement[Coord { y: height - 1 - y, x: width - 1 - x }] = true;
+            placement[(Y(y), X(x))] = true;
+            placement[(Y(height - 1 - y), X(width - 1 - x))] = true;
 
             if check_connectivity(&placement) == 0 {
                 upd = true;
@@ -253,7 +253,7 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
         for y in 0..height {
             let mut con = 0;
             for x in 0..width {
-                if placement[Coord { y: y, x: x }] {
+                if placement[(Y(y), X(x))] {
                     con = 0;
                 } else {
                     con += 1;
@@ -266,7 +266,7 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
         for x in 0..width {
             let mut con = 0;
             for y in 0..height {
-                if placement[Coord { y: y, x: x }] {
+                if placement[(Y(y), X(x))] {
                     con = 0;
                 } else {
                     con += 1;
@@ -284,7 +284,7 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
     let mut ret = Grid::new(height - 1, width - 1, false);
     for y in 0..(height - 1) {
         for x in 0..(width - 1) {
-            let loc = Coord { y: y, x: x };
+            let loc = (Y(y), X(x));
             ret[loc] = placement[loc];
         }
     }
