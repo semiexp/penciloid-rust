@@ -260,7 +260,7 @@ impl GridLoop {
         let end2_edge = field.grid_loop().grid[edge2].chain_another_end_edge;
         let status;
 
-        match (field.grid_loop().grid[edge1].edge_status, field.grid_loop().grid[edge1].edge_status) {
+        match (field.grid_loop().grid[edge1].edge_status, field.grid_loop().grid[edge2].edge_status) {
             (status1, status2) if status1 == status2 => status = status1,
             (Edge::Undecided, status2) => {
                 GridLoop::decide_chain(field, edge1, status2);
@@ -369,7 +369,7 @@ impl GridLoop {
                     let ud_another_end = field.grid_loop().another_end_id(vid, ud);
                     if line_size == field.grid_loop().decided_line || another_end != ud_another_end {
                         if cand == -1 {
-                            cand = ud_another_end as i32;
+                            cand = ud as i32;
                         } else {
                             cand = -2;
                         }
@@ -415,5 +415,180 @@ impl GridLoopField for GridLoop {
         }
     }
     fn inspect(&mut self, (Y(y), X(x)): Coord) {
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    fn run_grid_loop_test(input: &[&str], expected: &[&str], inconsistent: bool) {
+        let height = (input.len() / 2) as i32;
+        let width = (input[0].len() / 2) as i32;
+        let mut grid_loop = GridLoop::new(height, width);
+
+        for y in 0..(input.len() as i32) {
+            let mut row_iter = input[y as usize].chars();
+
+            for x in 0..(input[0].len() as i32) {
+                let ch = row_iter.next().unwrap();
+
+                if !grid_loop.is_edge((Y(y), X(x))) {
+                    continue;
+                }
+                match ch {
+                    '|' | '-' => GridLoop::decide_edge(&mut grid_loop, (Y(y), X(x)), Edge::Line),
+                    'x' => GridLoop::decide_edge(&mut grid_loop, (Y(y), X(x)), Edge::Blank),
+                    _ => (),
+                }
+            }
+        }
+
+        for y in 0..(input.len() as i32) {
+            let mut row_iter = expected[y as usize].chars();
+
+            for x in 0..(input[0].len() as i32) {
+                let ch = row_iter.next().unwrap();
+
+                if !grid_loop.is_edge((Y(y), X(x))) {
+                    continue;
+                }
+
+                let expected_edge = match ch {
+                    '|' | '-' => Edge::Line,
+                    'x' => Edge::Blank,
+                    _ => Edge::Undecided,
+                };
+
+                assert_eq!(grid_loop.get_edge((Y(y), X(x))), expected_edge, "Comparing at y={}, x={}", y, x);
+            }
+        }
+
+        assert_eq!(grid_loop.inconsistent(), inconsistent);
+    }
+
+    #[test]
+    fn test_corner() {
+        run_grid_loop_test(
+            &[
+                "+-+ + +",
+                "      x",
+                "+ + + +",
+                "       ",
+                "+ + + +",
+                "      |",
+                "+x+ + +",
+            ],
+            &[
+                "+-+ +x+",
+                "|     x",
+                "+ + + +",
+                "       ",
+                "+ + + +",
+                "x     |",
+                "+x+ +-+",
+            ],
+            false
+        );
+    }
+
+    #[test]
+    fn test_two_lines() {
+        run_grid_loop_test(
+            &[
+                "+ + + +",
+                "       ",
+                "+ +-+ +",
+                "  |    ",
+                "+ + + +",
+                "       ",
+                "+ + + +",
+            ],
+            &[
+                "+ + + +",
+                "  x    ",
+                "+x+-+ +",
+                "  |    ",
+                "+ + + +",
+                "       ",
+                "+ + + +",
+            ],
+            false
+        );
+    }
+
+    #[test]
+    fn test_joined_lines() {
+        run_grid_loop_test(
+            &[
+                "+ + + +",
+                "  x    ",
+                "+x+ + +",
+                "x      ",
+                "+ +x+ +",
+                "  x    ",
+                "+ +-+ +",
+            ],
+            &[
+                "+x+x+ +",
+                "x x    ",
+                "+x+-+ +",
+                "x |    ",
+                "+-+x+ +",
+                "| x    ",
+                "+-+-+ +",
+            ],
+            false
+        );
+    }
+
+    #[test]
+    fn test_line_close1() {
+        run_grid_loop_test(
+            &[
+                "+ + + +",
+                "       ",
+                "+ + +-+",
+                "|   |  ",
+                "+ + +-+",
+                "       ",
+                "+ + + +",
+            ],
+            &[
+                "+ +-+-+",
+                "    x |",
+                "+ +x+-+",
+                "|   | x",
+                "+ +x+-+",
+                "    x |",
+                "+ +-+-+",
+            ],
+            false
+        );
+    }
+
+    #[test]
+    fn test_line_close2() {
+        run_grid_loop_test(
+            &[
+                "+ + + +",
+                "       ",
+                "+ + +-+",
+                "    |  ",
+                "+ + +-+",
+                "       ",
+                "+ + + +",
+            ],
+            &[
+                "+ + + +",
+                "    x  ",
+                "+ +x+-+",
+                "    |  ",
+                "+ +x+-+",
+                "    x  ",
+                "+ + + +",
+            ],
+            false
+        );
     }
 }
