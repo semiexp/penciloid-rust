@@ -31,6 +31,10 @@ impl<T: Clone> Grid<T> {
     pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
         (y * self.width + x) as usize
     }
+    pub fn coord(&self, idx: usize) -> Coord {
+        let idx = idx as i32;
+        (Y(idx / self.width), X(idx % self.width))
+    }
 }
 impl<T: Clone> Index<Coord> for Grid<T> {
     type Output = T;
