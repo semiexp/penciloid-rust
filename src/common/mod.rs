@@ -1,5 +1,8 @@
 use std::ops::{Index, IndexMut};
 
+mod grid_loop;
+pub use self::grid_loop::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Y(pub i32);
 
