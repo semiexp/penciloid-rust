@@ -143,6 +143,9 @@ impl GridLoop {
     }
     
     // public modifier
+    pub fn set_inconsistent(&mut self) {
+        self.inconsistent = true;
+    }
     pub fn decide_edge<T: GridLoopField>(field: &mut T, loc: Coord, status: Edge) {
         if !field.grid_loop().is_valid_coord(loc) {
             if status != Edge::Blank {
