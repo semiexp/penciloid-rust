@@ -1,4 +1,5 @@
 use super::super::{Coord, Y, X, Grid, FiniteSearchQueue};
+use std::ops::{Index, IndexMut};
 
 use std::mem;
 
@@ -30,6 +31,17 @@ pub struct GridLoop {
     decided_line: i32,
     decided_edge: i32,
     queue: FiniteSearchQueue,
+}
+impl Index<EdgeId> for GridLoop {
+    type Output = GridLoopItem;
+    fn index(&self, index: EdgeId) -> &GridLoopItem {
+        &self.grid[index.0]
+    }
+}
+impl IndexMut<EdgeId> for GridLoop {
+    fn index_mut(&mut self, index: EdgeId) -> &mut GridLoopItem {
+        &mut self.grid[index.0]
+    }
 }
 impl GridLoop {
     pub fn new(height: i32, width: i32) -> GridLoop {
@@ -177,15 +189,15 @@ impl GridLoop {
 
     // private accessor
     fn another_end_id(&self, origin: VtxId, edge: EdgeId) -> VtxId {
-        let edge_data = self.grid[edge.0];
+        let edge_data = self[edge];
         VtxId((edge_data.chain_end_points.0).0 + (edge_data.chain_end_points.1).0 - origin.0)
     }
     fn is_end_of_chain(&self, id: EdgeId) -> bool {
-        let id2 = self.grid[id.0].chain_another_end_edge;
-        self.grid[id2.0].chain_another_end_edge == id
+        let id2 = self[id].chain_another_end_edge;
+        self[id2].chain_another_end_edge == id
     }
     fn is_end_of_chain_vertex(&self, edge: EdgeId, vtx: VtxId) -> bool {
-        let ends = self.grid[edge.0].chain_end_points;
+        let ends = self[edge].chain_end_points;
         ends.0 == vtx || ends.1 == vtx
     }
 
@@ -201,7 +213,7 @@ impl GridLoop {
         }
     }
     fn decide_edge_internal<T: GridLoopField>(field: &mut T, id: EdgeId, status: Edge) {
-        let current_status = field.grid_loop().grid[id.0].edge_status;
+        let current_status = field.grid_loop()[id].edge_status;
 
         if current_status == status {
             return;
@@ -216,15 +228,15 @@ impl GridLoop {
     }
     fn decide_chain<T: GridLoopField>(field: &mut T, edge: EdgeId, status: Edge) {
         let gl = field.grid_loop();
-        let sz = gl.grid[edge.0].chain_size;
+        let sz = gl[edge].chain_size;
         gl.decided_edge += sz;
         if status == Edge::Line {
             gl.decided_line += sz;
         }
         let mut pt = edge;
         loop {
-            gl.grid[pt.0].edge_status = status;
-            pt = gl.grid[pt.0].chain_next;
+            gl[pt].edge_status = status;
+            pt = gl[pt].chain_next;
             if pt == edge {
                 break;
             }
@@ -235,15 +247,15 @@ impl GridLoop {
         loop {
             let cd = field.grid_loop().grid.coord(pt.0);
             field.check_neighborhood(cd);
-            pt = field.grid_loop().grid[pt.0].chain_next;
+            pt = field.grid_loop()[pt].chain_next;
             if pt == edge {
                 break;
             }
         }
     }
     fn join<T: GridLoopField>(field: &mut T, edge1: EdgeId, edge2: EdgeId) {
-        let mut item1 = field.grid_loop().grid[edge1.0];
-        let mut item2 = field.grid_loop().grid[edge2.0];
+        let mut item1 = field.grid_loop()[edge1];
+        let mut item2 = field.grid_loop()[edge2];
         
         if !field.grid_loop().is_end_of_chain(edge1) || !field.grid_loop().is_end_of_chain(edge2) {
             return;
@@ -267,11 +279,11 @@ impl GridLoop {
         let origin = item1.chain_end_points.0;
         let end1_vertex = field.grid_loop().another_end_id(origin, edge1);
         let end2_vertex = field.grid_loop().another_end_id(origin, edge2);
-        let end1_edge = field.grid_loop().grid[edge1.0].chain_another_end_edge;
-        let end2_edge = field.grid_loop().grid[edge2.0].chain_another_end_edge;
+        let end1_edge = field.grid_loop()[edge1].chain_another_end_edge;
+        let end2_edge = field.grid_loop()[edge2].chain_another_end_edge;
         let status;
 
-        match (field.grid_loop().grid[edge1.0].edge_status, field.grid_loop().grid[edge2.0].edge_status) {
+        match (field.grid_loop()[edge1].edge_status, field.grid_loop()[edge2].edge_status) {
             (status1, status2) if status1 == status2 => status = status1,
             (Edge::Undecided, status2) => {
                 GridLoop::decide_chain(field, edge1, status2);
@@ -313,8 +325,8 @@ impl GridLoop {
 
         let grid_loop = field.grid_loop();
 
-        let mut end1_item = grid_loop.grid[end1_edge.0];
-        let mut end2_item = grid_loop.grid[end2_edge.0];
+        let mut end1_item = grid_loop[end1_edge];
+        let mut end2_item = grid_loop[end2_edge];
 
         // concatenate 2 lists
         mem::swap(&mut end1_item.chain_next, &mut end2_item.chain_next);
@@ -332,8 +344,8 @@ impl GridLoop {
         end1_item.chain_another_end_edge = end2_edge;
         end2_item.chain_another_end_edge = end1_edge;
 
-        grid_loop.grid[end1_edge.0] = end1_item;
-        grid_loop.grid[end2_edge.0] = end2_item;
+        grid_loop[end1_edge] = end1_item;
+        grid_loop[end2_edge] = end2_item;
 
         grid_loop.queue.push(end1_vertex.0);
         grid_loop.queue.push(end2_vertex.0);
@@ -371,7 +383,7 @@ impl GridLoop {
         if line.len() == 1 {
             let eid = line[0];
             let vid = VtxId(field.grid_loop().grid.index((Y(y), X(x))));
-            let line_size = field.grid_loop().grid[eid.0].chain_size;
+            let line_size = field.grid_loop()[eid].chain_size;
             let another_end = field.grid_loop().another_end_id(vid, eid);
 
             // TODO: handle -1 / -2 properly
