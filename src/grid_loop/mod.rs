@@ -1,4 +1,4 @@
-use super::super::{Coord, Y, X, Grid, FiniteSearchQueue};
+use super::{Coord, Y, X, Grid, FiniteSearchQueue};
 use std::ops::{Index, IndexMut, Deref, DerefMut};
 
 use std::mem;

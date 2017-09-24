@@ -1,4 +1,5 @@
-use super::super::{Y, X, Coord, Grid, Edge, GridLoop, GridLoopField};
+use super::super::{Y, X, Coord, Grid};
+use grid_loop::{Edge, GridLoop, GridLoopField};
 use super::*;
 
 pub struct Field<'a> {

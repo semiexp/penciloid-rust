@@ -1,4 +1,5 @@
-use super::super::{Y, X, Coord, Edge};
+use super::super::{Y, X, Coord};
+use grid_loop::Edge;
 use super::Clue;
 
 pub const DICTIONARY_NEIGHBOR_SIZE: usize = 12;
