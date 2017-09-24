@@ -259,6 +259,17 @@ impl GridLoop {
             }
         }
     }
+    fn has_fully_solved<T: GridLoopField>(field: &mut T) {
+        let height = field.grid_loop().height();
+        let width = field.grid_loop().width();
+        for y in 0..(2 * height + 1) {
+            for x in 0..(2 * width + 1) {
+                if y % 2 != x % 2 && field.grid_loop().get_edge((Y(y), X(x))) == Edge::Undecided {
+                    GridLoop::decide_edge(field, (Y(y), X(x)), Edge::Blank);
+                }
+            }
+        }
+    }
     fn join<T: GridLoopField>(field: &mut T, edge1: EdgeId, edge2: EdgeId) {
         let mut item1 = field.grid_loop()[edge1];
         let mut item2 = field.grid_loop()[edge2];
@@ -324,7 +335,7 @@ impl GridLoop {
                     return;
                 } else {
                     field.grid_loop().fully_solved = true;
-                    // GridLoop::has_fully_solved(field);
+                    GridLoop::has_fully_solved(field);
                 }
             }
         }
@@ -657,6 +668,31 @@ mod tests {
                 "+ +x+-+",
                 "    x  ",
                 "+ + + +",
+            ],
+            false
+        );
+    }
+
+    #[test]
+    fn test_fully_solved() {
+        run_grid_loop_test(
+            &[
+                "+ + + +",
+                "       ",
+                "+ + +-+",
+                "    | |",
+                "+ + +-+",
+                "       ",
+                "+ + + +",
+            ],
+            &[
+                "+x+x+x+",
+                "x x x x",
+                "+x+x+-+",
+                "x x | |",
+                "+x+x+-+",
+                "x x x x",
+                "+x+x+x+",
             ],
             false
         );
