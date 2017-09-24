@@ -64,6 +64,47 @@ impl<'a> Field<'a> {
     pub fn get_edge_safe(&mut self, cd: Coord) -> Edge {
         self.grid_loop.get_edge_safe(cd)
     }
+
+    fn inspect_technique(&mut self, (Y(y), X(x)): Coord) {
+        if y % 2 == 1 && x % 2 == 1 {
+            let clue = self.clue[(Y(y / 2), X(x / 2))];
+            if clue == Clue(3) {
+                let neighbor = [
+                    (Y(1), X(0)),
+                    (Y(0), X(1)),
+                    (Y(-1), X(0)),
+                    (Y(0), X(-1)),
+                ];
+
+                // adjacent 3
+                for d in 0..4 {
+                    let (Y(dy), X(dx)) = neighbor[d];
+                    let cell2 = (Y(y / 2 + dy), X(x / 2 + dx));
+                    if self.clue.is_valid_coord(cell2) && self.clue[cell2] == Clue(3) {
+                        // Deriberately ignoring the possible small loop encircling the two 3's
+                        GridLoop::decide_edge(self, (Y(y - dy), X(x - dx)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y + 3 * dy), X(x + 3 * dx)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y + dy + 2 * dx), X(x + dx + 2 * dy)), Edge::Blank);
+                        GridLoop::decide_edge(self, (Y(y + dy - 2 * dx), X(x + dx - 2 * dy)), Edge::Blank);
+                    }
+                }
+
+                // diagonal 3
+                for d in 0..4 {
+                    let (Y(dy1), X(dx1)) = neighbor[d];
+                    let (Y(dy2), X(dx2)) = neighbor[(d + 1) % 4];
+                    let cell2 = (Y(y / 2 + dy1 + dy2), X(x / 2 + dx1 + dx2));
+                    if self.clue.is_valid_coord(cell2) && self.clue[cell2] == Clue(3) {
+                        GridLoop::decide_edge(self, (Y(y - dy1), X(x - dx1)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y - dy2), X(x - dx2)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y + 2 * dy1 + 3 * dy2), X(x + 2 * dx1 + 3 * dx2)), Edge::Line);
+                        GridLoop::decide_edge(self, (Y(y + 3 * dy1 + 2 * dy2), X(x + 3 * dx1 + 2 * dx2)), Edge::Line);
+                    }
+                }
+            }
+        }
+    }
 }
 impl<'a> GridLoopField for Field<'a> {
     fn grid_loop(&mut self) -> &mut GridLoop {
@@ -114,6 +155,8 @@ impl<'a> GridLoopField for Field<'a> {
                     GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), neighbors[i]);
                 }
             }
+
+            self.inspect_technique((Y(y), X(x)));
         }
     }
 }
@@ -123,7 +166,7 @@ mod tests {
     use super::*;
     use common;
 
-    fn run_problem_test(input: &[&str], dic: &Dictionary) {
+    fn run_problem_test(dic: &Dictionary, input: &[&str], fully_solved: bool) {
         let height = (input.len() / 2) as i32;
         let width = (input[0].len() / 2) as i32;
 
@@ -142,6 +185,9 @@ mod tests {
 
         let mut field = Field::new(&clue, dic);
         field.check_all_cell();
+
+        assert_eq!(field.inconsistent(), false);
+        assert_eq!(field.fully_solved(), fully_solved);
 
         for y in 0..(input.len() as i32) {
             let mut row_iter = input[y as usize].chars();
@@ -168,7 +214,7 @@ mod tests {
     fn test_problem() {
         let dic = Dictionary::complete();
         
-        run_problem_test(&[
+        run_problem_test(&dic, &[
             "+x+-+-+ +",
             "x | x    ",
             "+x+-+x+ +",
@@ -176,8 +222,8 @@ mod tests {
             "+x+-+x+ +",
             "x | x    ",
             "+x+-+-+ +",
-        ], &dic);
-        run_problem_test(&[
+        ], false);
+        run_problem_test(&dic, &[
             "+x+-+x+x+",
             "x |3| x x",
             "+x+x+-+-+",
@@ -185,8 +231,8 @@ mod tests {
             "+x+-+x+-+",
             "x0x2| | x",
             "+x+x+-+x+",
-        ], &dic);
-        run_problem_test(&[
+        ], true);
+        run_problem_test(&dic, &[
             "+-+-+-+-+",
             "|3x x x |",
             "+-+ +-+x+",
@@ -194,8 +240,8 @@ mod tests {
             "+x+ +x+-+",
             "x x x0x1x",
             "+x+x+x+x+",
-        ], &dic);
-        run_problem_test(&[
+        ], false);
+        run_problem_test(&dic, &[
             "+ +-+-+x+",
             " 2  x2| x",
             "+ +x+x+-+",
@@ -203,6 +249,24 @@ mod tests {
             "+ + +x+ +",
             "         ",
             "+ + + + +",
-        ], &dic);
+        ], false);
+        run_problem_test(&dic, &[
+            "+ +-+ +x+",
+            "   3   1x",
+            "+x+-+x+ +",
+            "   3  |  ",
+            "+ +-+ + +",
+            "         ",
+            "+ + + + +",
+        ], false);
+        run_problem_test(&dic, &[
+            "+-+-+ + +",
+            "|2x      ",
+            "+x+-+ + +",
+            "| |3     ",
+            "+ + + + +",
+            "     3| x",
+            "+ + +-+x+",
+        ], false);
     }
 }
