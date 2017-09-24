@@ -1,5 +1,5 @@
 use super::super::{Coord, Y, X, Grid, FiniteSearchQueue};
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Deref, DerefMut};
 
 use std::mem;
 
@@ -188,6 +188,9 @@ impl GridLoop {
             GridLoop::queue_pop_all(field);
             field.grid_loop().queue.finish();
         }
+    }
+    pub fn get_handle<'a, T: GridLoopField>(field: &'a mut T) -> QueueActiveGridLoopField<'a, T> {
+        QueueActiveGridLoopField::new(field)
     }
 
     // private accessor
@@ -442,6 +445,46 @@ impl GridLoopField for GridLoop {
         }
     }
     fn inspect(&mut self, (Y(y), X(x)): Coord) {
+    }
+}
+pub struct QueueActiveGridLoopField<'a, T: GridLoopField + 'a> {
+    field: &'a mut T,
+    finalize_required: bool,
+}
+impl<'a, T: GridLoopField> Deref for QueueActiveGridLoopField<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.field
+    }
+}
+impl<'a, T: GridLoopField> DerefMut for QueueActiveGridLoopField<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.field
+    }
+}
+impl<'a, T: GridLoopField> QueueActiveGridLoopField<'a, T> {
+    fn new(field: &'a mut T) -> QueueActiveGridLoopField<'a, T> {
+        assert_eq!(field.grid_loop().queue.is_started(), false);
+        if field.grid_loop().queue.is_started() {
+            QueueActiveGridLoopField {
+                field,
+                finalize_required: false,
+            }
+        } else {
+            field.grid_loop().queue.start();
+            QueueActiveGridLoopField {
+                field,
+                finalize_required: true,
+            }
+        }
+    }
+}
+impl<'a, T: GridLoopField> Drop for QueueActiveGridLoopField<'a, T> {
+    fn drop(&mut self) {
+        GridLoop::queue_pop_all(self.field);
+        if self.finalize_required {
+            self.field.grid_loop().queue.finish();
+        }
     }
 }
 
