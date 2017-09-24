@@ -23,6 +23,15 @@ impl<'a> Field<'a> {
     pub fn width(&self) -> i32 {
         self.clue.width()
     }
+    pub fn inconsistent(&self) -> bool {
+        self.grid_loop.inconsistent()
+    }
+    pub fn set_inconsistent(&mut self) {
+        self.grid_loop.set_inconsistent()
+    }
+    pub fn fully_solved(&self) -> bool {
+        self.grid_loop.fully_solved()
+    }
     pub fn check_all_cell(&mut self) {
         let height = self.height();
         let width = self.width();
