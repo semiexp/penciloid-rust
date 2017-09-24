@@ -28,6 +28,9 @@ impl<T: Clone> Grid<T> {
     pub fn width(&self) -> i32 {
         self.width
     }
+    pub fn is_valid_coord(&self, (Y(y), X(x)): Coord) -> bool {
+        0 <= y && y < self.height && 0 <= x && x < self.width
+    }
     pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
         (y * self.width + x) as usize
     }
