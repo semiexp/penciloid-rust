@@ -141,6 +141,12 @@ impl GridLoop {
     pub fn is_edge(&self, (Y(y), X(x)): Coord) -> bool {
         y % 2 != x % 2
     }
+    pub fn num_decided_edges(&self) -> i32 {
+        self.decided_edge
+    }
+    pub fn num_decided_lines(&self) -> i32 {
+        self.decided_line
+    }
     
     // public modifier
     pub fn set_inconsistent(&mut self) {
@@ -234,18 +240,19 @@ impl GridLoop {
     }
     fn decide_chain<T: GridLoopField>(field: &mut T, edge: EdgeId, status: Edge) {
         let gl = field.grid_loop();
-        let sz = gl[edge].chain_size;
-        gl.decided_edge += sz;
-        if status == Edge::Line {
-            gl.decided_line += sz;
-        }
         let mut pt = edge;
+        let mut sz = 0;
         loop {
             gl[pt].edge_status = status;
             pt = gl[pt].chain_next;
+            sz += 1;
             if pt == edge {
                 break;
             }
+        }
+        gl.decided_edge += sz;
+        if status == Edge::Line {
+            gl.decided_line += sz;
         }
     }
     fn check_chain_neighborhood<T: GridLoopField>(field: &mut T, edge: EdgeId) {
@@ -525,6 +532,9 @@ mod tests {
             }
         }
 
+        let mut expected_decided_edge = 0;
+        let mut expected_decided_line = 0;
+
         for y in 0..(input.len() as i32) {
             let mut row_iter = expected[y as usize].chars();
 
@@ -535,16 +545,27 @@ mod tests {
                     continue;
                 }
 
-                let expected_edge = match ch {
-                    '|' | '-' => Edge::Line,
-                    'x' => Edge::Blank,
-                    _ => Edge::Undecided,
-                };
-
+                let expected_edge;
+                match ch {
+                    '|' | '-' => {
+                        expected_decided_edge += 1;
+                        expected_decided_line += 1;
+                        expected_edge = Edge::Line;
+                    },
+                    'x' => {
+                        expected_decided_edge += 1;
+                        expected_edge = Edge::Blank;
+                    },
+                    _ => {
+                        expected_edge = Edge::Undecided;
+                    },
+                }
                 assert_eq!(grid_loop.get_edge((Y(y), X(x))), expected_edge, "Comparing at y={}, x={}", y, x);
             }
         }
 
+        assert_eq!(grid_loop.num_decided_edges(), expected_decided_edge);
+        assert_eq!(grid_loop.num_decided_lines(), expected_decided_line);
         assert_eq!(grid_loop.inconsistent(), inconsistent);
     }
 
