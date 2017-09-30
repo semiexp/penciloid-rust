@@ -58,10 +58,10 @@ impl<'a> Field<'a> {
             GridLoop::check(self, cd);
         }
     }
-    pub fn get_edge(&mut self, cd: Coord) -> Edge {
+    pub fn get_edge(&self, cd: Coord) -> Edge {
         self.grid_loop.get_edge(cd)
     }
-    pub fn get_edge_safe(&mut self, cd: Coord) -> Edge {
+    pub fn get_edge_safe(&self, cd: Coord) -> Edge {
         self.grid_loop.get_edge_safe(cd)
     }
 
