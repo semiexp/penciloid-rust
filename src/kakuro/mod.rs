@@ -187,7 +187,7 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
         for x in 0..ans.width() {
             let loc = (Y(y), X(x));
             let v = ans[loc];
-            if (1 <= v && v <= MAX_VAL) { continue; }
+            if 1 <= v && v <= MAX_VAL { continue; }
             ret[loc] = Clue::Clue { horizontal: prob_base[loc].0, vertical: prob_base[loc].1 };
         }
     }

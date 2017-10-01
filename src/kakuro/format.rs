@@ -1,5 +1,4 @@
 use std::io::BufRead;
-use std::num::ParseIntError;
 
 use format::{Error, next_valid_line};
 use common::{Y, X, Grid};

@@ -1,18 +1,17 @@
 extern crate rand;
 
-use super::super::{Grid, Coord};
+use super::super::Grid;
 use super::*;
 
 use std::thread;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use rand::{thread_rng, Rng, distributions};
-use rand::distributions::IndependentSample;
+use rand::Rng;
 
 pub fn evaluate_parallel(n_threads: i32, problems: &Vec<Grid<Clue>>, param: EvaluatorParam) -> Vec<Option<f64>> {
-    let mut res = Arc::new(Mutex::new(vec![None; problems.len()]));
-    let mut checked = Arc::new(Mutex::new(0));
+    let res = Arc::new(Mutex::new(vec![None; problems.len()]));
+    let checked = Arc::new(Mutex::new(0));
     
     let mut threads = vec![];
 

@@ -1,8 +1,8 @@
 use super::super::{Grid, Y, X, Coord};
-use grid_loop::{Edge, GridLoop, GridLoopField};
+use grid_loop::{Edge, GridLoopField};
 use super::*;
 
-use rand::{Rng, distributions};
+use rand::Rng;
 
 pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
     let height = has_clue.height();

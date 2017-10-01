@@ -462,7 +462,7 @@ impl GridLoopField for GridLoop {
             GridLoop::check(self, (Y(y), X(x + 1)));
         }
     }
-    fn inspect(&mut self, (Y(y), X(x)): Coord) {
+    fn inspect(&mut self, _: Coord) {
     }
 }
 pub struct QueueActiveGridLoopField<'a, T: GridLoopField + 'a> {
