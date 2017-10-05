@@ -482,7 +482,6 @@ impl<'a, T: GridLoopField> DerefMut for QueueActiveGridLoopField<'a, T> {
 }
 impl<'a, T: GridLoopField> QueueActiveGridLoopField<'a, T> {
     fn new(field: &'a mut T) -> QueueActiveGridLoopField<'a, T> {
-        assert_eq!(field.grid_loop().queue.is_started(), false);
         if field.grid_loop().queue.is_started() {
             QueueActiveGridLoopField {
                 field,
