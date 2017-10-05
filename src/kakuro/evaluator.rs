@@ -1,4 +1,4 @@
-use super::super::{Grid, Coord};
+use super::super::Grid;
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -389,7 +389,6 @@ impl Evaluator {
     }
     fn two_cells_propagation(&mut self) {
         for gi in 0..self.shape.group_to_cells.len() {
-            let mut used_mask = 0u32; // bit indices are 1-origin
             let mut rem_sum = self.clue[gi];
             let mut undet1 = None;
             let mut undet2 = None;

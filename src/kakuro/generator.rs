@@ -1,4 +1,4 @@
-use super::super::{Grid, Coord};
+use super::super::Grid;
 use super::*;
 
 use rand::{Rng, distributions};
@@ -10,7 +10,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     let width = has_clue.width();
 
     let mut answer = Grid::new(height, width, -1);
-    let mut current_total_cands = (height * width * 9);
+    let mut current_total_cands = height * width * 9;
     for y in 0..height {
         for x in 0..width {
             if !has_clue[(Y(y), X(x))] {
@@ -23,7 +23,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     let n_step = height * width * 10;
     let mut temperature = 10.0f64;
 
-    for step in 0..n_step {
+    for _ in 0..n_step {
         let mut move_cand: Vec<Vec<(usize, i32, i32)>> = vec![];
 
         let mut grp_val_loc = vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];

@@ -300,7 +300,7 @@ impl<'a> Field<'a> {
                 let current_max = grp.unmet_sum - (min_sum - cand.smallest_set_cand());
                 let current_min = grp.unmet_sum - (max_sum - cand.largest_set_cand());
 
-                let mut lim = CAND_ALL.limit_upper_bound(current_max).limit_lower_bound(current_min);
+                let lim = CAND_ALL.limit_upper_bound(current_max).limit_lower_bound(current_min);
 
                 if lim != CAND_ALL {
                     update_list[update_size] = (c, lim);

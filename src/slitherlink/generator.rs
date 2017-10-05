@@ -1,8 +1,8 @@
 use super::super::{Grid, Y, X, Coord};
-use grid_loop::{Edge, GridLoop, GridLoopField};
+use grid_loop::{Edge, GridLoopField};
 use super::*;
 
-use rand::{Rng, distributions};
+use rand::Rng;
 
 pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
     let height = has_clue.height();
@@ -133,4 +133,77 @@ fn has_zero_nearby(problem: &Grid<Clue>, (Y(y), X(x)): Coord) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand;
+
+    fn run_placement_test<R: Rng>(placement: Vec<Vec<bool>>, dic: &Dictionary, rng: &mut R) {
+        let placement = ::common::vec_to_grid(&placement);
+        let mut succeeded = false;
+
+        for _ in 0..10 {
+            let problem = generate(&placement, dic, rng);
+
+            if let Some(problem) = problem {
+                succeeded = true;
+
+                assert_eq!(problem.height(), placement.height());
+                assert_eq!(problem.width(), placement.width());
+                
+                for y in 0..placement.height() {
+                    for x in 0..placement.width() {
+                        let clue = problem[(Y(y), X(x))];
+                        assert_eq!(placement[(Y(y), X(x))], clue != NO_CLUE);
+
+                        if clue == Clue(0) {
+                            for dy in -1..2 {
+                                for dx in -1..2 {
+                                    let y2 = y + dy;
+                                    let x2 = x + dx;
+
+                                    if 0 <= y2 && y2 < placement.height() && 0 <= x2 && x2 < placement.width() && (dy, dx) != (0, 0) {
+                                        assert!(problem[(Y(y2), X(x2))] != Clue(0));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut field = Field::new(&problem, &dic);
+                field.check_all_cell();
+                assert!(!field.inconsistent());
+                assert!(field.fully_solved());
+
+                break;
+            }
+        }
+
+        assert!(succeeded);
+    }
+
+    #[test]
+    fn test_generator() {
+        let mut rng = rand::thread_rng();
+        let dic = Dictionary::complete();
+
+        run_placement_test(vec![
+            vec![true , true , true , true , true ],
+            vec![true , false, false, false, true ],
+            vec![true , false, false, false, true ],
+            vec![true , false, false, false, true ],
+            vec![true , true , true , true , true ],
+        ], &dic, &mut rng);
+
+        run_placement_test(vec![
+            vec![true , false, true , true , true ],
+            vec![false, false, false, false, true ],
+            vec![true , false, false, false, true ],
+            vec![true , false, false, false, false],
+            vec![true , true , true , false, true ],
+        ], &dic, &mut rng);
+    }
 }

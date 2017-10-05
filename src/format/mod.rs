@@ -2,7 +2,7 @@ use std::io;
 use std::fmt;
 use std::error;
 use std::num::ParseIntError;
-use std::io::{Result, BufRead};
+use std::io::BufRead;
 
 #[derive(Debug)]
 pub enum Error {

@@ -1,4 +1,4 @@
-use super::super::{Grid, Y, X, Coord};
+use super::super::{Grid, Y, X};
 
 #[derive(Clone, Copy)]
 pub struct FieldShapeGrp {
