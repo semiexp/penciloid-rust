@@ -171,14 +171,8 @@ impl GridLoop {
             return;
         }
 
-        if field.grid_loop().queue.is_started() {
-            GridLoop::decide_edge_internal(field, EdgeId(id), status);
-        } else {
-            field.grid_loop().queue.start();
-            GridLoop::decide_edge_internal(field, EdgeId(id), status);
-            GridLoop::queue_pop_all(field);
-            field.grid_loop().queue.finish();
-        }
+        let mut handle = GridLoop::get_handle(field);
+        GridLoop::decide_edge_internal(&mut *handle, EdgeId(id), status);
     }
     pub fn check<T: GridLoopField>(field: &mut T, cd: Coord) {
         if !field.grid_loop().is_valid_coord(cd) {
@@ -186,14 +180,8 @@ impl GridLoop {
         }
 
         let id = field.grid_loop().grid.index(cd);
-        if field.grid_loop().queue.is_started() {
-            field.grid_loop().queue.push(id);
-        } else {
-            field.grid_loop().queue.start();
-            field.grid_loop().queue.push(id);
-            GridLoop::queue_pop_all(field);
-            field.grid_loop().queue.finish();
-        }
+        let mut handle = GridLoop::get_handle(field);
+        handle.grid_loop().queue.push(id);
     }
     pub fn get_handle<'a, T: GridLoopField>(field: &'a mut T) -> QueueActiveGridLoopField<'a, T> {
         QueueActiveGridLoopField::new(field)
