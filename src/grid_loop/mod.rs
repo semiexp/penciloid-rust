@@ -486,8 +486,8 @@ impl<'a, T: GridLoopField> QueueActiveGridLoopField<'a, T> {
 }
 impl<'a, T: GridLoopField> Drop for QueueActiveGridLoopField<'a, T> {
     fn drop(&mut self) {
-        GridLoop::queue_pop_all(self.field);
         if self.finalize_required {
+            GridLoop::queue_pop_all(self.field);
             self.field.grid_loop().queue.finish();
         }
     }
