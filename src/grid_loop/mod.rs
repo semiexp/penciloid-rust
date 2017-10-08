@@ -1,5 +1,6 @@
 use super::{Coord, Y, X, Grid, FiniteSearchQueue};
 use std::ops::{Index, IndexMut, Deref, DerefMut};
+use std::iter::IntoIterator;
 
 use std::mem;
 
@@ -363,8 +364,8 @@ impl GridLoop {
         grid_loop.queue.push(end2_vertex.0);
     }
     fn inspect_vertex<T: GridLoopField>(field: &mut T, (Y(y), X(x)): Coord) {
-        let mut line = vec![];
-        let mut undecided = vec![];
+        let mut line = FixVec::new();
+        let mut undecided = FixVec::new();
 
         for &(dy, dx) in [(1, 0), (0, 1), (-1, 0), (0, -1)].iter() {
             let cd = (Y(y + dy), X(x + dx));
@@ -490,6 +491,40 @@ impl<'a, T: GridLoopField> Drop for QueueActiveGridLoopField<'a, T> {
             GridLoop::queue_pop_all(self.field);
             self.field.grid_loop().queue.finish();
         }
+    }
+}
+
+struct FixVec {
+    data: [EdgeId; 4],
+    idx: usize,
+}
+impl FixVec {
+    fn new() -> FixVec {
+        FixVec {
+            data: [EdgeId(0); 4],
+            idx: 0,
+        }
+    }
+    fn push(&mut self, e: EdgeId) {
+        let idx2 = self.idx;
+        self.idx += 1;
+        self.data[idx2] = e;
+    }
+    fn len(&self) -> usize {
+        self.idx
+    }
+}
+impl Index<usize> for FixVec {
+    type Output = EdgeId;
+    fn index(&self, index: usize) -> &EdgeId {
+        &self.data[index]
+    }
+}
+impl<'a> IntoIterator for &'a FixVec {
+    type Item = &'a EdgeId;
+    type IntoIter = ::std::slice::Iter<'a, EdgeId>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.data[0..self.idx].into_iter()
     }
 }
 
