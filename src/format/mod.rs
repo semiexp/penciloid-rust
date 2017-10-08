@@ -49,6 +49,10 @@ pub fn next_valid_line(reader: &mut BufRead, buf: &mut String) -> io::Result<usi
         buf.clear();
         let len = try!(reader.read_line(buf));
 
+        if len == 0 {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
+        }
+
         if !buf.trim().is_empty() && !is_comment(buf) {
             return Ok(len);
         }
