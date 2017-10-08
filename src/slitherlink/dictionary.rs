@@ -20,7 +20,7 @@ pub const DICTIONARY_EDGE_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
 
 const DICTIONARY_NEIGHBOR_PATTERN_COUNT: usize = 531441; // 3^12
 const DICTIONARY_SIZE: usize = DICTIONARY_NEIGHBOR_PATTERN_COUNT * 4;
-const DICTIONARY_INCONSISTENT: u32 = 0xffffffff;
+pub const DICTIONARY_INCONSISTENT: u32 = 0xffffffff;
 
 pub struct Dictionary {
     dic: Vec<u32>,
@@ -72,6 +72,9 @@ impl Dictionary {
             }
         }
         Dictionary { dic }
+    }
+    pub fn consult_raw(&self, Clue(c): Clue, neighbor_code: u32) -> u32 {
+        self.dic[c as usize * DICTIONARY_NEIGHBOR_PATTERN_COUNT + neighbor_code as usize]
     }
     pub fn consult(&self, Clue(c): Clue, neighbor: &mut [Edge; DICTIONARY_NEIGHBOR_SIZE]) -> bool {
         let id = Dictionary::pattern_to_id(*neighbor);

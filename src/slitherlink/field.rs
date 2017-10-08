@@ -138,21 +138,31 @@ impl<'a> GridLoopField for Field<'a> {
             let clue = self.clue[(Y(y / 2), X(x / 2))];
             if clue == NO_CLUE { return; }
 
-            let mut neighbors = [Edge::Undecided; DICTIONARY_NEIGHBOR_SIZE];
+            let mut neighbors_code = 0;
+            let mut pow3 = 1;
             for i in 0..DICTIONARY_NEIGHBOR_SIZE {
                 let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                neighbors[i] = self.grid_loop.get_edge_safe((Y(y + dy), X(x + dx)));
+                neighbors_code += pow3 * match self.grid_loop.get_edge_safe((Y(y + dy), X(x + dx))) {
+                    Edge::Undecided => 0,
+                    Edge::Line => 1,
+                    Edge::Blank => 2,
+                };
+                pow3 *= 3;
             }
 
-            if self.dic.consult(clue, &mut neighbors) {
+            let res = self.dic.consult_raw(clue, neighbors_code);
+            if res == DICTIONARY_INCONSISTENT {
                 self.grid_loop.set_inconsistent();
                 return;
             }
-
             for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-                if neighbors[i] != Edge::Undecided {
+                let e = (res >> (2 * i)) & 3;
+                if e == 1 {
                     let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), neighbors[i]);
+                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
+                } else if e == 2 {
+                    let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
+                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Blank);
                 }
             }
 
