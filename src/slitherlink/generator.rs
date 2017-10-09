@@ -4,6 +4,14 @@ use super::*;
 
 use rand::Rng;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Symmetry {
+    pub dyad: bool,         // 180-degree symmetry
+    pub tetrad: bool,       // 90-degree symmetry
+    pub horizontal: bool,   // horizontal line symmetry
+    pub vertical: bool,     // vertical line symmetry
+}
+
 pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
     let height = has_clue.height();
     let width = has_clue.width();
@@ -133,6 +141,93 @@ fn has_zero_nearby(problem: &Grid<Clue>, (Y(y), X(x)): Coord) -> bool {
         }
     }
     false
+}
+
+pub fn generate_placement<R: Rng>(height: i32, width: i32, num_clues: i32, symmetry: Symmetry, rng: &mut R) -> Grid<bool> {
+    let mut num_clues = num_clues;
+    let mut symmetry = symmetry;
+
+    symmetry.dyad |= symmetry.tetrad;
+    symmetry.tetrad &= (height == width);
+    
+    let mut grp_ids = Grid::new(height, width, false);
+    let mut last_id = 0;
+
+    let mut clue_positions: Vec<Vec<Coord>> = vec![];
+
+    for y in 0..height {
+        for x in 0..width {
+            if !grp_ids[(Y(y), X(x))] {
+                let mut sto = vec![];
+                update_grp(y, x, last_id, symmetry, &mut grp_ids, &mut sto);
+                clue_positions.push(sto);
+            }
+        }
+    }
+
+    let mut ret = Grid::new(height, width, false);
+    while clue_positions.len() > 0 && num_clues > 0 {
+        let mut scores = vec![];
+        let mut scores_total = 0.0f64;
+
+        for pos in &clue_positions {
+            let (Y(y), X(x)) = pos[0];
+            let mut score_base = 0.0f64;
+
+            for dy in -2..3 {
+                for dx in -2..3 {
+                    let cd2 = (Y(y + dy), X(x + dx));
+                    if ret.is_valid_coord(cd2) && ret[cd2] {
+                        let dist = dy.abs() + dx.abs();
+                        score_base += 5.0f64 - (dist as f64);
+                        if dist == 1 {
+                            score_base += 2.0f64;
+                        }
+                    }
+                }
+            }
+
+            let pos_score = 64.0f64 * 2.0f64.powf((16.0f64 - score_base) / 2.0f64) + 4.0f64;
+            scores.push(pos_score);
+            scores_total += pos_score;
+        }
+
+        let mut thresh = rng.gen_range(0.0f64, scores_total);
+        for i in 0..clue_positions.len() {
+            if thresh < scores[i] {
+                for &c in &(clue_positions[i]) {
+                    ret[c] = true;
+                    num_clues -= 1;
+                }
+                clue_positions.swap_remove(i);
+                break;
+            } else {
+                thresh -= scores[i];
+            }
+        }
+    }
+
+    ret
+}
+
+fn update_grp(y: i32, x: i32, id: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto: &mut Vec<Coord>) {
+    if grp_ids[(Y(y), X(x))] {
+        return;
+    }
+    grp_ids[(Y(y), X(x))] = true;
+    sto.push((Y(y), X(x)));
+
+    if symmetry.tetrad {
+        update_grp(grp_ids.height() - 1 - x, y, id, symmetry, grp_ids, sto);
+    } else if symmetry.dyad {
+        update_grp(grp_ids.height() - 1 - y, grp_ids.width() - 1 - x, id, symmetry, grp_ids, sto);
+    }
+    if symmetry.horizontal {
+        update_grp(grp_ids.height() - 1 - y, x, id, symmetry, grp_ids, sto);
+    }
+    if symmetry.vertical {
+        update_grp(y, grp_ids.width() - 1 - x, id, symmetry, grp_ids, sto);
+    }
 }
 
 #[cfg(test)]
