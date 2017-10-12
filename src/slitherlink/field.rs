@@ -40,6 +40,7 @@ impl<'a> Field<'a> {
             for x in 0..width {
                 let clue = handle.get_clue((Y(y), X(x)));
                 if clue != NO_CLUE {
+                    handle.inspect_technique((Y(y * 2 + 1), X(x * 2 + 1)));
                     GridLoop::check(&mut *handle, (Y(y * 2 + 1), X(x * 2 + 1)));
                 }
             }
@@ -55,7 +56,10 @@ impl<'a> Field<'a> {
             }
         } else {
             self.clue[cd] = clue;
-            GridLoop::check(self, cd);
+
+            let mut handle = GridLoop::get_handle(self);
+            handle.inspect_technique(cd);
+            GridLoop::check(&mut *handle, cd);
         }
     }
     pub fn get_edge(&self, cd: Coord) -> Edge {
@@ -165,8 +169,6 @@ impl<'a> GridLoopField for Field<'a> {
                     GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Blank);
                 }
             }
-
-            self.inspect_technique((Y(y), X(x)));
         }
     }
 }
