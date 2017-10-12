@@ -70,6 +70,23 @@ impl Dictionary {
                     },
                 }
             }
+            for pat_id in 0..DICTIONARY_NEIGHBOR_PATTERN_COUNT {
+                let pat_id = DICTIONARY_NEIGHBOR_PATTERN_COUNT - 1 - pat_id;
+                let mut pat = Dictionary::id_to_pattern(pat_id);
+
+                let mut pat_id_bin = 0u32;
+                for i in 0..DICTIONARY_NEIGHBOR_SIZE {
+                    pat_id_bin |= match pat[i] {
+                        Edge::Undecided => 0,
+                        Edge::Line => 1,
+                        Edge::Blank => 2,
+                    } << (2 * i);
+                }
+
+                if dic[ofs + pat_id] != DICTIONARY_INCONSISTENT {
+                    dic[ofs + pat_id] &= !pat_id_bin;
+                }
+            }
         }
         Dictionary { dic }
     }
