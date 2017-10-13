@@ -70,16 +70,22 @@ impl<'a> Field<'a> {
     }
 
     fn inspect_technique(&mut self, (Y(y), X(x)): Coord) {
+        let neighbor = [
+            (Y(1), X(0)),
+            (Y(0), X(1)),
+            (Y(-1), X(0)),
+            (Y(0), X(-1)),
+        ];
+
         if y % 2 == 1 && x % 2 == 1 {
             let clue = self.clue[(Y(y / 2), X(x / 2))];
+            if clue == Clue(0) {
+                for d in 0..4 {
+                    let (Y(dy), X(dx)) = neighbor[d];
+                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Blank);
+                }
+            }
             if clue == Clue(3) {
-                let neighbor = [
-                    (Y(1), X(0)),
-                    (Y(0), X(1)),
-                    (Y(-1), X(0)),
-                    (Y(0), X(-1)),
-                ];
-
                 // adjacent 3
                 for d in 0..4 {
                     let (Y(dy), X(dx)) = neighbor[d];
@@ -140,7 +146,7 @@ impl<'a> GridLoopField for Field<'a> {
     fn inspect(&mut self, (Y(y), X(x)): Coord) {
         if y % 2 == 1 && x % 2 == 1 {
             let clue = self.clue[(Y(y / 2), X(x / 2))];
-            if clue == NO_CLUE { return; }
+            if clue == NO_CLUE || clue == Clue(0) { return; }
 
             let mut neighbors_code = 0;
             let mut pow3 = 1;
