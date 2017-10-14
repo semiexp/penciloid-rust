@@ -167,15 +167,13 @@ impl<'a> GridLoopField for Field<'a> {
                 self.grid_loop.set_inconsistent();
                 return;
             }
-            for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-                let e = (res >> (2 * i)) & 3;
-                if e == 1 {
-                    let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
-                } else if e == 2 {
-                    let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Blank);
-                }
+            let mut res = res;
+            while res != 0 {
+                let ix = res.trailing_zeros();
+                let i = ix / 2;
+                let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i as usize];
+                GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), if ix % 2 == 0 { Edge::Line } else { Edge::Blank });
+                res ^= 1u32 << ix;
             }
         }
     }
