@@ -60,11 +60,20 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
 
             rng.shuffle(&mut new_clue_cand);
 
+            let mut common;
+            if prev_clue == NO_CLUE {
+                common = last_field.clone();
+            } else {
+                current_problem[pos] = NO_CLUE;
+                common = Field::new(&current_problem, dic);
+                common.check_all_cell();
+            }
+
             for &c in &new_clue_cand {
                 current_problem[pos] = c;
 
-                let mut field = Field::new(&current_problem, dic);
-                field.check_all_cell();
+                let mut field = common.clone();
+                field.add_clue(pos, c);
 
                 let isok;
                 let current_decided_edges;
@@ -94,13 +103,13 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
 
                     last_field = field;
                     break;
-                } else {
-                    current_problem[pos] = prev_clue;
                 }
             }
 
             if updated {
                 break;
+            } else {
+                current_problem[pos] = prev_clue;
             }
         }
     }
