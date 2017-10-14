@@ -59,8 +59,9 @@ impl<'a> Field<'a> {
             self.clue[cd] = clue;
 
             let mut handle = GridLoop::get_handle(self);
-            handle.inspect_technique(cd);
-            GridLoop::check(&mut *handle, cd);
+            let (Y(y), X(x)) = cd;
+            handle.inspect_technique((Y(y * 2 + 1), X(x * 2 + 1)));
+            GridLoop::check(&mut *handle, (Y(y * 2 + 1), X(x * 2 + 1)));
         }
     }
     pub fn get_edge(&self, cd: Coord) -> Edge {
