@@ -25,6 +25,7 @@ struct GridLoopItem {
     chain_size: i32,
 }
 
+#[derive(Clone)]
 pub struct GridLoop {
     grid: Grid<GridLoopItem>,
     inconsistent: bool,

@@ -2,6 +2,7 @@ use super::super::{Y, X, Coord, Grid};
 use grid_loop::{Edge, GridLoop, GridLoopField};
 use super::*;
 
+#[derive(Clone)]
 pub struct Field<'a> {
     grid_loop: GridLoop,
     clue: Grid<Clue>,

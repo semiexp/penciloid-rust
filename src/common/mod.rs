@@ -64,6 +64,7 @@ impl<T: Clone> IndexMut<usize> for Grid<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct FiniteSearchQueue {
     top: usize,
     end: usize,
