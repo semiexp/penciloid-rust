@@ -45,6 +45,16 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
 
         rng.shuffle(&mut pos_cand);
 
+        let mut interpos_common = last_field.clone();
+        let mut pos_with_clue = vec![];
+        let mut pos_with_clue_idx = 0;
+
+        for &pos in &pos_cand {
+            if current_problem[pos] != NO_CLUE {
+                pos_with_clue.push(pos);
+            }
+        }
+
         let mut updated = false;
         for &pos in &pos_cand {
             let prev_clue = current_problem[pos];
@@ -64,9 +74,31 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
             if prev_clue == NO_CLUE {
                 common = last_field.clone();
             } else {
-                current_problem[pos] = NO_CLUE;
-                common = Field::new(&current_problem, dic);
-                common.check_all_cell();
+                if pos_with_clue_idx % 2 == 0 {
+                    if pos_with_clue_idx == pos_with_clue.len() - 1 {
+                        current_problem[pos] = NO_CLUE;
+                        common = Field::new(&current_problem, dic);
+                        common.check_all_cell();
+                    } else {
+                        let c1 = current_problem[pos_with_clue[pos_with_clue_idx]];
+                        current_problem[pos_with_clue[pos_with_clue_idx]] = NO_CLUE;
+                        let c2 = current_problem[pos_with_clue[pos_with_clue_idx + 1]];
+                        current_problem[pos_with_clue[pos_with_clue_idx + 1]] = NO_CLUE;
+
+                        interpos_common = Field::new(&current_problem, dic);
+                        interpos_common.check_all_cell();
+
+                        current_problem[pos_with_clue[pos_with_clue_idx]] = c1;
+                        current_problem[pos_with_clue[pos_with_clue_idx + 1]] = c2;
+
+                        common = interpos_common.clone();
+                        common.add_clue(pos_with_clue[pos_with_clue_idx + 1], c2);
+                    }
+                } else {
+                    common = interpos_common.clone();
+                    common.add_clue(pos_with_clue[pos_with_clue_idx - 1], current_problem[pos_with_clue[pos_with_clue_idx - 1]]);
+                }
+                pos_with_clue_idx += 1;
             }
 
             for &c in &new_clue_cand {
