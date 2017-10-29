@@ -1,5 +1,5 @@
 use super::super::{Grid, Y, X, Coord};
-use grid_loop::{Edge, GridLoopField};
+use grid_loop::{Edge, GridLoop, GridLoopField};
 use super::*;
 
 use rand::Rng;
@@ -75,35 +75,37 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                 let mut field = common.clone();
                 field.add_clue(pos, c);
 
-                let isok;
-                let current_score;
                 if field.inconsistent() {
-                    isok = false;
-                    current_score = -1;
-                } else {
-                    current_score = field.grid_loop().num_decided_edges() - count_prohibited_patterns(has_clue, &field, &current_problem) * 10;
+                    continue;
+                }
 
-                    if prev_score < current_score {
-                        isok = true;
-                    } else {
-                        isok = rng.next_f64() < ((current_score - prev_score) as f64 / temperature).exp()
+                let current_score = field.grid_loop().num_decided_edges() - count_prohibited_patterns(has_clue, &field, &current_problem) * 10;
+
+                if prev_score >= current_score {
+                    if !(rng.next_f64() < ((current_score - prev_score) as f64 / temperature).exp()) {
+                        continue;
                     }
                 }
 
-                if isok {
-                    updated = true;
-                    prev_score = current_score;
-                    if prev_clue == NO_CLUE {
-                        unplaced_clues -= 1;
-                    }
-
-                    if field.fully_solved() && unplaced_clues == 0 {
-                        return Some(current_problem);
-                    }
-
-                    last_field = field;
-                    break;
+                let mut field_inout_test = field.clone();
+                GridLoop::apply_inout_rule(&mut field_inout_test);
+                GridLoop::check_connectability(&mut field_inout_test);
+                if field_inout_test.inconsistent() {
+                    continue;
                 }
+
+                updated = true;
+                prev_score = current_score;
+                if prev_clue == NO_CLUE {
+                    unplaced_clues -= 1;
+                }
+
+                if field.fully_solved() && unplaced_clues == 0 {
+                    return Some(current_problem);
+                }
+
+                last_field = field;
+                break;
             }
 
             if updated {
