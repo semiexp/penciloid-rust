@@ -1,6 +1,8 @@
 mod solver;
+mod generator;
 
 pub use self::solver::*;
+pub use self::generator::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Clue(pub i32);
