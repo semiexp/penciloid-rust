@@ -164,7 +164,7 @@ impl AnswerField {
     }
 }
 
-fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) {
+pub fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) -> Option<Grid<Clue>> {
     let mut field = AnswerField::new(height, width);
 
     loop {
@@ -213,7 +213,7 @@ fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) {
         }
     }
 
-    if field.invalid { return; }
+    if field.invalid { return None; }
 
     let mut ids = Grid::new(height, width, -1);
     let mut id = 1;
@@ -233,49 +233,41 @@ fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) {
         }
     }
     for i in 1..id {
-        if line_len[i as usize] <= 3 { return; }
+        if line_len[i as usize] <= 3 { return None; }
+    }
+
+    let mut end_count = vec![0; id as usize];
+    for y in 0..height {
+        for x in 0..width {
+            if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
+                end_count[ids[(Y(y), X(x))] as usize] += 1;
+            }
+        }
+    }
+    for i in 1..id {
+        if end_count[i as usize] != 2 { return None; }
     }
 
     for y in 0..(2 * height - 1) {
         for x in 0..(2 * width - 1) {
             if y % 2 == 1 && x % 2 == 0 {
-                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { return; }
+                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { return None; }
             } else if y % 2 == 0 && x % 2 == 1 {
-                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { return; }
+                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { return None; }
             }
         }
     }
-    for y in 0..(2 * height - 1) {
-        for x in 0..(2 * width - 1) {
-            match (y % 2, x % 2) {
-                (0, 0) => print!("+"),
-                (0, 1) => print!("{}", match field.get((Y(y), X(x))) {
-                    Edge::Undecided => ' ',
-                    Edge::Line => '-',
-                    Edge::Blank => ' ',
-                }),
-                (1, 0) => print!("{}", match field.get((Y(y), X(x))) {
-                    Edge::Undecided => ' ',
-                    Edge::Line => '|',
-                    Edge::Blank => ' ',
-                }),
-                (1, 1) => print!(" "),
-                _ => unreachable!(),
-            }
-        }
-        println!();
-    }
+
+    let mut ret = Grid::new(height, width, NO_CLUE);
     for y in 0..height {
         for x in 0..width {
             if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
-                print!("{:2} ", ids[(Y(y), X(x))]);
-            } else {
-                print!(".. ");
+                ret[(Y(y), X(x))] = Clue(ids[(Y(y), X(x))]);
             }
         }
-        println!();
     }
-    println!("----------------");
+
+    Some(ret)
 }
 fn fill_line_id(cd: Coord, field: &AnswerField, ids: &mut Grid<i32>, id: i32) {
     if ids[cd] != -1 { return; }
@@ -287,19 +279,5 @@ fn fill_line_id(cd: Coord, field: &AnswerField, ids: &mut Grid<i32>, id: i32) {
         if field.get((Y(y * 2 + dy), X(x * 2 + dx))) == Edge::Line {
             fill_line_id((Y(y + dy), X(x + dx)), field, ids, id);
         }
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_placement_generator() {
-        let mut rng = ::rand::thread_rng();
-        println!();
-        for _ in 0..1000 {
-            generate_placement(10, 18, &mut rng);
-        }
-        assert!(false);
     }
 }
