@@ -45,7 +45,38 @@ fn search(y: i32, x: i32, problem: &Grid<i32>, frontier: &Frontier, place: &mut 
         if v && y == problem.height() - 1 { continue; }
         if h && x == problem.width() - 1 { continue; }
 
+        let deg =
+            if v { 1 } else { 0 } +
+            if h { 1 } else { 0 } +
+            if place.down((Y(y - 1), X(x))) { 1 } else { 0 } +
+            if place.right((Y(y), X(x - 1))) { 1 } else { 0 } +
+            if problem[(Y(y), X(x))] < 0 { 1 } else { 0 };
+        if deg != 0 && deg != 2 { continue; }
+
         let mut new_frontier = frontier.clone();
+
+        // Forbidden patterns related to isolated cells:
+        // 
+        // + X ; X +
+        // |   ;   |
+        // +-+ ; +-+
+        if h && y > 0 && x < problem.width() - 1 {
+            if place.isolated((Y(y - 1), X(x + 1))) && place.down((Y(y - 1), X(x))) { continue; }
+            if place.isolated((Y(y - 1), X(x))) && place.down((Y(y - 1), X(x + 1))) { continue; }
+        }
+
+        // Forbidden patterns related to redundant paths:
+        //
+        // +-+ ; +-+ ; + + ; +-+
+        // |   ;   | ; | | ; | |
+        // +-+ ; +-+ ; +-+ ; + +
+        if h && y > 0 && x < problem.width() - 1 {
+            if place.right((Y(y - 1), X(x))) && (place.down((Y(y - 1), X(x))) || place.down((Y(y - 1), X(x + 1)))) { continue; }
+            if place.down((Y(y - 1), X(x))) && place.down((Y(y - 1), X(x + 1))) { continue; }
+        }
+        if v && x > 0 {
+            if place.right((Y(y), X(x - 1))) && place.down((Y(y), X(x - 1))) { continue; }
+        }
 
         if h {
             if join(&mut new_frontier, x, x + 1) { continue; }
