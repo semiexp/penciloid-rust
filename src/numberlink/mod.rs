@@ -36,4 +36,8 @@ impl LinePlacement {
     pub fn set_down(&mut self, cd: Coord, e: bool) {
         self.down[cd] = e;
     }
+    pub fn isolated(&self, cd: Coord) -> bool {
+        let (Y(y), X(x)) = cd;
+        !(self.right((Y(y), X(x - 1))) || self.right((Y(y), X(x))) || self.down((Y(y - 1), X(x))) || self.down((Y(y), X(x))))
+    }
 }
