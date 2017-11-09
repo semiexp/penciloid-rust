@@ -16,17 +16,31 @@ struct AnswerField {
     height: i32,
     width: i32,
     field: Grid<Edge>,
+    seed_idx: Grid<i32>,
+    seeds: Vec<Coord>,
     invalid: bool,
 }
 
 impl AnswerField {
     fn new(height: i32, width: i32) -> AnswerField {
-        AnswerField {
+        let mut ret = AnswerField {
             height: height,
             width: width,
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
+            seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
+            seeds: vec![],
             invalid: false,
-        }
+        };
+
+        ret.seeds.push((Y(0), X(0)));
+        ret.seeds.push((Y(0), X(2 * width - 2)));
+        ret.seeds.push((Y(2 * height - 2), X(0)));
+        ret.seeds.push((Y(2 * height - 2), X(2 * width - 2)));
+        ret.seed_idx[(Y(0), X(0))] = 0;
+        ret.seed_idx[(Y(0), X(2 * width - 2))] = 1;
+        ret.seed_idx[(Y(2 * height - 2), X(0))] = 2;
+        ret.seed_idx[(Y(2 * height - 2), X(2 * width - 2))] = 3;
+        ret
     }
     fn get(&self, cd: Coord) -> Edge {
         if self.field.is_valid_coord(cd) {
@@ -64,6 +78,22 @@ impl AnswerField {
             }
         }
         ret
+    }
+    /// Returns whether vertex `cd` is a seed
+    fn is_seed(&self, cd: Coord) -> bool {
+        let nb = self.count_neighbor(cd);
+        nb == (0, 2) || (nb.0 == 1 && nb.1 > 0)
+    }
+    fn num_seeds(&self) -> usize { self.seeds.len() }
+
+    /// Returns whether there is at least one seed
+    fn has_seed(&self) -> bool {
+        self.seeds.len() != 0
+    }
+    /// Returns a random seed using `rng`
+    fn random_seed<R: Rng>(&self, rng: &mut R) -> Coord {
+        let idx = rng.gen_range(0, self.seeds.len());
+        self.seeds[idx]
     }
     fn decide(&mut self, cd: Coord, state: Edge) {
         let current = self.field[cd];
@@ -161,6 +191,21 @@ impl AnswerField {
                 }
             }
         }
+
+        let is_seed = self.is_seed((Y(y), X(x)));
+        let seed_idx = self.seed_idx[(Y(y), X(x))];
+
+        if seed_idx != -1 && !is_seed {
+            // (y, x) is no longer a seed
+            let moved = self.seeds[self.seeds.len() - 1];
+            self.seed_idx[moved] = seed_idx;
+            self.seeds.swap_remove(seed_idx as usize);
+            self.seed_idx[(Y(y), X(x))] = -1;
+        } else if seed_idx == -1 && is_seed {
+            // (y, x) is now a seed
+            self.seed_idx[(Y(y), X(x))] = self.seeds.len() as i32;
+            self.seeds.push((Y(y), X(x)));
+        }
     }
 }
 
@@ -168,22 +213,8 @@ pub fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) -> Optio
     let mut field = AnswerField::new(height, width);
 
     loop {
-        let mut cand = vec![];
-        for y in 0..height {
-            for x in 0..width {
-                let y = y * 2;
-                let x = x * 2;
-                let (line, undecided) = field.count_neighbor((Y(y), X(x)));
-                if (line == 0 && undecided == 2) || (line == 1 && undecided > 0) {
-                    cand.push((Y(y), X(x)));
-                }
-            }
-        }
-
-        if cand.len() == 0 { break; }
-
-        let idx = rng.gen_range(0, cand.len());
-        let cd = cand[idx];
+        if !field.has_seed() { break; }
+        let cd = field.random_seed(rng);
 
         if field.count_neighbor(cd) == (0, 2) {
             let nbs = field.undecided_neighbors(cd);
@@ -211,9 +242,9 @@ pub fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) -> Optio
                 }
             }
         }
-    }
 
-    if field.invalid { return None; }
+        if field.invalid { return None; }
+    }
 
     let mut ids = Grid::new(height, width, -1);
     let mut id = 1;
