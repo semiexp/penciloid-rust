@@ -1,7 +1,9 @@
 mod solver;
+mod solver2;
 mod generator;
 
 pub use self::solver::*;
+pub use self::solver2::*;
 pub use self::generator::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
