@@ -77,6 +77,27 @@ fn search(y: i32, x: i32, problem: &Grid<i32>, frontier: &Frontier, place: &mut 
         if v && x > 0 {
             if place.right((Y(y), X(x - 1))) && place.down((Y(y), X(x - 1))) { continue; }
         }
+        // +-+ ... +-+
+        // |         |
+        // + + ... + +
+        if y > 0 && place.down((Y(y - 1), X(x))) {
+            let mut w = 0;
+            while x - 1 - w >= 0 && place.right((Y(y - 1), X(x - 1 - w))) {
+                w += 1;
+            }
+            if w > 0 && place.down((Y(y - 1), X(x - w))) {
+                let mut invalid = true;
+                for x2 in (x - w)..x {
+                    if place.right((Y(y), X(x2))) || (x2 != x && problem[(Y(y), X(x2))] < 0) {
+                        invalid = false;
+                        break;
+                    }
+                }
+                if invalid {
+                    continue;
+                }
+            }
+        }
 
         if h {
             if join(&mut new_frontier, x, x + 1) { continue; }
