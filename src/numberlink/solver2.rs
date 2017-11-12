@@ -331,6 +331,12 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
         return;
     }
 
+    let degree_common = if field.has_clue[(Y(y), X(x))] { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line { 1 } else { 0 };
+
     for mask in 0..4 {
         let right = (mask & 1) != 0;
         let down = (mask & 2) != 0;
@@ -338,13 +344,7 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
         if right && field.get_edge((Y(y * 2), X(x * 2 + 1))) != Edge::Undecided { continue; }
         if down && field.get_edge((Y(y * 2 + 1), X(x * 2))) != Edge::Undecided { continue; }
 
-        let degree = if field.has_clue[(Y(y), X(x))] { 1 } else { 0 }
-            + if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line { 1 } else { 0 }
-            + if field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line { 1 } else { 0 }
-            + if field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line { 1 } else { 0 }
-            + if field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line { 1 } else { 0 }
-            + if right { 1 } else { 0 }
-            + if down { 1 } else { 0 };
+        let degree = degree_common + if right { 1 } else { 0 } + if down { 1 } else { 0 };
         if degree != 0 && degree != 2 { continue; }
 
         let right_effective = right || (field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line);
