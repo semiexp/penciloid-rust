@@ -373,6 +373,22 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
             }
             if !isok { continue; }
         }
+        if right_effective && field.get_edge((Y(y * 2 - 1), X(x * 2 + 2))) == Edge::Line {
+            let mut len = 1;
+            while len <= x && field.get_edge((Y(y * 2), X(x * 2 + 1 - 2 * len))) == Edge::Line {
+                len += 1;
+            }
+            if field.get_edge((Y(y * 2 - 1), X(x * 2 + 2 - 2 * len))) == Edge::Line {
+                let mut flg = true;
+                for i in 0..len {
+                    if field.get_edge((Y(y * 2 - 2), X(x * 2 + 1 - 2 * i))) != Edge::Blank || (i != len - 1 && field.has_clue[(Y(y - 1), X(x - i))]) {
+                        flg = false;
+                        break;
+                    }
+                }
+                if flg { continue; }
+            }
+        }
 
         field.add_checkpoint();
         let mut inconsistent = false;
