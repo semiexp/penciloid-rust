@@ -338,6 +338,15 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
         if right && field.get_edge((Y(y * 2), X(x * 2 + 1))) != Edge::Undecided { continue; }
         if down && field.get_edge((Y(y * 2 + 1), X(x * 2))) != Edge::Undecided { continue; }
 
+        let degree = if field.has_clue[(Y(y), X(x))] { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line { 1 } else { 0 }
+            + if field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line { 1 } else { 0 }
+            + if right { 1 } else { 0 }
+            + if down { 1 } else { 0 };
+        if degree != 0 && degree != 2 { continue; }
+
         field.add_checkpoint();
         let mut inconsistent = false;
 
