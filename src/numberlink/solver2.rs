@@ -298,18 +298,26 @@ impl SolverField {
     }
 }
 
-pub fn solve2(problem: &Grid<Clue>) -> Vec<LinePlacement> {
+struct AnswerInfo {
+    answers: Vec<LinePlacement>,
+    limit: Option<usize>,
+}
+
+pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>) -> Vec<LinePlacement> {
     let height = problem.height();
     let width = problem.width();
     let mut solver_field = SolverField::new(problem);
-    let mut answers = vec![];
+    let mut answer_info = AnswerInfo {
+        answers: Vec::new(),
+        limit,
+    };
 
-    search(0, 0, &mut solver_field, &mut answers);
+    search(0, 0, &mut solver_field, &mut answer_info);
 
-    answers
+    answer_info.answers
 }
 
-fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlacement>) {
+fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo) -> bool {
     let mut y = y;
     let mut x = x;
     if x == field.width() {
@@ -327,8 +335,13 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
 
     if y == field.height() {
         // answer found
-        answers.push(field.get_line_placement());
-        return;
+        answer_info.answers.push(field.get_line_placement());
+        if let Some(lim) = answer_info.limit {
+            if answer_info.answers.len() >= lim {
+                return true;
+            }
+        }
+        return false;
     }
 
     let degree_common = if field.has_clue[(Y(y), X(x))] { 1 } else { 0 }
@@ -399,9 +412,10 @@ fn search(y: i32, x: i32, field: &mut SolverField, answers: &mut Vec<LinePlaceme
         }
 
         if !inconsistent {
-            search(y, x + 1, field, answers);
+            if search(y, x + 1, field, answer_info) { return true; }
         }
 
         field.rollback();
     }
+    return false;
 }
