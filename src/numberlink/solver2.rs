@@ -316,7 +316,7 @@ struct AnswerInfo {
     limit: Option<usize>,
 }
 
-pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>) -> Vec<LinePlacement> {
+pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>) -> AnswerDetail {
     let height = problem.height();
     let width = problem.width();
     let mut solver_field = SolverField::new(problem);
@@ -324,13 +324,20 @@ pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>) -> Vec<LinePlacement> 
         answers: Vec::new(),
         limit,
     };
+    let mut n_steps = 0u64;
 
-    search(0, 0, &mut solver_field, &mut answer_info);
+    search(0, 0, &mut solver_field, &mut answer_info, &mut n_steps);
 
-    answer_info.answers
+    let fully_checked = if let Some(limit) = limit { limit == answer_info.answers.len() } else { true };
+
+    AnswerDetail {
+        answers: answer_info.answers,
+        fully_checked,
+        n_steps,
+    }
 }
 
-fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo) -> bool {
+fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo, n_steps: &mut u64) -> bool {
     let mut y = y;
     let mut x = x;
     if x == field.width() {
@@ -345,6 +352,7 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo)
             x += 1;
         }
     }
+    *n_steps += 1;
 
     if y == field.height() {
         // answer found
@@ -425,7 +433,7 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo)
         }
 
         if !inconsistent {
-            if search(y, x + 1, field, answer_info) { return true; }
+            if search(y, x + 1, field, answer_info, n_steps) { return true; }
         }
 
         field.rollback();

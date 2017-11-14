@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 mod solver;
 mod solver2;
 mod generator;
@@ -41,5 +43,22 @@ impl LinePlacement {
     pub fn isolated(&self, cd: Coord) -> bool {
         let (Y(y), X(x)) = cd;
         !(self.right((Y(y), X(x - 1))) || self.right((Y(y), X(x))) || self.down((Y(y - 1), X(x))) || self.down((Y(y), X(x))))
+    }
+}
+
+pub struct AnswerDetail {
+    pub answers: Vec<LinePlacement>,
+    pub fully_checked: bool,
+    pub n_steps: u64,
+}
+impl AnswerDetail {
+    pub fn len(&self) -> usize {
+        self.answers.len()
+    }
+}
+impl Index<usize> for AnswerDetail {
+    type Output = LinePlacement;
+    fn index(&self, idx: usize) -> &LinePlacement {
+        &self.answers[idx]
     }
 }
