@@ -20,13 +20,14 @@ struct SolverField {
     has_clue: Grid<bool>, // height * width
     edge: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     inconsistent: bool,
+    disallow_unused_cell: bool,
     history: Vec<History>,
 }
 
 const CLOSED_END: i32 = -1;
 
 impl SolverField {
-    fn new(problem: &Grid<Clue>) -> SolverField {
+    fn new(problem: &Grid<Clue>, disallow_unused_cell: bool) -> SolverField {
         let height = problem.height();
         let width = problem.width();
         let mut another_end = Grid::new(height, width, 0);
@@ -43,13 +44,22 @@ impl SolverField {
                 }
             }
         }
-        SolverField {
+        let mut ret = SolverField {
             another_end,
             has_clue,
             edge: Grid::new(height * 2 - 1, width * 2 - 1, Edge::Undecided),
             inconsistent: false,
+            disallow_unused_cell,
             history: Vec::new(),
+        };
+        if disallow_unused_cell {
+            for y in 0..height {
+                for x in 0..width {
+                    ret.inspect((Y(y), X(x)));
+                }
+            }
         }
+        ret
     }
     fn get_edge(&self, cd: Coord) -> Edge {
         if self.edge.is_valid_coord(cd) {
@@ -306,6 +316,17 @@ impl SolverField {
             } else if n_undecided == 0 {
                 return self.set_inconsistent();
             }
+        } else if n_line == 0 && self.disallow_unused_cell {
+            if n_undecided < 2 {
+                return self.set_inconsistent();
+            } else if n_undecided == 2 {
+                for &(dy, dx) in &dirs {
+                    let cd2 = (Y(y * 2 + dy), X(x * 2 + dx));
+                    if self.get_edge(cd2) == Edge::Undecided {
+                        if self.decide_edge(cd2, Edge::Line) { return true; }
+                    }
+                }
+            }
         }
         false
     }
@@ -316,10 +337,10 @@ struct AnswerInfo {
     limit: Option<usize>,
 }
 
-pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>) -> AnswerDetail {
+pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: bool) -> AnswerDetail {
     let height = problem.height();
     let width = problem.width();
-    let mut solver_field = SolverField::new(problem);
+    let mut solver_field = SolverField::new(problem, disallow_unused_cell);
     let mut answer_info = AnswerInfo {
         answers: Vec::new(),
         limit,
