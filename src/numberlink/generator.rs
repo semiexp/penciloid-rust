@@ -21,6 +21,7 @@ struct AnswerField {
     seed_idx: Grid<i32>,
     seeds: Vec<Coord>,
     endpoints: i32,
+    chain_threshold: i32,
     invalid: bool,
 }
 
@@ -35,6 +36,7 @@ impl AnswerField {
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
             endpoints: 0,
+            chain_threshold: 3,
             invalid: false,
         };
 
@@ -58,6 +60,12 @@ impl AnswerField {
         } else {
             Edge::Blank
         }
+    }
+    fn set_threshold(&mut self, threshold: i32) {
+        self.chain_threshold = threshold;
+    }
+    fn get_threshold(&self) -> i32 {
+        self.chain_threshold
     }
     /// Counts the number of (Line, Undecided) around `cd`
     fn count_neighbor(&self, cd: Coord) -> (i32, i32) {
@@ -140,7 +148,7 @@ impl AnswerField {
             self.chain_length[another_end1_id] = new_length;
             self.chain_length[another_end2_id] = new_length;
 
-            if new_length < 3 {
+            if new_length < self.chain_threshold {
                 let cd = self.chain_union.coord(another_end1_id);
                 self.extend_chain(cd);
             }
@@ -236,7 +244,7 @@ impl AnswerField {
             }
         } else if line == 1 {
             // avoid too short chains
-            if self.chain_length[(Y(y / 2), X(x / 2))] < 3 {
+            if self.chain_length[(Y(y / 2), X(x / 2))] < self.chain_threshold {
                 self.extend_chain((Y(y / 2), X(x / 2)));
             }
         }
