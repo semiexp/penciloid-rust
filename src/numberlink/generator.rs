@@ -139,6 +139,11 @@ impl AnswerField {
             self.chain_union[another_end2_id] = another_end1_id;
             self.chain_length[another_end1_id] = new_length;
             self.chain_length[another_end2_id] = new_length;
+
+            if new_length < 3 {
+                let cd = self.chain_union.coord(another_end1_id);
+                self.extend_chain(cd);
+            }
         }
 
         // check incident vertices
@@ -229,6 +234,11 @@ impl AnswerField {
                     self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
                 }
             }
+        } else if line == 1 {
+            // avoid too short chains
+            if self.chain_length[(Y(y / 2), X(x / 2))] < 3 {
+                self.extend_chain((Y(y / 2), X(x / 2)));
+            }
         }
 
         let is_seed = self.is_seed((Y(y), X(x)));
@@ -244,6 +254,28 @@ impl AnswerField {
             // (y, x) is now a seed
             self.seed_idx[(Y(y), X(x))] = self.seeds.len() as i32;
             self.seeds.push((Y(y), X(x)));
+        }
+    }
+    /// Extend the chain one of whose endpoint is `(y, x)`
+    fn extend_chain(&mut self, (Y(y), X(x)): Coord) {
+        let end1_id = self.chain_union.index((Y(y), X(x)));
+        let end2_id = self.chain_union[end1_id];
+
+        let end1 = (Y(y * 2), X(x * 2));
+        let (Y(y2), X(x2)) = self.chain_union.coord(end2_id);
+        let end2 = (Y(y2 * 2), X(x2 * 2));
+
+        let end1_undecided = self.undecided_neighbors(end1);
+        let end2_undecided = self.undecided_neighbors(end2);
+
+        match (end1_undecided.len(), end2_undecided.len()) {
+            (0, 0) => {
+                self.invalid = true;
+                return;
+            },
+            (0, 1) => self.decide(end2_undecided[0], Edge::Line),
+            (1, 0) => self.decide(end1_undecided[0], Edge::Line),
+            _ => (),
         }
     }
 }
