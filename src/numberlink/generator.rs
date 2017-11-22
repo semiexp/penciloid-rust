@@ -15,9 +15,12 @@ enum Edge {
 struct AnswerField {
     height: i32,
     width: i32,
-    field: Grid<Edge>,
+    chain_union: Grid<usize>, // height * width
+    chain_length: Grid<i32>, // height * width
+    field: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     seed_idx: Grid<i32>,
     seeds: Vec<Coord>,
+    endpoints: i32,
     invalid: bool,
 }
 
@@ -26,11 +29,18 @@ impl AnswerField {
         let mut ret = AnswerField {
             height: height,
             width: width,
+            chain_union: Grid::new(height, width, 0),
+            chain_length: Grid::new(height, width, 0),
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
+            endpoints: 0,
             invalid: false,
         };
+
+        for idx in 0..((height * width) as usize) {
+            ret.chain_union[idx] = idx;
+        }
 
         ret.seeds.push((Y(0), X(0)));
         ret.seeds.push((Y(0), X(2 * width - 2)));
@@ -105,12 +115,41 @@ impl AnswerField {
         }
         self.field[cd] = state;
 
-        // check incident vertices
         let (Y(y), X(x)) = cd;
+
+        // update chain information
+        if state == Edge::Line {
+            let end1 = (Y(y / 2), X(x / 2));
+            let end2 = (Y((y + 1) / 2), X((x + 1) / 2));
+
+            let end1_id = self.chain_union.index(end1);
+            let end2_id = self.chain_union.index(end2);
+            let another_end1_id = self.chain_union[end1_id];
+            let another_end2_id = self.chain_union[end2_id];
+
+            if another_end1_id == end2_id {
+                // invalid: a self-loop will be formed
+                self.invalid = true;
+                return;
+            }
+
+            let new_length = self.chain_length[end1_id] + self.chain_length[end2_id] + 1;
+
+            self.chain_union[another_end1_id] = another_end2_id;
+            self.chain_union[another_end2_id] = another_end1_id;
+            self.chain_length[another_end1_id] = new_length;
+            self.chain_length[another_end2_id] = new_length;
+        }
+
+        // check incident vertices
         if y % 2 == 1 {
+            if self.count_neighbor((Y(y - 1), X(x))) == (1, 0) { self.endpoints += 1; }
+            if self.count_neighbor((Y(y + 1), X(x))) == (1, 0) { self.endpoints += 1; }
             self.inspect((Y(y - 1), X(x)));
             self.inspect((Y(y + 1), X(x)));
         } else {
+            if self.count_neighbor((Y(y), X(x - 1))) == (1, 0) { self.endpoints += 1; }
+            if self.count_neighbor((Y(y), X(x + 1))) == (1, 0) { self.endpoints += 1; }
             self.inspect((Y(y), X(x - 1)));
             self.inspect((Y(y), X(x + 1)));
         }
