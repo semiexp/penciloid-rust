@@ -6,13 +6,25 @@ extern crate rand;
 use rand::{Rng, distributions};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Endpoint {
+    Any,
+    Forced,
+    Prohibited,
+}
+
+pub struct GeneratorOption<'a> {
+    pub chain_threshold: i32,
+    pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Edge {
     Undecided,
     Line,
     Blank,
 }
 
-struct AnswerField {
+struct AnswerField<'a> {
     height: i32,
     width: i32,
     chain_union: Grid<usize>, // height * width
@@ -20,13 +32,14 @@ struct AnswerField {
     field: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     seed_idx: Grid<i32>,
     seeds: Vec<Coord>,
+    endpoint_constraint: Option<&'a Grid<Endpoint>>,
     endpoints: i32,
     chain_threshold: i32,
     invalid: bool,
 }
 
-impl AnswerField {
-    fn new(height: i32, width: i32) -> AnswerField {
+impl<'a> AnswerField<'a> {
+    fn new(height: i32, width: i32, endpoint_constraint: Option<&'a Grid<Endpoint>>) -> AnswerField<'a> {
         let mut ret = AnswerField {
             height: height,
             width: width,
@@ -35,6 +48,7 @@ impl AnswerField {
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
+            endpoint_constraint,
             endpoints: 0,
             chain_threshold: 3,
             invalid: false,
@@ -66,6 +80,12 @@ impl AnswerField {
     }
     fn get_threshold(&self) -> i32 {
         self.chain_threshold
+    }
+    fn endpoint_constraint(&self, cd: Coord) -> Endpoint {
+        match self.endpoint_constraint {
+            Some(g) => g[cd],
+            None => Endpoint::Any,
+        }
     }
     /// Counts the number of (Line, Undecided) around `cd`
     fn count_neighbor(&self, cd: Coord) -> (i32, i32) {
@@ -249,6 +269,35 @@ impl AnswerField {
             }
         }
 
+        match self.endpoint_constraint((Y(y / 2), X(x / 2))) {
+            Endpoint::Any => (),
+            Endpoint::Forced => {
+                if line == 1 {
+                    for &(dy, dx) in &dirs {
+                        let e = self.get((Y(y + dy), X(x + dx)));
+                        if e == Edge::Undecided {
+                            self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
+                        }
+                    }
+                }
+            },
+            Endpoint::Prohibited => {
+                if line == 1 {
+                    if undecided == 0 {
+                        self.invalid = true;
+                        return;
+                    } else if undecided == 1 {
+                        for &(dy, dx) in &dirs {
+                            let e = self.get((Y(y + dy), X(x + dx)));
+                            if e == Edge::Undecided {
+                                self.decide((Y(y + dy), X(x + dx)), Edge::Line);
+                            }
+                        }
+                    }
+                }
+            },
+        }
+
         let is_seed = self.is_seed((Y(y), X(x)));
         let seed_idx = self.seed_idx[(Y(y), X(x))];
 
@@ -288,16 +337,20 @@ impl AnswerField {
     }
 }
 
-pub fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) -> Option<Grid<Clue>> {
-    let mut field = AnswerField::new(height, width);
+pub fn generate_placement<R: Rng>(height: i32, width: i32, opt: &GeneratorOption, rng: &mut R) -> Option<Grid<Clue>> {
+    let mut field = AnswerField::new(height, width, opt.endpoint_constraint);
+    field.set_threshold(opt.chain_threshold);
 
     loop {
         if !field.has_seed() { break; }
         let cd = field.random_seed(rng);
+        let (Y(y), X(x)) = cd;
+        let cd_vtx = (Y(y / 2), X(x / 2));
 
         if field.count_neighbor(cd) == (0, 2) {
             let nbs = field.undecided_neighbors(cd);
-            if rng.next_f64() < 0.9f64 {
+            let constraint = field.endpoint_constraint(cd_vtx);
+            if (constraint != Endpoint::Forced && rng.next_f64() < 0.9f64) || constraint == Endpoint::Prohibited {
                 // as angle
                 field.decide(nbs[0], Edge::Line);
                 field.decide(nbs[1], Edge::Line);
