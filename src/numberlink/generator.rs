@@ -279,6 +279,8 @@ impl<'a> AnswerField<'a> {
                             self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
                         }
                     }
+                } else if line >= 2 {
+                    self.invalid = true;
                 }
             },
             Endpoint::Prohibited => {
