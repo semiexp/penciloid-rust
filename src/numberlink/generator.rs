@@ -6,31 +6,57 @@ extern crate rand;
 use rand::{Rng, distributions};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Endpoint {
+    Any,
+    Forced,
+    Prohibited,
+}
+
+pub struct GeneratorOption<'a> {
+    pub chain_threshold: i32,
+    pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Edge {
     Undecided,
     Line,
     Blank,
 }
 
-struct AnswerField {
+struct AnswerField<'a> {
     height: i32,
     width: i32,
-    field: Grid<Edge>,
+    chain_union: Grid<usize>, // height * width
+    chain_length: Grid<i32>, // height * width
+    field: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     seed_idx: Grid<i32>,
     seeds: Vec<Coord>,
+    endpoint_constraint: Option<&'a Grid<Endpoint>>,
+    endpoints: i32,
+    chain_threshold: i32,
     invalid: bool,
 }
 
-impl AnswerField {
-    fn new(height: i32, width: i32) -> AnswerField {
+impl<'a> AnswerField<'a> {
+    fn new(height: i32, width: i32, endpoint_constraint: Option<&'a Grid<Endpoint>>) -> AnswerField<'a> {
         let mut ret = AnswerField {
             height: height,
             width: width,
+            chain_union: Grid::new(height, width, 0),
+            chain_length: Grid::new(height, width, 0),
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
+            endpoint_constraint,
+            endpoints: 0,
+            chain_threshold: 3,
             invalid: false,
         };
+
+        for idx in 0..((height * width) as usize) {
+            ret.chain_union[idx] = idx;
+        }
 
         ret.seeds.push((Y(0), X(0)));
         ret.seeds.push((Y(0), X(2 * width - 2)));
@@ -47,6 +73,18 @@ impl AnswerField {
             self.field[cd]
         } else {
             Edge::Blank
+        }
+    }
+    fn set_threshold(&mut self, threshold: i32) {
+        self.chain_threshold = threshold;
+    }
+    fn get_threshold(&self) -> i32 {
+        self.chain_threshold
+    }
+    fn endpoint_constraint(&self, cd: Coord) -> Endpoint {
+        match self.endpoint_constraint {
+            Some(g) => g[cd],
+            None => Endpoint::Any,
         }
     }
     /// Counts the number of (Line, Undecided) around `cd`
@@ -105,12 +143,46 @@ impl AnswerField {
         }
         self.field[cd] = state;
 
-        // check incident vertices
         let (Y(y), X(x)) = cd;
+
+        // update chain information
+        if state == Edge::Line {
+            let end1 = (Y(y / 2), X(x / 2));
+            let end2 = (Y((y + 1) / 2), X((x + 1) / 2));
+
+            let end1_id = self.chain_union.index(end1);
+            let end2_id = self.chain_union.index(end2);
+            let another_end1_id = self.chain_union[end1_id];
+            let another_end2_id = self.chain_union[end2_id];
+
+            if another_end1_id == end2_id {
+                // invalid: a self-loop will be formed
+                self.invalid = true;
+                return;
+            }
+
+            let new_length = self.chain_length[end1_id] + self.chain_length[end2_id] + 1;
+
+            self.chain_union[another_end1_id] = another_end2_id;
+            self.chain_union[another_end2_id] = another_end1_id;
+            self.chain_length[another_end1_id] = new_length;
+            self.chain_length[another_end2_id] = new_length;
+
+            if new_length < self.chain_threshold {
+                let cd = self.chain_union.coord(another_end1_id);
+                self.extend_chain(cd);
+            }
+        }
+
+        // check incident vertices
         if y % 2 == 1 {
+            if self.count_neighbor((Y(y - 1), X(x))) == (1, 0) { self.endpoints += 1; }
+            if self.count_neighbor((Y(y + 1), X(x))) == (1, 0) { self.endpoints += 1; }
             self.inspect((Y(y - 1), X(x)));
             self.inspect((Y(y + 1), X(x)));
         } else {
+            if self.count_neighbor((Y(y), X(x - 1))) == (1, 0) { self.endpoints += 1; }
+            if self.count_neighbor((Y(y), X(x + 1))) == (1, 0) { self.endpoints += 1; }
             self.inspect((Y(y), X(x - 1)));
             self.inspect((Y(y), X(x + 1)));
         }
@@ -190,6 +262,42 @@ impl AnswerField {
                     self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
                 }
             }
+        } else if line == 1 {
+            // avoid too short chains
+            if self.chain_length[(Y(y / 2), X(x / 2))] < self.chain_threshold {
+                self.extend_chain((Y(y / 2), X(x / 2)));
+            }
+        }
+
+        match self.endpoint_constraint((Y(y / 2), X(x / 2))) {
+            Endpoint::Any => (),
+            Endpoint::Forced => {
+                if line == 1 {
+                    for &(dy, dx) in &dirs {
+                        let e = self.get((Y(y + dy), X(x + dx)));
+                        if e == Edge::Undecided {
+                            self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
+                        }
+                    }
+                } else if line >= 2 {
+                    self.invalid = true;
+                }
+            },
+            Endpoint::Prohibited => {
+                if line == 1 {
+                    if undecided == 0 {
+                        self.invalid = true;
+                        return;
+                    } else if undecided == 1 {
+                        for &(dy, dx) in &dirs {
+                            let e = self.get((Y(y + dy), X(x + dx)));
+                            if e == Edge::Undecided {
+                                self.decide((Y(y + dy), X(x + dx)), Edge::Line);
+                            }
+                        }
+                    }
+                }
+            },
         }
 
         let is_seed = self.is_seed((Y(y), X(x)));
@@ -207,18 +315,44 @@ impl AnswerField {
             self.seeds.push((Y(y), X(x)));
         }
     }
+    /// Extend the chain one of whose endpoint is `(y, x)`
+    fn extend_chain(&mut self, (Y(y), X(x)): Coord) {
+        let end1_id = self.chain_union.index((Y(y), X(x)));
+        let end2_id = self.chain_union[end1_id];
+
+        let end1 = (Y(y * 2), X(x * 2));
+        let (Y(y2), X(x2)) = self.chain_union.coord(end2_id);
+        let end2 = (Y(y2 * 2), X(x2 * 2));
+
+        let end1_undecided = self.undecided_neighbors(end1);
+        let end2_undecided = self.undecided_neighbors(end2);
+
+        match (end1_undecided.len(), end2_undecided.len()) {
+            (0, 0) => {
+                self.invalid = true;
+                return;
+            },
+            (0, 1) => self.decide(end2_undecided[0], Edge::Line),
+            (1, 0) => self.decide(end1_undecided[0], Edge::Line),
+            _ => (),
+        }
+    }
 }
 
-pub fn generate_placement<R: Rng>(height: i32, width: i32, rng: &mut R) -> Option<Grid<Clue>> {
-    let mut field = AnswerField::new(height, width);
+pub fn generate_placement<R: Rng>(height: i32, width: i32, opt: &GeneratorOption, rng: &mut R) -> Option<Grid<Clue>> {
+    let mut field = AnswerField::new(height, width, opt.endpoint_constraint);
+    field.set_threshold(opt.chain_threshold);
 
     loop {
         if !field.has_seed() { break; }
         let cd = field.random_seed(rng);
+        let (Y(y), X(x)) = cd;
+        let cd_vtx = (Y(y / 2), X(x / 2));
 
         if field.count_neighbor(cd) == (0, 2) {
             let nbs = field.undecided_neighbors(cd);
-            if rng.next_f64() < 0.9f64 {
+            let constraint = field.endpoint_constraint(cd_vtx);
+            if (constraint != Endpoint::Forced && rng.next_f64() < 0.9f64) || constraint == Endpoint::Prohibited {
                 // as angle
                 field.decide(nbs[0], Edge::Line);
                 field.decide(nbs[1], Edge::Line);
