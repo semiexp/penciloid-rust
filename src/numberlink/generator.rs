@@ -266,6 +266,19 @@ impl<'a> AnswerField<'a> {
             // avoid too short chains
             if self.chain_length[(Y(y / 2), X(x / 2))] < self.chain_threshold {
                 self.extend_chain((Y(y / 2), X(x / 2)));
+
+                let (Y(ay), X(ax)) = self.chain_union.coord(self.chain_union[(Y(y / 2), X(x / 2))]);
+                if self.count_neighbor((Y(ay * 2), X(ax * 2))) == (1, 0) {
+                    let minimum_len = self.chain_threshold - self.chain_length[(Y(y / 2), X(x / 2))];
+                    for &(dy, dx) in &dirs {
+                        if self.get((Y(y + dy), X(x + dx))) == Edge::Undecided {
+                            let (Y(ay), X(ax)) = self.chain_union.coord(self.chain_union[(Y(y / 2 + dy), X(x / 2 + dx))]);
+                            if self.count_neighbor((Y(ay * 2), X(ax * 2))) == (1, 0) && self.chain_length[(Y(y / 2 + dy), X(x / 2 + dx))] < minimum_len {
+                                self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
+                            }
+                        }
+                    }
+                }
             }
         }
 
