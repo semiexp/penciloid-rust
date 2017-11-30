@@ -13,7 +13,8 @@ pub use self::format::*;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Clue(pub i32);
 
-const NO_CLUE: Clue = Clue(0);
+pub const NO_CLUE: Clue = Clue(0);
+pub const UNUSED: Clue = Clue(-1);
 
 use super::{Grid, Y, X, Coord};
 

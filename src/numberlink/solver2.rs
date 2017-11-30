@@ -18,6 +18,7 @@ enum History {
 struct SolverField {
     another_end: Grid<i32>, // height * width
     has_clue: Grid<bool>, // height * width
+    unused: Grid<bool>, // height * width
     edge: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     inconsistent: bool,
     disallow_unused_cell: bool,
@@ -31,11 +32,21 @@ impl SolverField {
         let height = problem.height();
         let width = problem.width();
         let mut another_end = Grid::new(height, width, 0);
+        let mut edge = Grid::new(height * 2 - 1, width * 2 - 1, Edge::Undecided);
         let mut has_clue = Grid::new(height, width, false);
+        let mut unused = Grid::new(height, width, false);
         for y in 0..height {
             for x in 0..width {
                 let c = problem[(Y(y), X(x))];
-                if c == NO_CLUE {
+                if c == UNUSED {
+                    has_clue[(Y(y), X(x))] = true;
+                    unused[(Y(y), X(x))] = true;
+
+                    if y > 0 { edge[(Y(y * 2 - 1), X(x * 2))] = Edge::Blank; }
+                    if x > 0 { edge[(Y(y * 2), X(x * 2 - 1))] = Edge::Blank; }
+                    if y < height - 1 { edge[(Y(y * 2 + 1), X(x * 2))] = Edge::Blank; }
+                    if x < width - 1 { edge[(Y(y * 2), X(x * 2 + 1))] = Edge::Blank; }
+                } else if c == NO_CLUE {
                     let id = another_end.index((Y(y), X(x))) as i32;
                     another_end[(Y(y), X(x))] = id;
                 } else {
@@ -47,7 +58,8 @@ impl SolverField {
         let mut ret = SolverField {
             another_end,
             has_clue,
-            edge: Grid::new(height * 2 - 1, width * 2 - 1, Edge::Undecided),
+            unused,
+            edge,
             inconsistent: false,
             disallow_unused_cell,
             history: Vec::new(),
@@ -269,6 +281,8 @@ impl SolverField {
     /// Inspect vertex `cd`.
     /// `cd` must be in vertex-coordination.
     fn inspect(&mut self, cd: Coord) -> bool {
+        if self.unused[cd] { return false; }
+
         let (Y(y), X(x)) = cd;
 
         let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
@@ -460,4 +474,27 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
         field.rollback();
     }
     return false;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_solver_unused_cells() {
+        let problem_base = [
+            [0 , 0 , 0 , 0 , 0 ],
+            [0 , 0 , 0 , 0 , 0 ],
+            [1 , 2 , -1, 2 , 1 ],
+            [-1, -1, -1, -1, -1],
+        ];
+        let mut problem = Grid::new(problem_base.len() as i32, problem_base[0].len() as i32, NO_CLUE);
+        for y in 0..problem_base.len() {
+            for x in 0..problem_base[0].len() {
+                problem[(Y(y as i32), X(x as i32))] = Clue(problem_base[y][x]);
+            }
+        }
+
+        let ans = solve2(&problem, None, false);
+        assert_eq!(ans.len(), 1);
+    }
 }
