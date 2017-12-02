@@ -12,6 +12,8 @@ enum History {
     AnotherEnd(i32, i32),
     Edge(Coord),
     Inconsistent(bool),
+    OpenEndCount(i32, i32),
+    NumberEnd(i32, (i32, i32)),
     Checkpoint,
 }
 
@@ -23,6 +25,11 @@ struct SolverField {
     inconsistent: bool,
     disallow_unused_cell: bool,
     history: Vec<History>,
+
+    // for cut-based pruning
+    undecided_count: Vec<i32>, // width - 1
+    open_end_count: Vec<i32>, // width
+    number_end: Vec<(i32, i32)>, // max clue
 }
 
 const CLOSED_END: i32 = -1;
@@ -35,6 +42,7 @@ impl SolverField {
         let mut edge = Grid::new(height * 2 - 1, width * 2 - 1, Edge::Undecided);
         let mut has_clue = Grid::new(height, width, false);
         let mut unused = Grid::new(height, width, false);
+        let mut max_clue = 0;
         for y in 0..height {
             for x in 0..width {
                 let c = problem[(Y(y), X(x))];
@@ -50,8 +58,25 @@ impl SolverField {
                     let id = another_end.index((Y(y), X(x))) as i32;
                     another_end[(Y(y), X(x))] = id;
                 } else {
+                    max_clue = ::std::cmp::max(max_clue, c.0);
                     another_end[(Y(y), X(x))] = -(c.0 + 1);
                     has_clue[(Y(y), X(x))] = true;
+                }
+            }
+        }
+        let undecided_count = vec![height; (width - 1) as usize];
+        let open_end_count = vec![0; width as usize];
+        let mut number_end = vec![(-1, -1); (max_clue + 1) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                let Clue(c) = problem[(Y(y), X(x))];
+                if c > 0 {
+                    let c = c as usize;
+                    if number_end[c].0 == -1 {
+                        number_end[c].0 = x;
+                    } else {
+                        number_end[c].1 = x;
+                    }
                 }
             }
         }
@@ -63,6 +88,9 @@ impl SolverField {
             inconsistent: false,
             disallow_unused_cell,
             history: Vec::new(),
+            undecided_count,
+            open_end_count,
+            number_end,
         };
         if disallow_unused_cell {
             for y in 0..height {
@@ -108,6 +136,32 @@ impl SolverField {
         self.history.push(History::AnotherEnd(id, self.another_end[id as usize]));
         self.another_end[id as usize] = value;
     }
+    fn update_open_end_count(&mut self, X(x1): X, X(x2): X, sgn: i32) {
+        if x1 < x2 {
+            self.open_end_count[x1 as usize] += sgn;
+            self.open_end_count[x2 as usize] -= sgn;
+            self.history.push(History::OpenEndCount(x1, -sgn));
+            self.history.push(History::OpenEndCount(x2, sgn));
+        } else if x1 > x2 {
+            self.open_end_count[x2 as usize] += sgn;
+            self.open_end_count[x1 as usize] -= sgn;
+            self.history.push(History::OpenEndCount(x2, -sgn));
+            self.history.push(History::OpenEndCount(x1, sgn));
+        }
+    }
+    fn update_number_end(&mut self, n: i32, X(before): X, X(after): X) {
+        self.history.push(History::NumberEnd(n, self.number_end[n as usize]));
+        let n = n as usize;
+        if self.number_end[n].0 == before {
+            self.number_end[n].0 = after;
+        } else {
+            self.number_end[n].1 = after;
+        }
+    }
+    fn close_number_end(&mut self, n: i32) {
+        self.history.push(History::NumberEnd(n, self.number_end[n as usize]));
+        self.number_end[n as usize] = (-1, -1);
+    }
     /// Add an checkpoint.
     fn add_checkpoint(&mut self) {
         self.history.push(History::Checkpoint);
@@ -117,8 +171,14 @@ impl SolverField {
         while let Some(entry) = self.history.pop() {
             match entry {
                 History::AnotherEnd(id, val) => self.another_end[id as usize] = val,
-                History::Edge(cd) => self.edge[cd] = Edge::Undecided,
+                History::Edge(cd) => {
+                    self.edge[cd] = Edge::Undecided;
+                    let (_, X(x)) = cd;
+                    if x % 2 == 1 { self.undecided_count[(x / 2) as usize] += 1; }
+                },
                 History::Inconsistent(ic) => self.inconsistent = ic,
+                History::OpenEndCount(x, app) => self.open_end_count[x as usize] += app,
+                History::NumberEnd(n, v) => self.number_end[n as usize] = v,
                 History::Checkpoint => break,
             }
         }
@@ -161,6 +221,7 @@ impl SolverField {
             match (another_end1_id < 0, another_end2_id < 0) {
                 (true, true) => {
                     if another_end1_id == another_end2_id {
+                        self.close_number_end(-another_end1_id - 1);
                         self.update_another_end(end1_id, CLOSED_END);
                         self.update_another_end(end2_id, CLOSED_END);
                     } else {
@@ -168,6 +229,17 @@ impl SolverField {
                     }
                 },
                 (false, true) => {
+                    let ae1_x = self.another_end.coord(another_end1_id as usize).1;
+                    self.update_open_end_count(
+                        ae1_x,
+                        end1.1,
+                        -1
+                    );
+                    self.update_number_end(
+                        -another_end2_id - 1,
+                        end2.1,
+                        ae1_x,
+                    );
                     if end1_id != another_end1_id {
                         self.update_another_end(end1_id, CLOSED_END);
                     }
@@ -175,6 +247,17 @@ impl SolverField {
                     self.update_another_end(end2_id, CLOSED_END);
                 },
                 (true, false) => {
+                    let ae2_x = self.another_end.coord(another_end2_id as usize).1;
+                    self.update_open_end_count(
+                        ae2_x,
+                        end2.1,
+                        -1
+                    );
+                    self.update_number_end(
+                        -another_end1_id - 1,
+                        end1.1,
+                        ae2_x,
+                    );
                     if end2_id != another_end2_id {
                         self.update_another_end(end2_id, CLOSED_END);
                     }
@@ -182,6 +265,23 @@ impl SolverField {
                     self.update_another_end(end1_id, CLOSED_END);
                 },
                 (false, false) => {
+                    let ae1_x = self.another_end.coord(another_end1_id as usize).1;
+                    let ae2_x = self.another_end.coord(another_end2_id as usize).1;
+                    self.update_open_end_count(
+                        ae1_x,
+                        end1.1,
+                        -1
+                    );
+                    self.update_open_end_count(
+                        ae2_x,
+                        end2.1,
+                        -1
+                    );
+                    self.update_open_end_count(
+                        ae1_x,
+                        ae2_x,
+                        1
+                    );
                     if end1_id != another_end1_id {
                         self.update_another_end(end1_id, CLOSED_END);
                     }
@@ -197,6 +297,9 @@ impl SolverField {
         // update edge state
         self.history.push(History::Edge(cd));
         self.edge[cd] = state;
+        if x % 2 == 1 {
+            self.undecided_count[(x / 2) as usize] -= 1;
+        }
 
         // ensure canonical form
         if state == Edge::Line {
@@ -371,7 +474,37 @@ pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: 
         n_steps,
     }
 }
+fn prune_cut(field: &SolverField) -> bool {
+    let height = field.height();
+    let width = field.width();
+    let mut accsum = vec![0; width as usize];
+    
+    for x in 0..width {
+        accsum[x as usize] = -field.open_end_count[x as usize];
+    }
+    for n in 0..field.number_end.len() {
+        let (a, b) = field.number_end[n];
+        if a != -1 {
+            if a < b {
+                accsum[a as usize] += 1;
+                accsum[b as usize] -= 1;
+            } else {
+                accsum[b as usize] += 1;
+                accsum[a as usize] -= 1;
+            }
+        }
+    }
 
+    for i in 1..(width as usize) {
+        accsum[i] += accsum[i - 1];
+    }
+    for x in 0..(width - 1) {
+        if field.undecided_count[x as usize] < accsum[x as usize] {
+            return true;
+        }
+    }
+    false
+}
 fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo, n_steps: &mut u64) -> bool {
     let mut y = y;
     let mut x = x;
@@ -458,7 +591,6 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
                 if flg { continue; }
             }
         }
-
         field.add_checkpoint();
         let mut inconsistent = false;
 
@@ -466,11 +598,12 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
         if !inconsistent {
             inconsistent |= field.decide_edge((Y(y * 2 + 1), X(x * 2)), if down { Edge::Line } else { Edge::Blank });
         }
-
+        if !inconsistent {
+            inconsistent |= prune_cut(field);
+        }
         if !inconsistent {
             if search(y, x + 1, field, answer_info, n_steps) { return true; }
         }
-
         field.rollback();
     }
     return false;
