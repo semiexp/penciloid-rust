@@ -362,7 +362,7 @@ pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorO
         if fields.len() == 0 { return None; }
 
         let mut fields_next = vec![];
-        for _ in 0..(5 * fields.len()) {
+        'outer: for _ in 0..(5 * fields.len()) {
             if fields_next.len() >= beam_width { break; }
 
             let id = rng.gen_range(0, fields.len());
@@ -421,7 +421,7 @@ pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorO
                     }
                 }
                 for i in 1..id {
-                    if line_len[i as usize] <= 3 { continue; }
+                    if line_len[i as usize] <= 3 { continue 'outer; }
                 }
 
                 let mut end_count = vec![0; id as usize];
@@ -433,19 +433,19 @@ pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorO
                     }
                 }
                 for i in 1..id {
-                    if end_count[i as usize] != 2 { continue; }
+                    if end_count[i as usize] != 2 { continue 'outer; }
                 }
 
                 for y in 0..(2 * height - 1) {
                     for x in 0..(2 * width - 1) {
                         if y % 2 == 1 && x % 2 == 0 {
-                            if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { continue; }
+                            if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { continue 'outer; }
                         } else if y % 2 == 0 && x % 2 == 1 {
-                            if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { continue; }
+                            if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { continue 'outer; }
                         }
                     }
                 }
-                
+
                 let mut ret = Grid::new(height, width, NO_CLUE);
                 for y in 0..height {
                     for x in 0..width {
