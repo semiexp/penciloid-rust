@@ -40,7 +40,7 @@ struct AnswerField {
 }
 
 impl AnswerField {
-    fn new(height: i32, width: i32, endpoint_constraint: Option<&Grid<Endpoint>>) -> AnswerField {
+    fn new(height: i32, width: i32, opt: &GeneratorOption) -> AnswerField {
         let mut ret = AnswerField {
             height: height,
             width: width,
@@ -49,12 +49,12 @@ impl AnswerField {
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
-            endpoint_constraint: match endpoint_constraint {
+            endpoint_constraint: match opt.endpoint_constraint {
                 Some(ep) => ep.clone(),
                 None => Grid::new(height, width, Endpoint::Any),
             },
             endpoints: 0,
-            chain_threshold: 3,
+            chain_threshold: opt.chain_threshold,
             invalid: false,
         };
 
@@ -355,8 +355,7 @@ impl AnswerField {
 
 pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorOption, rng: &mut R) -> Option<Grid<Clue>> {
     let beam_width = 100;
-    let mut fields = vec![AnswerField::new(height, width, opt.endpoint_constraint)];
-    fields[0].set_threshold(opt.chain_threshold);
+    let mut fields = vec![AnswerField::new(height, width, opt)];
 
     loop {
         if fields.len() == 0 { return None; }
@@ -467,8 +466,7 @@ pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorO
 }
 
 pub fn generate_placement<R: Rng>(height: i32, width: i32, opt: &GeneratorOption, rng: &mut R) -> Option<Grid<Clue>> {
-    let mut field = AnswerField::new(height, width, opt.endpoint_constraint);
-    field.set_threshold(opt.chain_threshold);
+    let mut field = AnswerField::new(height, width, opt);
 
     loop {
         if !field.has_seed() { break; }
