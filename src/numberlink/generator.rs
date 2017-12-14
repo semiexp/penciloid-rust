@@ -25,7 +25,7 @@ enum Edge {
 }
 
 #[derive(Clone)]
-struct AnswerField<'a> {
+struct AnswerField {
     height: i32,
     width: i32,
     chain_union: Grid<usize>, // height * width
@@ -33,14 +33,14 @@ struct AnswerField<'a> {
     field: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     seed_idx: Grid<i32>,
     seeds: Vec<Coord>,
-    endpoint_constraint: Option<&'a Grid<Endpoint>>,
+    endpoint_constraint: Grid<Endpoint>,
     endpoints: i32,
     chain_threshold: i32,
     invalid: bool,
 }
 
-impl<'a> AnswerField<'a> {
-    fn new(height: i32, width: i32, endpoint_constraint: Option<&'a Grid<Endpoint>>) -> AnswerField<'a> {
+impl AnswerField {
+    fn new(height: i32, width: i32, endpoint_constraint: Option<&Grid<Endpoint>>) -> AnswerField {
         let mut ret = AnswerField {
             height: height,
             width: width,
@@ -49,7 +49,10 @@ impl<'a> AnswerField<'a> {
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
             seeds: vec![],
-            endpoint_constraint,
+            endpoint_constraint: match endpoint_constraint {
+                Some(ep) => ep.clone(),
+                None => Grid::new(height, width, Endpoint::Any),
+            },
             endpoints: 0,
             chain_threshold: 3,
             invalid: false,
@@ -83,10 +86,7 @@ impl<'a> AnswerField<'a> {
         self.chain_threshold
     }
     fn endpoint_constraint(&self, cd: Coord) -> Endpoint {
-        match self.endpoint_constraint {
-            Some(g) => g[cd],
-            None => Endpoint::Any,
-        }
+        self.endpoint_constraint[cd]
     }
     /// Counts the number of (Line, Undecided) around `cd`
     fn count_neighbor(&self, cd: Coord) -> (i32, i32) {
