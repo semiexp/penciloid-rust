@@ -15,6 +15,7 @@ pub enum Endpoint {
 pub struct GeneratorOption<'a> {
     pub chain_threshold: i32,
     pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
+    pub forbid_adjacent_clue: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +37,7 @@ struct AnswerField {
     endpoint_constraint: Grid<Endpoint>,
     endpoints: i32,
     chain_threshold: i32,
+    forbid_adjacent_clue: bool,
     invalid: bool,
 }
 
@@ -55,6 +57,7 @@ impl AnswerField {
             },
             endpoints: 0,
             chain_threshold: opt.chain_threshold,
+            forbid_adjacent_clue: opt.forbid_adjacent_clue,
             invalid: false,
         };
 
@@ -278,6 +281,25 @@ impl AnswerField {
                                 self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
                             }
                         }
+                    }
+                }
+            }
+        } else if line >= 3 {
+            self.invalid = true;
+            return;
+        }
+        
+        if self.forbid_adjacent_clue && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0)) {
+            for dy in -1..2 {
+                for dx in -1..2 {
+                    if dy == 0 && dx == 0 { continue; }
+                    if y / 2 + dy < 0 || y / 2 + dy >= self.height || x / 2 + dx < 0 || x / 2 + dx >= self.width { continue; }
+                    let cond = self.endpoint_constraint((Y(y / 2 + dy), X(x / 2 + dx)));
+                    if cond == Endpoint::Forced {
+                        self.invalid = true;
+                    } else if cond == Endpoint::Any {
+                        self.endpoint_constraint[(Y(y / 2 + dy), X(x / 2 + dx))] = Endpoint::Prohibited;
+                        self.inspect((Y(y + dy * 2), X(x + dx * 2)));
                     }
                 }
             }
