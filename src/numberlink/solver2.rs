@@ -21,6 +21,8 @@ struct SolverField {
     another_end: Grid<i32>, // height * width
     has_clue: Grid<bool>, // height * width
     unused: Grid<bool>, // height * width
+    down_left: Grid<bool>, // height * width
+    down_right: Grid<bool>, // height * width
     edge: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     inconsistent: bool,
     disallow_unused_cell: bool,
@@ -64,6 +66,21 @@ impl SolverField {
                 }
             }
         }
+        let mut down_left = Grid::new(height, width, false);
+        let mut down_right = Grid::new(height, width, false);
+        for y in 0..height {
+            let y = height - 1 - y;
+            for x in 0..width {
+                if y != height - 1 {
+                    if x > 0 && (down_left[(Y(y + 1), X(x - 1))] || has_clue[(Y(y + 1), X(x - 1))]) {
+                        down_left[(Y(y), X(x))] = true;
+                    }
+                    if x < width - 1 && (down_right[(Y(y + 1), X(x + 1))] || has_clue[(Y(y + 1), X(x + 1))]) {
+                        down_right[(Y(y), X(x))] = true;
+                    }
+                }
+            }
+        }
         let undecided_count = vec![height; (width - 1) as usize];
         let open_end_count = vec![0; width as usize];
         let mut number_end = vec![(-1, -1); (max_clue + 1) as usize];
@@ -84,6 +101,8 @@ impl SolverField {
             another_end,
             has_clue,
             unused,
+            down_left,
+            down_right,
             edge,
             inconsistent: false,
             disallow_unused_cell,
@@ -304,6 +323,13 @@ impl SolverField {
         // ensure canonical form
         if state == Edge::Line {
             if y % 2 == 0 {
+                if !self.down_right[(Y(y / 2), X(x / 2))] && self.get_edge((Y(y + 1), X(x - 1))) == Edge::Line {
+                    return self.set_inconsistent();
+                }
+                if !self.down_left[(Y(y / 2), X(x / 2 + 1))] && self.get_edge((Y(y + 1), X(x + 1))) == Edge::Line {
+                    return self.set_inconsistent();
+                }
+
                 if self.get_edge((Y(y - 2), X(x))) == Edge::Line {
                     if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) { return true; }
                     if self.decide_edge((Y(y - 1), X(x + 1)), Edge::Blank) { return true; }
@@ -338,6 +364,13 @@ impl SolverField {
                     }
                 }
             } else {
+                if !self.down_left[(Y(y / 2), X(x / 2))] && self.get_edge((Y(y - 1), X(x - 1))) == Edge::Line {
+                    return self.set_inconsistent();
+                }
+                if !self.down_right[(Y(y / 2), X(x / 2))] && self.get_edge((Y(y - 1), X(x + 1))) == Edge::Line {
+                    return self.set_inconsistent();
+                }
+
                 if self.get_edge((Y(y), X(x - 2))) == Edge::Line {
                     if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) { return true; }
                     if self.decide_edge((Y(y + 1), X(x - 1)), Edge::Blank) { return true; }
