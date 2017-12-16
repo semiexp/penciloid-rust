@@ -585,28 +585,10 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
         let right_effective = right || (field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line);
         let down_effective = down || (field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line);
         if right_effective && down_effective {
-            let mut isok = false;
-            let mut i = 1;
-            while y + i < field.height() && x + i < field.width() {
-                if field.has_clue[(Y(y + i), X(x + i))] {
-                    isok = true;
-                    break;
-                }
-                i += 1;
-            }
-            if !isok { continue; }
+            if !field.down_right[(Y(y), X(x))] { continue; }
         }
         if right_effective && field.get_edge((Y(y * 2 + 1), X(x * 2 + 2))) == Edge::Line {
-            let mut isok = false;
-            let mut i = 1;
-            while y + i < field.height() && x + 1 - i >= 0 {
-                if field.has_clue[(Y(y + i), X(x + 1 - i))] {
-                    isok = true;
-                    break;
-                }
-                i += 1;
-            }
-            if !isok { continue; }
+            if !field.down_left[(Y(y), X(x))] { continue; }
         }
         if right_effective && field.get_edge((Y(y * 2 - 1), X(x * 2 + 2))) == Edge::Line {
             let mut len = 1;
