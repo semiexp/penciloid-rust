@@ -451,14 +451,9 @@ impl SolverField {
                 let cd2 = (Y(y + dy), X(x + dx));
                 if self.another_end.is_valid_coord(cd2) {
                     let another_end2 = self.another_end[cd2];
-                    if another_end2 < -1 && another_end != another_end2 {
-                        if self.decide_edge((Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank) { return true; }
+                    if another_end2 < -1 {
+                        if self.decide_edge((Y(y * 2 + dy), X(x * 2 + dx)), if another_end == another_end2 { Edge::Line } else { Edge::Blank }) { return true; }
                     }
-                    /*
-                    if another_end2 < -1 && another_end == another_end2 {
-                        if self.decide_edge((Y(y * 2 + dy), X(x * 2 + dx)), Edge::Line) { return true; }
-                    }
-                    */
                 }
             }
         }
