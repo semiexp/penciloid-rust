@@ -23,6 +23,7 @@ struct SolverField {
     unused: Grid<bool>, // height * width
     down_left: Grid<bool>, // height * width
     down_right: Grid<bool>, // height * width
+    left_clue_distance: Grid<i32>, // height * width
     edge: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     inconsistent: bool,
     disallow_unused_cell: bool,
@@ -81,6 +82,17 @@ impl SolverField {
                 }
             }
         }
+        let mut left_clue_distance = Grid::new(height, width, 0);
+        for y in 0..height {
+            let mut d = width;
+            for x in 0..width {
+                d += 1;
+                left_clue_distance[(Y(y), X(x))] = d;
+                if has_clue[(Y(y), X(x))] {
+                    d = 0;
+                }
+            }
+        }
         let undecided_count = vec![height; (width - 1) as usize];
         let open_end_count = vec![0; width as usize];
         let mut number_end = vec![(-1, -1); (max_clue + 1) as usize];
@@ -103,6 +115,7 @@ impl SolverField {
             unused,
             down_left,
             down_right,
+            left_clue_distance,
             edge,
             inconsistent: false,
             disallow_unused_cell,
@@ -438,8 +451,8 @@ impl SolverField {
                 let cd2 = (Y(y + dy), X(x + dx));
                 if self.another_end.is_valid_coord(cd2) {
                     let another_end2 = self.another_end[cd2];
-                    if another_end2 < -1 && another_end != another_end2 {
-                        if self.decide_edge((Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank) { return true; }
+                    if another_end2 < -1 {
+                        if self.decide_edge((Y(y * 2 + dy), X(x * 2 + dx)), if another_end == another_end2 { Edge::Line } else { Edge::Blank }) { return true; }
                     }
                 }
             }
@@ -491,6 +504,16 @@ impl SolverField {
                 if self.decide_edge((Y(y - 1), X(x + 2)), Edge::Blank) { return true; }
             }
         }
+        /*
+        if n_line == 0 && n_undecided == 2 && self.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Undecided {
+            if self.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Undecided && (!self.down_left[(Y(y), X(x))] || self.get_edge((Y(y * 2 + 2), X(x * 2 - 1))) == Edge::Line || self.get_edge((Y(y * 2 + 1), X(x * 2 - 2))) == Edge::Line) {
+                if self.decide_edge((Y(y * 2 + 1), X(x * 2)), Edge::Blank) { return true; }
+            }
+            if self.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Undecided && (!self.down_right[(Y(y), X(x))] || self.get_edge((Y(y * 2 + 2), X(x * 2 + 1))) == Edge::Line || self.get_edge((Y(y * 2 + 1), X(x * 2 + 2))) == Edge::Line) {
+                if self.decide_edge((Y(y * 2 + 1), X(x * 2)), Edge::Blank) { return true; }
+            }
+        }
+        */
         false
     }
 }
@@ -510,7 +533,7 @@ pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: 
     };
     let mut n_steps = 0u64;
 
-    search(0, 0, &mut solver_field, &mut answer_info, &mut n_steps);
+    search(0, 0, &mut solver_field, &mut answer_info, &mut n_steps, 0);
 
     let fully_checked = if let Some(limit) = limit { limit == answer_info.answers.len() } else { true };
 
@@ -551,12 +574,14 @@ fn prune_cut(field: &SolverField) -> bool {
     }
     false
 }
-fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo, n_steps: &mut u64) -> bool {
+fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo, n_steps: &mut u64, line_chain: i32) -> bool {
     let mut y = y;
     let mut x = x;
+    let mut line_chain = line_chain;
     if x == field.width() {
         y += 1;
         x = 0;
+        line_chain = 0;
     }
     while y < field.height() && field.get_edge((Y(y * 2 + 1), X(x * 2))) != Edge::Undecided && field.get_edge((Y(y * 2), X(x * 2 + 1))) != Edge::Undecided {
         if x == field.width() - 1 {
@@ -564,6 +589,22 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
             x = 0;
         } else {
             x += 1;
+            if y > 0 {
+                if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line {
+                    if field.get_edge((Y(y * 2 - 2), X(x * 2 - 1))) == Edge::Line {
+                        line_chain = -field.width();
+                    } else {
+                        line_chain += 1;
+                    }
+                } else {
+                    line_chain = 0;
+                }
+            }
+            if line_chain > 0 && field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line {
+                if field.get_edge((Y(y * 2 - 1), X((x - line_chain) * 2))) == Edge::Line && field.left_clue_distance[(Y(y - 1), X(x))] >= line_chain {
+                    return false;
+                }
+            }
         }
     }
     *n_steps += 1;
@@ -598,43 +639,14 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
         let right_effective = right || (field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line);
         let down_effective = down || (field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line);
         if right_effective && down_effective {
-            let mut isok = false;
-            let mut i = 1;
-            while y + i < field.height() && x + i < field.width() {
-                if field.has_clue[(Y(y + i), X(x + i))] {
-                    isok = true;
-                    break;
-                }
-                i += 1;
-            }
-            if !isok { continue; }
+            if !field.down_right[(Y(y), X(x))] { continue; }
         }
         if right_effective && field.get_edge((Y(y * 2 + 1), X(x * 2 + 2))) == Edge::Line {
-            let mut isok = false;
-            let mut i = 1;
-            while y + i < field.height() && x + 1 - i >= 0 {
-                if field.has_clue[(Y(y + i), X(x + 1 - i))] {
-                    isok = true;
-                    break;
-                }
-                i += 1;
-            }
-            if !isok { continue; }
+            if !field.down_left[(Y(y), X(x))] { continue; }
         }
         if right_effective && field.get_edge((Y(y * 2 - 1), X(x * 2 + 2))) == Edge::Line {
-            let mut len = 1;
-            while len <= x && field.get_edge((Y(y * 2), X(x * 2 + 1 - 2 * len))) == Edge::Line {
-                len += 1;
-            }
-            if field.get_edge((Y(y * 2 - 1), X(x * 2 + 2 - 2 * len))) == Edge::Line {
-                let mut flg = true;
-                for i in 0..len {
-                    if field.get_edge((Y(y * 2 - 2), X(x * 2 + 1 - 2 * i))) != Edge::Blank || (i != len - 1 && field.has_clue[(Y(y - 1), X(x - i))]) {
-                        flg = false;
-                        break;
-                    }
-                }
-                if flg { continue; }
+            if line_chain > 0 && field.get_edge((Y(y * 2 - 2), X(x * 2 + 1))) == Edge::Blank && field.get_edge((Y(y * 2 - 1), X((x - line_chain) * 2))) == Edge::Line && field.left_clue_distance[(Y(y - 1), X(x + 1))] >= line_chain + 1 {
+                continue;
             }
         }
         field.add_checkpoint();
@@ -648,7 +660,14 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
             inconsistent |= prune_cut(field);
         }
         if !inconsistent {
-            if search(y, x + 1, field, answer_info, n_steps) { return true; }
+            let line_chain2 = if right_effective {
+                if field.get_edge((Y(y * 2 - 2), X(x * 2 + 1))) == Edge::Line {
+                    -field.width()
+                } else {
+                    line_chain + 1
+                }
+            } else { 0 };
+            if search(y, x + 1, field, answer_info, n_steps, line_chain2) { return true; }
         }
         field.rollback();
     }
