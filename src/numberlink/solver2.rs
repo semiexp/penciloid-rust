@@ -490,19 +490,6 @@ impl SolverField {
                     }
                 }
             }
-        } else if n_line == 0 && n_undecided <= 1 {
-            if self.get_edge((Y(y - 1), X(x - 2))) == Edge::Line {
-                if self.decide_edge((Y(y - 2), X(x - 1)), Edge::Blank) { return true; }
-            }
-            if self.get_edge((Y(y - 2), X(x - 1))) == Edge::Line {
-                if self.decide_edge((Y(y - 1), X(x - 2)), Edge::Blank) { return true; }
-            }
-            if self.get_edge((Y(y - 1), X(x + 2))) == Edge::Line {
-                if self.decide_edge((Y(y - 2), X(x + 1)), Edge::Blank) { return true; }
-            }
-            if self.get_edge((Y(y - 2), X(x + 1))) == Edge::Line {
-                if self.decide_edge((Y(y - 1), X(x + 2)), Edge::Blank) { return true; }
-            }
         }
         /*
         if n_line == 0 && n_undecided == 2 && self.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Undecided {
