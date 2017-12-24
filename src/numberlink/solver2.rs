@@ -508,15 +508,19 @@ impl SolverField {
 struct AnswerInfo {
     answers: Vec<LinePlacement>,
     limit: Option<usize>,
+    terminate_on_not_fully_filled: bool,
+    found_not_fully_filled: bool,
 }
 
-pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: bool) -> AnswerDetail {
+pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: bool, terminate_on_not_fully_filled: bool) -> AnswerDetail {
     let height = problem.height();
     let width = problem.width();
     let mut solver_field = SolverField::new(problem, disallow_unused_cell);
     let mut answer_info = AnswerInfo {
         answers: Vec::new(),
         limit,
+        terminate_on_not_fully_filled,
+        found_not_fully_filled: false,
     };
     let mut n_steps = 0u64;
 
@@ -527,6 +531,7 @@ pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: 
     AnswerDetail {
         answers: answer_info.answers,
         fully_checked,
+        found_not_fully_filled: answer_info.found_not_fully_filled,
         n_steps,
     }
 }
@@ -599,6 +604,20 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
     if y == field.height() {
         // answer found
         answer_info.answers.push(field.get_line_placement());
+        if answer_info.terminate_on_not_fully_filled {
+            let mut full = true;
+            for y in 0..field.height() {
+                for x in 0..field.width() {
+                    if !field.unused[(Y(y), X(x))] && field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Blank && field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Blank && field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Blank && field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Blank {
+                        full = false;
+                    }
+                }
+            }
+            if !full {
+                answer_info.found_not_fully_filled = true;
+                return true;
+            }
+        }
         if let Some(lim) = answer_info.limit {
             if answer_info.answers.len() >= lim {
                 return true;

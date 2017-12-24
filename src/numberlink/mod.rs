@@ -52,6 +52,7 @@ impl LinePlacement {
 pub struct AnswerDetail {
     pub answers: Vec<LinePlacement>,
     pub fully_checked: bool,
+    pub found_not_fully_filled: bool,
     pub n_steps: u64,
 }
 impl AnswerDetail {
