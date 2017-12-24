@@ -614,6 +614,7 @@ fn search(y: i32, x: i32, field: &mut SolverField, answer_info: &mut AnswerInfo,
             + if field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line { 1 } else { 0 };
 
     for mask in 0..4 {
+        let mask = 3 - mask;
         let right = (mask & 1) != 0;
         let down = (mask & 2) != 0;
 
