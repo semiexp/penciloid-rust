@@ -476,6 +476,44 @@ pub fn generate_placement_beam<R: Rng>(height: i32, width: i32, opt: &GeneratorO
                     }
                 }
 
+                // screening
+                for mode in 0..2 {
+                    let mut poss = vec![vec![]; id as usize];
+                    for y in 0..height {
+                        for x in 0..width {
+                            poss[ids[(Y(y), X(x))] as usize].push((Y(y), X(x)));
+                        }
+                    }
+
+                    let mut screen_problem = Grid::new(height, width, UNUSED);
+                    let mut used_cells = 0;
+                    for x in 0..width {
+                        let x = if mode == 0 { x } else { width - 1 - x };
+                        for y in 0..height {
+                            let i = ids[(Y(y), X(x))] as usize;
+                            if poss[i].len() > 0 {
+                                for &loc in &poss[i] {
+                                    if ret[loc] != NO_CLUE {
+                                        screen_problem[loc] = ret[loc];
+                                    } else {
+                                        screen_problem[loc] = NO_CLUE;
+                                    }
+                                    used_cells += 1;
+                                }
+                                poss[i].clear();
+                            }
+                        }
+                        if used_cells >= height * width / 2 {
+                            break;
+                        }
+                    }
+
+                    let ans = solve2(&screen_problem, Some(2), false, true);
+                    if ans.len() >= 2 || ans.found_not_fully_filled {
+                        return None;
+                    }
+                }
+
                 return Some(ret);
             }
 
