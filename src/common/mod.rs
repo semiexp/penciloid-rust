@@ -31,6 +31,11 @@ impl<T: Clone> Grid<T> {
     pub fn is_valid_coord(&self, (Y(y), X(x)): Coord) -> bool {
         0 <= y && y < self.height && 0 <= x && x < self.width
     }
+    pub fn copy_from(&mut self, src: &Grid<T>) where T: Copy {
+        assert_eq!(self.height, src.height);
+        assert_eq!(self.width, src.width);
+        self.data.copy_from_slice(&src.data);
+    }
     pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
         (y * self.width + x) as usize
     }
