@@ -325,6 +325,17 @@ impl AnswerField {
                 }
             }
         }
+        if self.forbid_adjacent_clue && line + undecided == 2 {
+            let adj = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
+            for &(Y(dy), X(dx)) in &adj {
+                if self.get((Y(y + dy), X(x + dx))) != Edge::Blank {
+                    let nb = self.count_neighbor((Y(y + 2 * dy), X(x + 2 * dx)));
+                    if nb.0 + nb.1 == 2 {
+                        self.decide((Y(y + dy), X(x + dx)), Edge::Line);
+                    }
+                }
+            }
+        }
 
         match self.endpoint_constraint((Y(y / 2), X(x / 2))) {
             Endpoint::Any => (),
