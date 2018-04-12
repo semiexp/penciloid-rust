@@ -16,6 +16,7 @@ pub struct GeneratorOption<'a> {
     pub chain_threshold: i32,
     pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
     pub forbid_adjacent_clue: bool,
+    pub symmetry_clue: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +40,7 @@ struct AnswerField {
     endpoints: i32,
     chain_threshold: i32,
     forbid_adjacent_clue: bool,
+    symmetry_endpoints: bool,
     invalid: bool,
 }
 
@@ -60,6 +62,7 @@ impl AnswerField {
             endpoints: 0,
             chain_threshold: opt.chain_threshold,
             forbid_adjacent_clue: opt.forbid_adjacent_clue,
+            symmetry_endpoints: opt.symmetry_clue,
             invalid: false,
         };
 
@@ -146,6 +149,7 @@ impl AnswerField {
         self.endpoints = src.endpoints;
         self.chain_threshold = src.chain_threshold;
         self.forbid_adjacent_clue = src.forbid_adjacent_clue;
+        self.symmetry_endpoints = src.symmetry_endpoints;
         self.invalid = src.invalid;
     }
 
@@ -337,6 +341,31 @@ impl AnswerField {
             }
         }
 
+        if self.symmetry_endpoints {
+            let height = self.height;
+            let width = self.width;
+            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0) {
+                let cond = self.endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)));
+                if cond == Endpoint::Prohibited {
+                    self.invalid = true;
+                    return;
+                } else if cond == Endpoint::Any {
+                    self.endpoint_constraint[(Y(height - 1 - y / 2), X(width - 1 - x / 2))] = Endpoint::Forced;
+                    self.inspect((Y(height * 2 - 2 - y), X(width * 2 - 2 - x)));
+                }
+            }
+            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Prohibited || line == 2 {
+                let cond = self.endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)));
+                if cond == Endpoint::Forced {
+                    self.invalid = true;
+                    return;
+                } else if cond == Endpoint::Any {
+                    self.endpoint_constraint[(Y(height - 1 - y / 2), X(width - 1 - x / 2))] = Endpoint::Prohibited;
+                    self.inspect((Y(height * 2 - 2 - y), X(width * 2 - 2 - x)));
+                }
+            }
+        }
+
         match self.endpoint_constraint((Y(y / 2), X(x / 2))) {
             Endpoint::Any => (),
             Endpoint::Forced => {
@@ -362,6 +391,13 @@ impl AnswerField {
                             if e == Edge::Undecided {
                                 self.decide((Y(y + dy), X(x + dx)), Edge::Line);
                             }
+                        }
+                    }
+                } else if undecided == 2 {
+                    for &(dy, dx) in &dirs {
+                        let e = self.get((Y(y + dy), X(x + dx)));
+                        if e == Edge::Undecided {
+                            self.decide((Y(y + dy), X(x + dx)), Edge::Line);
                         }
                     }
                 }
@@ -424,6 +460,7 @@ impl PlacementGenerator {
             chain_threshold: 1,
             endpoint_constraint: None,
             forbid_adjacent_clue: false,
+            symmetry_clue: false,
         });
         let beam_width = 100;
         PlacementGenerator {
@@ -453,9 +490,15 @@ impl PlacementGenerator {
 
             let fields_next = &mut self.next_fields;
             'outer: for _ in 0..(5 * fields.len()) {
-                if fields_next.len() >= beam_width { break; }
+                if fields_next.len() >= beam_width || fields.len() == 0 { break; }
 
                 let id = rng.gen_range(0, fields.len());
+
+                if fields[id].invalid || !fields[id].has_seed() {
+                    self.pool.push(fields.swap_remove(id));
+                    continue;
+                }
+
                 let mut field = self.pool.pop().unwrap();
                 field.copy_from(&fields[id]);
 
@@ -471,11 +514,28 @@ impl PlacementGenerator {
                         // as angle
                         field.decide(nbs[0], Edge::Line);
                         field.decide(nbs[1], Edge::Line);
+
+                        if opt.symmetry_clue && field.invalid {
+                            if constraint == Endpoint::Prohibited {
+                                self.pool.push(fields.swap_remove(id));
+                            } else {
+                                fields[id].endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
+                                fields[id].inspect((Y(y), X(x)));
+                            }
+                            self.pool.push(field);
+                            continue;
+                        }
                     } else {
                         // as an endpoint
                         let i = rng.gen_range(0, 2);
                         field.decide(nbs[i], Edge::Line);
                         field.decide(nbs[(1 - i)], Edge::Blank);
+
+                        if opt.symmetry_clue && field.invalid {
+                            fields[id].decide(nbs[1 - i], Edge::Blank);
+                            self.pool.push(field);
+                            continue;
+                        }
                     }
                 } else {
                     let nbs = field.undecided_neighbors(cd);
@@ -484,6 +544,12 @@ impl PlacementGenerator {
                         // extend
                         let i = rng.gen_range(0, nbs.len());
                         field.decide(nbs[i], Edge::Line);
+
+                        if opt.symmetry_clue && field.invalid {
+                            fields[id].decide(nbs[i], Edge::Blank);
+                            self.pool.push(field);
+                            continue;
+                        }
                     } else {
                         // terminate
                         for nb in nbs {
@@ -492,7 +558,36 @@ impl PlacementGenerator {
                     }
                 }
 
+                let invalid;
                 if field.invalid {
+                    invalid = true;
+                } else {
+                    if opt.symmetry_clue {
+                        let mut n_equal = 0i32;
+                        let mut n_diff = 0i32;
+                        for y in 0..(2 * height - 1) {
+                            for x in 0..(2 * width - 1) {
+                                if y % 2 != x % 2 {
+                                    let e1 = field.get((Y(y), X(x)));
+                                    let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+
+                                    if e1 == Edge::Undecided && e2 == Edge::Undecided {
+                                        continue;
+                                    }
+                                    if e1 == e2 {
+                                        n_equal += 1;
+                                    } else {
+                                        n_diff += 1;
+                                    }
+                                }
+                            }
+                        }
+                        invalid = n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64;
+                    } else {
+                        invalid = false;
+                    }
+                }
+                if invalid {
                     // release this field
                     self.pool.push(field);
                     continue;

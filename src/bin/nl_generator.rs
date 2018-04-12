@@ -26,6 +26,7 @@ struct GeneratorOption {
     width: i32,
     jobs: i32,
     no_adjacent_clues: bool,
+    symmetry_clue: bool,
     minimum_path_length: i32,
     empty_width: i32,
     corner: Option<(i32, i32)>,
@@ -84,6 +85,7 @@ fn run_generator(opts: GeneratorOption) {
                     chain_threshold: opts.minimum_path_length,
                     endpoint_constraint: Some(&end),
                     forbid_adjacent_clue: opts.no_adjacent_clues,
+                    symmetry_clue: opts.symmetry_clue,
                 };
                 
                 let problem = generator.generate(&opt, &mut rng);
@@ -155,6 +157,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
                 .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'jobs' must be a positive integer") })
         ).unwrap_or(Ok(1)));
     let no_adjacent_clues = matches.opt_present("no-adjacent-clues");
+    let symmetry_clue = matches.opt_present("symmetry");
     let minimum_path_length = try!(
         matches.opt_str("minimum-path-length").map(|s|
             s.parse::<i32>()
@@ -187,6 +190,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         width,
         jobs,
         no_adjacent_clues,
+        symmetry_clue,
         minimum_path_length,
         empty_width,
         corner
@@ -203,6 +207,7 @@ fn main() {
     options.optopt("w", "width", "Width of desired problems", "10");
     options.optopt("j", "jobs", "Number of workers (threads)", "2");
     options.optflag("a", "no-adjacent-clues", "Disallow adjacent clues");
+    options.optflag("s", "symmetry", "Force symmetry");
     options.optopt("m", "minimum-path-length", "Minimum length of paths in the answer", "12");
     options.optopt("e", "empty-width", "Disallow clues on n cell(s) from the outer border", "1");
     options.optopt("c", "corner", "Put one clue within specified range from each corner", "1,3");
