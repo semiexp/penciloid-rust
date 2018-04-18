@@ -71,13 +71,33 @@ fn run_generator(opts: GeneratorOption) {
                     }
                 }
                 if let Some((lo, hi)) = opts.corner {
-                    for d in 0..4 {
-                        let i = rng.gen_range(lo, hi + 1);
-                        end[trans(i, i, d)] = numberlink::Endpoint::Forced;
-                        end[trans(i, i + 1, d)] = numberlink::Endpoint::Prohibited;
-                        end[trans(i + 1, i, d)] = numberlink::Endpoint::Prohibited;
-                        for j in 0..i {
-                            end[trans(j, j, d)] = numberlink::Endpoint::Prohibited;
+                    if opts.symmetry_clue {
+                        for d in 0..2 {
+                            let i = rng.gen_range(lo, hi + 1);
+                            let (d0, d1) = if d == 0 { (0, 3) } else { (1, 2) };
+
+                            end[trans(i, i, d0)] = numberlink::Endpoint::Forced;
+                            end[trans(i, i + 1, d0)] = numberlink::Endpoint::Prohibited;
+                            end[trans(i + 1, i, d0)] = numberlink::Endpoint::Prohibited;
+                            for j in 0..i {
+                                end[trans(j, j, d0)] = numberlink::Endpoint::Prohibited;
+                            }
+                            end[trans(i, i, d1)] = numberlink::Endpoint::Forced;
+                            end[trans(i, i + 1, d1)] = numberlink::Endpoint::Prohibited;
+                            end[trans(i + 1, i, d1)] = numberlink::Endpoint::Prohibited;
+                            for j in 0..i {
+                                end[trans(j, j, d1)] = numberlink::Endpoint::Prohibited;
+                            }
+                        }
+                    } else {
+                        for d in 0..4 {
+                            let i = rng.gen_range(lo, hi + 1);
+                            end[trans(i, i, d)] = numberlink::Endpoint::Forced;
+                            end[trans(i, i + 1, d)] = numberlink::Endpoint::Prohibited;
+                            end[trans(i + 1, i, d)] = numberlink::Endpoint::Prohibited;
+                            for j in 0..i {
+                                end[trans(j, j, d)] = numberlink::Endpoint::Prohibited;
+                            }
                         }
                     }
                 }
