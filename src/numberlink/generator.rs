@@ -433,6 +433,34 @@ impl AnswerField {
         let end1_undecided = self.undecided_neighbors(end1);
         let end2_undecided = self.undecided_neighbors(end2);
 
+        if end1_undecided.len() == 0 {
+            let con = self.endpoint_constraint[(Y(y2), X(x2))];
+            match con {
+                Endpoint::Forced => {
+                    self.invalid = true;
+                    return;
+                },
+                Endpoint::Any => {
+                    self.endpoint_constraint[(Y(y2), X(x2))] = Endpoint::Prohibited;
+                    self.inspect((Y(y2 * 2), X(x2 * 2)));
+                },
+                Endpoint::Prohibited => (),
+            }
+        }
+        if end2_undecided.len() == 0 {
+            let con = self.endpoint_constraint[(Y(y), X(x))];
+            match con {
+                Endpoint::Forced => {
+                    self.invalid = true;
+                    return;
+                },
+                Endpoint::Any => {
+                    self.endpoint_constraint[(Y(y), X(x))] = Endpoint::Prohibited;
+                    self.inspect((Y(y * 2), X(x * 2)));
+                },
+                Endpoint::Prohibited => (),
+            }
+        }
         match (end1_undecided.len(), end2_undecided.len()) {
             (0, 0) => {
                 self.invalid = true;
