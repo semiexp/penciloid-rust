@@ -472,6 +472,29 @@ impl AnswerField {
             _ => (),
         }
     }
+    /// Convert into `LinePlacement`
+    fn as_line_placement(&self) -> LinePlacement {
+        let height = self.height;
+        let width = self.width;
+        let mut ret = LinePlacement::new(height, width);
+
+        for y in 0..height {
+            for x in 0..width {
+                if y < height - 1 {
+                    if self.get((Y(y * 2 + 1), X(x * 2))) == Edge::Line {
+                        ret.set_down((Y(y), X(x)), true);
+                    }
+                }
+                if x < width - 1 {
+                    if self.get((Y(y * 2), X(x * 2 + 1))) == Edge::Line {
+                        ret.set_right((Y(y), X(x)), true);
+                    }
+                }
+            }
+        }
+
+        ret
+    }
 }
 
 pub struct PlacementGenerator {
@@ -502,7 +525,7 @@ impl PlacementGenerator {
             beam_width,
         }
     }
-    pub fn generate<R: Rng>(&mut self, opt: &GeneratorOption, rng: &mut R) -> Option<Grid<Clue>> {
+    pub fn generate<R: Rng>(&mut self, opt: &GeneratorOption, rng: &mut R) -> Option<LinePlacement> {
         let beam_width = self.beam_width;
         let height = self.height;
         let width = self.width;
@@ -596,11 +619,11 @@ impl PlacementGenerator {
 
                 let mut invalid = field.invalid;
                 if !field.invalid && opt.symmetry_clue {
-                    invalid = PlacementGenerator::check_symmetry(&field);
+                    invalid = check_symmetry(&field);
                 }
                 if !invalid {
                     if let Some(limit) = opt.clue_limit {
-                        PlacementGenerator::limit_clue_number(&mut field, limit);
+                        limit_clue_number(&mut field, limit);
                         invalid = field.invalid;
                     }
                 }
@@ -611,57 +634,12 @@ impl PlacementGenerator {
                     continue;
                 }
                 if field.num_seeds() == 0 {
-                    let mut ids = Grid::new(height, width, -1);
-                    let mut id = 1;
-                    for y in 0..height {
-                        for x in 0..width {
-                            if ids[(Y(y), X(x))] == -1 {
-                                fill_line_id((Y(y), X(x)), &field, &mut ids, id);
-                                id += 1;
-                            }
-                        }
+                    if !check_answer_validity(&field) {
+                        self.pool.push(field);
+                        continue 'outer;
                     }
 
-                    let mut line_len = vec![0; id as usize];
-                    for y in 0..height {
-                        for x in 0..width {
-                            line_len[ids[(Y(y), X(x))] as usize] += 1;
-                        }
-                    }
-                    for i in 1..id {
-                        if line_len[i as usize] <= 3 { self.pool.push(field); continue 'outer; }
-                    }
-
-                    let mut end_count = vec![0; id as usize];
-                    for y in 0..height {
-                        for x in 0..width {
-                            if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
-                                end_count[ids[(Y(y), X(x))] as usize] += 1;
-                            }
-                        }
-                    }
-                    for i in 1..id {
-                        if end_count[i as usize] != 2 { self.pool.push(field); continue 'outer; }
-                    }
-
-                    for y in 0..(2 * height - 1) {
-                        for x in 0..(2 * width - 1) {
-                            if y % 2 == 1 && x % 2 == 0 {
-                                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { self.pool.push(field); continue 'outer; }
-                            } else if y % 2 == 0 && x % 2 == 1 {
-                                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { self.pool.push(field); continue 'outer; }
-                            }
-                        }
-                    }
-
-                    let mut ret = Grid::new(height, width, NO_CLUE);
-                    for y in 0..height {
-                        for x in 0..width {
-                            if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
-                                ret[(Y(y), X(x))] = Clue(ids[(Y(y), X(x))]);
-                            }
-                        }
-                    }
+                    let line_placement = field.as_line_placement();
 
                     self.pool.push(field);
                     // release used fields
@@ -672,45 +650,7 @@ impl PlacementGenerator {
                         self.pool.push(used);
                     }
 
-                    // screening
-                    for mode in 0..2 {
-                        let mut poss = vec![vec![]; id as usize];
-                        for y in 0..height {
-                            for x in 0..width {
-                                poss[ids[(Y(y), X(x))] as usize].push((Y(y), X(x)));
-                            }
-                        }
-
-                        let mut screen_problem = Grid::new(height, width, UNUSED);
-                        let mut used_cells = 0;
-                        for x in 0..width {
-                            let x = if mode == 0 { x } else { width - 1 - x };
-                            for y in 0..height {
-                                let i = ids[(Y(y), X(x))] as usize;
-                                if poss[i].len() > 0 {
-                                    for &loc in &poss[i] {
-                                        if ret[loc] != NO_CLUE {
-                                            screen_problem[loc] = ret[loc];
-                                        } else {
-                                            screen_problem[loc] = NO_CLUE;
-                                        }
-                                        used_cells += 1;
-                                    }
-                                    poss[i].clear();
-                                }
-                            }
-                            if used_cells >= height * width / 2 {
-                                break;
-                            }
-                        }
-
-                        let ans = solve2(&screen_problem, Some(2), false, true);
-                        if ans.len() >= 2 || ans.found_not_fully_filled {
-                            return None;
-                        }
-                    }
-
-                    return Some(ret);
+                    return Some(line_placement);
                 }
 
                 fields_next.push(field);
@@ -726,65 +666,219 @@ impl PlacementGenerator {
         None
     }
 
-    /// Returns true if the line placements in `field` is too *symmetry* 
-    fn check_symmetry(field: &AnswerField) -> bool {
-        let mut n_equal = 0i32;
-        let mut n_diff = 0i32;
-        let height = field.height;
-        let width = field.width;
+}
 
-        for y in 0..(2 * height - 1) {
-            for x in 0..(2 * width - 1) {
-                if y % 2 != x % 2 {
-                    let e1 = field.get((Y(y), X(x)));
-                    let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+/// Extract a problem from `placement`.
+/// Clue numbers are randomly assigned using `rng`.
+pub fn extract_problem<R: Rng>(placement: &LinePlacement, rng: &mut R) -> Grid<Clue> {
+    let height = placement.height();
+    let width = placement.width();
+    let groups = match placement.extract_chain_groups() {
+        Some(groups) => groups,
+        None => panic!(),
+    };
 
-                    if e1 == Edge::Undecided && e2 == Edge::Undecided {
-                        continue;
-                    }
-                    if e1 == e2 {
-                        n_equal += 1;
-                    } else {
-                        n_diff += 1;
-                    }
-                }
+    let mut max_id = 0;
+    for y in 0..height {
+        for x in 0..width {
+            max_id = ::std::cmp::max(max_id, groups[(Y(y), X(x))]);
+        }
+    }
+
+    let mut shuffler = vec![0; (max_id + 1) as usize];
+    for i in 0..(max_id + 1) {
+        shuffler[i as usize] = i;
+    }
+    rng.shuffle(&mut shuffler);
+
+    let mut ret = Grid::new(height, width, NO_CLUE);
+    for y in 0..height {
+        for x in 0..width {
+            if placement.is_endpoint((Y(y), X(x))) {
+                ret[(Y(y), X(x))] = Clue(1 + shuffler[groups[(Y(y), X(x))] as usize]);
+            }
+        }
+    }
+
+    ret
+}
+
+/// Check whether the problem obtained from `placement` *may have* unique solution.
+/// If `false` is returned, the problem is guaranteed to have several solutions.
+/// However, even if `true` is returned, it is still possible that the problem has several solutions.
+pub fn uniqueness_pretest(placement: &LinePlacement) -> bool {
+    let height = placement.height();
+    let width = placement.width();
+    let ids = match placement.extract_chain_groups() {
+        Some(ids) => ids,
+        None => return false,
+    };
+
+    if !uniqueness_pretest_horizontal(&ids) { return false; }
+    if height == width {
+        let mut ids_fliped = Grid::new(width, height, -1);
+        for y in 0..height {
+            for x in 0..width {
+                ids_fliped[(Y(x), X(y))] = ids[(Y(y), X(x))];
             }
         }
         
-        n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64
+        if !uniqueness_pretest_horizontal(&ids_fliped) { return false; }
     }
-    fn limit_clue_number(field: &mut AnswerField, limit: i32) {
-        let mut n_endpoints = 0;
-        let height = field.height;
-        let width = field.width;
-        let limit = limit * 2;
 
-        for y in 0..field.height {
-            for x in 0..field.width {
-                if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
-                    n_endpoints += 1;
+    true
+}
+fn uniqueness_pretest_horizontal(ids: &Grid<i32>) -> bool {
+    let height = ids.height();
+    let width = ids.width();
+
+    let mut max_id = 0;
+    for y in 0..height {
+        for x in 0..width {
+            max_id = ::std::cmp::max(max_id, ids[(Y(y), X(x))]); 
+        }
+    }
+
+    let mut positions = vec![vec![]; (max_id + 1) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            positions[ids[(Y(y), X(x))] as usize].push((Y(y), X(x)));
+        }
+    }
+
+    for mode in 0..2 {
+        let mut checked = vec![false; (max_id + 1) as usize];
+        let mut screen_problem = Grid::new(height, width, UNUSED);
+        let mut used_cells = 0;
+        for x in 0..width {
+            let x = if mode == 0 { x } else { width - 1 - x };
+            for y in 0..height {
+                let i = ids[(Y(y), X(x))];
+                if !checked[i as usize] {
+                    for &loc in &positions[i as usize] {
+                        let (Y(y), X(x)) = loc;
+                        let is_endpoint = 1 == (
+                              if y > 0 && ids[(Y(y), X(x))] == ids[(Y(y - 1), X(x))] { 1 } else { 0 }
+                            + if x > 0 && ids[(Y(y), X(x))] == ids[(Y(y), X(x - 1))] { 1 } else { 0 }
+                            + if y < height - 1 && ids[(Y(y), X(x))] == ids[(Y(y + 1), X(x))] { 1 } else { 0 }
+                            + if x < width - 1 && ids[(Y(y), X(x))] == ids[(Y(y), X(x + 1))] { 1 } else { 0 }
+                        );
+                        screen_problem[(Y(y), X(x))] = if is_endpoint { Clue(i + 1) } else { NO_CLUE };
+                    }
+                    checked[i as usize] = true;
+                    used_cells += positions[i as usize].len() as i32;
                 }
+            }
+            if used_cells >= height * width / 2 {
+                break;
             }
         }
 
-        if n_endpoints > limit {
-            field.invalid = true;
-        } else {
-            if n_endpoints == limit {
-                for y in 0..height {
-                    for x in 0..width {
-                        if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
-                            field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
-                            field.inspect((Y(y), X(x)));
-                        }
+        let ans = solve2(&screen_problem, Some(2), false, true);
+        if ans.len() >= 2 || ans.found_not_fully_filled {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Check whether `field` is valid.
+/// A field is considered invalid if it contains a self-touching line.
+fn check_answer_validity(field: &AnswerField) -> bool {
+    let height = field.height;
+    let width = field.width;
+    let mut ids = Grid::new(height, width, -1);
+    let mut id = 1;
+    for y in 0..height {
+        for x in 0..width {
+            if ids[(Y(y), X(x))] == -1 {
+                fill_line_id((Y(y), X(x)), &field, &mut ids, id);
+                id += 1;
+            }
+        }
+    }
+
+    let mut end_count = vec![0; id as usize];
+    for y in 0..height {
+        for x in 0..width {
+            if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
+                end_count[ids[(Y(y), X(x))] as usize] += 1;
+            }
+        }
+    }
+    for i in 1..id {
+        if end_count[i as usize] != 2 { return false; }
+    }
+
+    for y in 0..(2 * height - 1) {
+        for x in 0..(2 * width - 1) {
+            if y % 2 == 1 && x % 2 == 0 {
+                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))]) != (field.get((Y(y), X(x))) == Edge::Line) { return false; }
+            } else if y % 2 == 0 && x % 2 == 1 {
+                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))]) != (field.get((Y(y), X(x))) == Edge::Line) { return false; }
+            }
+        }
+    }
+
+    true
+}
+/// Returns true if the line placements in `field` is too *symmetry* 
+fn check_symmetry(field: &AnswerField) -> bool {
+    let mut n_equal = 0i32;
+    let mut n_diff = 0i32;
+    let height = field.height;
+    let width = field.width;
+
+    for y in 0..(2 * height - 1) {
+        for x in 0..(2 * width - 1) {
+            if y % 2 != x % 2 {
+                let e1 = field.get((Y(y), X(x)));
+                let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+
+                if e1 == Edge::Undecided && e2 == Edge::Undecided {
+                    continue;
+                }
+                if e1 == e2 {
+                    n_equal += 1;
+                } else {
+                    n_diff += 1;
+                }
+            }
+        }
+    }
+    
+    n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64
+}
+fn limit_clue_number(field: &mut AnswerField, limit: i32) {
+    let mut n_endpoints = 0;
+    let height = field.height;
+    let width = field.width;
+    let limit = limit * 2;
+
+    for y in 0..field.height {
+        for x in 0..field.width {
+            if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
+                n_endpoints += 1;
+            }
+        }
+    }
+
+    if n_endpoints > limit {
+        field.invalid = true;
+    } else {
+        if n_endpoints == limit {
+            for y in 0..height {
+                for x in 0..width {
+                    if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
+                        field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
+                        field.inspect((Y(y), X(x)));
                     }
                 }
             }
-            if field.endpoints > limit * 2 {
-                field.invalid = true;
-            }
         }
-
+        if field.endpoints > limit * 2 {
+            field.invalid = true;
+        }
     }
 }
 
