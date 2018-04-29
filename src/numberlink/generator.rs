@@ -594,40 +594,17 @@ impl PlacementGenerator {
                     }
                 }
 
-                let mut invalid;
-                if field.invalid {
-                    invalid = true;
-                } else {
-                    if opt.symmetry_clue {
-                        let mut n_equal = 0i32;
-                        let mut n_diff = 0i32;
-                        for y in 0..(2 * height - 1) {
-                            for x in 0..(2 * width - 1) {
-                                if y % 2 != x % 2 {
-                                    let e1 = field.get((Y(y), X(x)));
-                                    let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
-
-                                    if e1 == Edge::Undecided && e2 == Edge::Undecided {
-                                        continue;
-                                    }
-                                    if e1 == e2 {
-                                        n_equal += 1;
-                                    } else {
-                                        n_diff += 1;
-                                    }
-                                }
-                            }
-                        }
-                        invalid = n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64;
-                    } else {
-                        invalid = false;
-                    }
+                let mut invalid = field.invalid;
+                if !field.invalid && opt.symmetry_clue {
+                    invalid = PlacementGenerator::check_symmetry(&field);
                 }
                 if !invalid {
                     if let Some(limit) = opt.clue_limit {
                         PlacementGenerator::limit_clue_number(&mut field, limit);
+                        invalid = field.invalid;
                     }
                 }
+                
                 if invalid {
                     // release this field
                     self.pool.push(field);
@@ -749,6 +726,33 @@ impl PlacementGenerator {
         None
     }
 
+    /// Returns true if the line placements in `field` is too *symmetry* 
+    fn check_symmetry(field: &AnswerField) -> bool {
+        let mut n_equal = 0i32;
+        let mut n_diff = 0i32;
+        let height = field.height;
+        let width = field.width;
+
+        for y in 0..(2 * height - 1) {
+            for x in 0..(2 * width - 1) {
+                if y % 2 != x % 2 {
+                    let e1 = field.get((Y(y), X(x)));
+                    let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+
+                    if e1 == Edge::Undecided && e2 == Edge::Undecided {
+                        continue;
+                    }
+                    if e1 == e2 {
+                        n_equal += 1;
+                    } else {
+                        n_diff += 1;
+                    }
+                }
+            }
+        }
+        
+        n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64
+    }
     fn limit_clue_number(field: &mut AnswerField, limit: i32) {
         let mut n_endpoints = 0;
         let height = field.height;
