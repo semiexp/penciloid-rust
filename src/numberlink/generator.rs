@@ -511,6 +511,12 @@ impl PlacementGenerator {
         let mut field_base = self.pool.pop().unwrap();
         field_base.copy_from(&template);
 
+        for y in 0..height {
+            for x in 0..width {
+                field_base.inspect((Y(y * 2), X(x * 2)));
+            }
+        }
+
         fields.push(field_base);
 
         loop {
@@ -560,7 +566,7 @@ impl PlacementGenerator {
                         field.decide(nbs[(1 - i)], Edge::Blank);
 
                         if opt.symmetry_clue && field.invalid {
-                            fields[id].decide(nbs[1 - i], Edge::Blank);
+                            fields[id].decide(nbs[i], Edge::Blank);
                             self.pool.push(field);
                             continue;
                         }
