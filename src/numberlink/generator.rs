@@ -17,6 +17,7 @@ pub struct GeneratorOption<'a> {
     pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
     pub forbid_adjacent_clue: bool,
     pub symmetry_clue: bool,
+    pub clue_limit: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -489,6 +490,7 @@ impl PlacementGenerator {
             endpoint_constraint: None,
             forbid_adjacent_clue: false,
             symmetry_clue: false,
+            clue_limit: None,
         });
         let beam_width = 100;
         PlacementGenerator {
@@ -592,7 +594,7 @@ impl PlacementGenerator {
                     }
                 }
 
-                let invalid;
+                let mut invalid;
                 if field.invalid {
                     invalid = true;
                 } else {
@@ -619,6 +621,11 @@ impl PlacementGenerator {
                         invalid = n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64;
                     } else {
                         invalid = false;
+                    }
+                }
+                if !invalid {
+                    if let Some(limit) = opt.clue_limit {
+                        PlacementGenerator::limit_clue_number(&mut field, limit);
                     }
                 }
                 if invalid {
@@ -740,6 +747,40 @@ impl PlacementGenerator {
             ::std::mem::swap(fields, fields_next);
         }
         None
+    }
+
+    fn limit_clue_number(field: &mut AnswerField, limit: i32) {
+        let mut n_endpoints = 0;
+        let height = field.height;
+        let width = field.width;
+        let limit = limit * 2;
+
+        for y in 0..field.height {
+            for x in 0..field.width {
+                if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
+                    n_endpoints += 1;
+                }
+            }
+        }
+
+        if n_endpoints > limit {
+            field.invalid = true;
+        } else {
+            if n_endpoints == limit {
+                for y in 0..height {
+                    for x in 0..width {
+                        if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
+                            field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
+                            field.inspect((Y(y), X(x)));
+                        }
+                    }
+                }
+            }
+            if field.endpoints > limit * 2 {
+                field.invalid = true;
+            }
+        }
+
     }
 }
 
