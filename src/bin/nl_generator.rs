@@ -106,28 +106,18 @@ fn run_generator(opts: GeneratorOption) {
                     endpoint_constraint: Some(&end),
                     forbid_adjacent_clue: opts.no_adjacent_clues,
                     symmetry_clue: opts.symmetry_clue,
+                    clue_limit: None,
                 };
                 
-                let problem = generator.generate(&opt, &mut rng);
-                if let Some(problem) = problem {
+                let placement = generator.generate(&opt, &mut rng);
+                if let Some(placement) = placement {
+                    // pretest
+                    if !numberlink::uniqueness_pretest(&placement) { continue; }
+
+                    let problem = numberlink::extract_problem(&placement, &mut rng);
                     let ans = numberlink::solve2(&problem, Some(2), false, true);
 
                     if ans.len() == 1 && !ans.found_not_fully_filled {
-                        let mut num_clues = 0;
-                        for y in 0..height {
-                            for x in 0..width {
-                                if problem[(Y(y), X(x))] != numberlink::Clue(0) {
-                                    num_clues += 1;
-                                }
-                            }
-                        }
-                        num_clues /= 2;
-
-                        let mut trans = vec![];
-                        for i in 0..num_clues {
-                            trans.push(i + 1);
-                        }
-                        rng.shuffle(&mut trans);
                         let stdin = io::stdout();
                         let handle = &mut stdin.lock();
 
@@ -142,7 +132,7 @@ fn run_generator(opts: GeneratorOption) {
                             for x in 0..width {
                                 let numberlink::Clue(c) = problem[(Y(y), X(x))];
                                 if c >= 1 {
-                                    write!(handle, "{}{}", trans[(c - 1) as usize], if x == width - 1 { '\n' } else { ' ' }).unwrap();
+                                    write!(handle, "{}{}", c, if x == width - 1 { '\n' } else { ' ' }).unwrap();
                                 } else {
                                     write!(handle, ".{}", if x == width - 1 { '\n' } else { ' ' }).unwrap();
                                 }
