@@ -29,6 +29,7 @@ struct GeneratorOption {
     symmetry_clue: bool,
     minimum_path_length: i32,
     empty_width: i32,
+    max_clue: Option<i32>,
     corner: Option<(i32, i32)>,
 }
 
@@ -106,7 +107,7 @@ fn run_generator(opts: GeneratorOption) {
                     endpoint_constraint: Some(&end),
                     forbid_adjacent_clue: opts.no_adjacent_clues,
                     symmetry_clue: opts.symmetry_clue,
-                    clue_limit: None,
+                    clue_limit: opts.max_clue,
                 };
                 
                 let placement = generator.generate(&opt, &mut rng);
@@ -180,6 +181,12 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
                 .map_err(|_| "Could not parse value for 'empty-width'")
                 .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'empty-width' must be a positive integer") })
         ).unwrap_or(Ok(1)));
+    let max_clue = try!(
+        matches.opt_str("max-clue").map(|s|
+            s.parse::<i32>()
+                .map_err(|_| "Could not parse value for 'max-clue'")
+                .and_then(|arg| if arg > 0 { Ok(Some(arg)) } else { Err("'max-clue' must be a positive integer") })
+        ).unwrap_or(Ok(None)));
     let corner = match matches.opt_str("corner") {
         Some(s) => {
             let split = s.split(",").collect::<Vec<&str>>();
@@ -203,6 +210,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         symmetry_clue,
         minimum_path_length,
         empty_width,
+        max_clue,
         corner
     })
 }
@@ -221,6 +229,7 @@ fn main() {
     options.optopt("m", "minimum-path-length", "Minimum length of paths in the answer", "12");
     options.optopt("e", "empty-width", "Disallow clues on n cell(s) from the outer border", "1");
     options.optopt("c", "corner", "Put one clue within specified range from each corner", "1,3");
+    options.optopt("x", "max-clue", "Maximum value of clues", "10");
     
     let matches = match options.parse(&args[1..]) {
         Ok(m) => m,

@@ -618,14 +618,14 @@ impl PlacementGenerator {
                 }
 
                 let mut invalid = field.invalid;
-                if !field.invalid && opt.symmetry_clue {
-                    invalid = check_symmetry(&field);
-                }
                 if !invalid {
                     if let Some(limit) = opt.clue_limit {
                         limit_clue_number(&mut field, limit);
                         invalid = field.invalid;
                     }
+                }
+                if !invalid && opt.symmetry_clue {
+                    invalid = check_symmetry(&field);
                 }
                 
                 if invalid {
@@ -876,7 +876,7 @@ fn limit_clue_number(field: &mut AnswerField, limit: i32) {
                 }
             }
         }
-        if field.endpoints > limit * 2 {
+        if field.endpoints > limit {
             field.invalid = true;
         }
     }
