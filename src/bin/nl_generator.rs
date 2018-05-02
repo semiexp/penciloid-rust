@@ -15,6 +15,23 @@ use std::thread;
 use std::sync::Mutex;
 use std::io::Write;
 
+macro_rules! run_timed {
+    ($timer: ident, $flag: ident, $e: expr) => {
+        if $flag {
+            let start = Instant::now();
+            let ret = $e;
+            let end = start.elapsed();
+            let cost_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1e9f64;
+            
+            let mut timer_lock = $timer.lock().unwrap();
+            *timer_lock += cost_time;
+
+            ret
+        } else {
+            $e
+        }
+    };
+}
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options]", program);
     print!("{}", opts.usage(&brief));
@@ -31,6 +48,7 @@ struct GeneratorOption {
     empty_width: i32,
     max_clue: Option<i32>,
     corner: Option<(i32, i32)>,
+    use_profiler: bool,
 }
 
 fn run_generator(opts: GeneratorOption) {
@@ -39,8 +57,18 @@ fn run_generator(opts: GeneratorOption) {
     let mut ths = vec![];
     let gen_probs = std::sync::Arc::new(Mutex::new(0i64));
 
+    // profiling
+    let use_profiler = opts.use_profiler;
+    let cost_genenerator = std::sync::Arc::new(Mutex::new(0.0f64));
+    let cost_pretest = std::sync::Arc::new(Mutex::new(0.0f64));
+    let cost_exact_test = std::sync::Arc::new(Mutex::new(0.0f64));
+
     for _ in 0..opts.jobs {
         let gen_probs = gen_probs.clone();
+        let cost_genenerator = cost_genenerator.clone();
+        let cost_pretest = cost_pretest.clone();
+        let cost_exact_test = cost_exact_test.clone();
+
         let opts = opts;
 
         ths.push(thread::spawn(move || {
@@ -110,13 +138,15 @@ fn run_generator(opts: GeneratorOption) {
                     clue_limit: opts.max_clue,
                 };
                 
-                let placement = generator.generate(&opt, &mut rng);
+                let placement = run_timed!(cost_genenerator, use_profiler, generator.generate(&opt, &mut rng));
                 if let Some(placement) = placement {
                     // pretest
-                    if !numberlink::uniqueness_pretest(&placement) { continue; }
+                    let pretest_res = run_timed!(cost_pretest, use_profiler, numberlink::uniqueness_pretest(&placement));
+                    if !pretest_res { continue; }
 
                     let problem = numberlink::extract_problem(&placement, &mut rng);
-                    let ans = numberlink::solve2(&problem, Some(2), false, true);
+
+                    let ans = run_timed!(cost_exact_test, use_profiler, numberlink::solve2(&problem, Some(2), false, true));
 
                     if ans.len() == 1 && !ans.found_not_fully_filled {
                         let stdin = io::stdout();
@@ -127,7 +157,18 @@ fn run_generator(opts: GeneratorOption) {
                         let mut cnt = gen_probs.lock().unwrap();
                         *cnt += 1;
                         eprintln!("{} problem(s) in {:.3}[min] ({:.3} [prob/min])", *cnt, cost_time, (*cnt) as f64 / cost_time);
-                        
+                        if use_profiler {
+                            let cost_genenerator = *(cost_genenerator.lock().unwrap());
+                            let cost_pretest = *(cost_pretest.lock().unwrap());
+                            let cost_exact_test = *(cost_exact_test.lock().unwrap());
+                            let cost_total = cost_genenerator + cost_pretest + cost_exact_test;
+
+                            eprintln!("Generator: {:.3}[s] ({:.2}%) / Pretest: {:.3}[s] ({:.2}%) / Exact test: {:.3}[s] ({:.2}%)",
+                                cost_genenerator, cost_genenerator / cost_total * 100.0f64,
+                                cost_pretest, cost_pretest / cost_total * 100.0f64,
+                                cost_exact_test, cost_exact_test / cost_total * 100.0f64);
+                        }
+
                         writeln!(handle, "{} {}", height, width).unwrap();
                         for y in 0..height {
                             for x in 0..width {
@@ -187,6 +228,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
                 .map_err(|_| "Could not parse value for 'max-clue'")
                 .and_then(|arg| if arg > 0 { Ok(Some(arg)) } else { Err("'max-clue' must be a positive integer") })
         ).unwrap_or(Ok(None)));
+    let use_profiler = matches.opt_present("use-profiler");
     let corner = match matches.opt_str("corner") {
         Some(s) => {
             let split = s.split(",").collect::<Vec<&str>>();
@@ -211,7 +253,8 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         minimum_path_length,
         empty_width,
         max_clue,
-        corner
+        corner,
+        use_profiler,
     })
 }
 
@@ -230,6 +273,7 @@ fn main() {
     options.optopt("e", "empty-width", "Disallow clues on n cell(s) from the outer border", "1");
     options.optopt("c", "corner", "Put one clue within specified range from each corner", "1,3");
     options.optopt("x", "max-clue", "Maximum value of clues", "10");
+    options.optflag("p", "use-profiler", "Enable profiler");
     
     let matches = match options.parse(&args[1..]) {
         Ok(m) => m,
