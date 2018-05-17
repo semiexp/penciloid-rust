@@ -32,6 +32,7 @@ struct AnswerField {
     height: i32,
     width: i32,
     chain_union: Grid<usize>, // height * width
+    chain_connectivity: Grid<i32>, // height * width
     chain_length: Grid<i32>, // height * width
     field: Grid<Edge>, // (2 * height - 1) * (2 * width - 1)
     seed_idx: Grid<i32>,
@@ -51,6 +52,7 @@ impl AnswerField {
             height: height,
             width: width,
             chain_union: Grid::new(height, width, 0),
+            chain_connectivity: Grid::new(height, width, -1),
             chain_length: Grid::new(height, width, 0),
             field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
             seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
@@ -139,6 +141,7 @@ impl AnswerField {
     /// the shape of these `AnswerField`s must match.
     fn copy_from(&mut self, src: &AnswerField) {
         self.chain_union.copy_from(&src.chain_union);
+        self.chain_connectivity.copy_from(&src.chain_connectivity);
         self.chain_length.copy_from(&src.chain_length);
         self.field.copy_from(&src.field);
         self.seed_idx.copy_from(&src.seed_idx);
@@ -154,6 +157,46 @@ impl AnswerField {
         self.invalid = src.invalid;
     }
 
+    /// Returns the representative node of the union containing `x` in `chain_connectivity`.
+    /// Performs path compression to reduce complexity.
+    fn root_mut(&mut self, x: usize) -> usize {
+        if self.chain_connectivity[x] < 0 {
+            x as usize
+        } else {
+            let parent = self.chain_connectivity[x] as usize;
+            let ret = self.root_mut(parent);
+            self.chain_connectivity[x] = ret as i32;
+            ret
+        }
+    }
+
+    /// Returns the representative node of the union containing `x` in `chain_connectivity`.
+    fn root(&self, x: usize) -> usize {
+        if self.chain_connectivity[x] < 0 {
+            x as usize
+        } else {
+            let parent = self.chain_connectivity[x] as usize;
+            self.root(parent)
+        }
+    }
+    fn root_from_coord(&self, cd: Coord) -> usize {
+        self.root(self.chain_connectivity.index(cd))
+    }
+
+    /// Join `x` and `y` in `chain_connectivity`
+    fn join(&mut self, x: usize, y: usize) {
+        let x = self.root_mut(x);
+        let y = self.root_mut(y);
+        if x != y {
+            if self.chain_connectivity[x] < self.chain_connectivity[y] {
+                self.chain_connectivity[x] += self.chain_connectivity[y];
+                self.chain_connectivity[y] = x as i32;
+            } else {
+                self.chain_connectivity[y] += self.chain_connectivity[x];
+                self.chain_connectivity[x] = y as i32;
+            }
+        }
+    }
     /// Returns whether there is at least one seed
     fn has_seed(&self) -> bool {
         self.seed_count != 0
@@ -197,6 +240,10 @@ impl AnswerField {
             self.chain_union[another_end2_id] = another_end1_id;
             self.chain_length[another_end1_id] = new_length;
             self.chain_length[another_end2_id] = new_length;
+
+            self.join(another_end1_id, another_end2_id);
+            self.root_mut(another_end1_id);
+            self.root_mut(another_end2_id);
 
             if new_length < self.chain_threshold {
                 let cd = self.chain_union.coord(another_end1_id);
@@ -316,6 +363,11 @@ impl AnswerField {
         }
         
         if self.forbid_adjacent_clue && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0)) {
+            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Prohibited {
+                self.invalid = true;
+                return;
+            }
+            self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
             for dy in -1..2 {
                 for dx in -1..2 {
                     if dy == 0 && dx == 0 { continue; }
@@ -624,6 +676,11 @@ impl PlacementGenerator {
                         invalid = field.invalid;
                     }
                 }
+                if !invalid {
+                    if is_entangled(&field) {
+                        invalid = true;
+                    }
+                }
                 if !invalid && opt.symmetry_clue {
                     invalid = check_symmetry(&field);
                 }
@@ -666,6 +723,52 @@ impl PlacementGenerator {
         None
     }
 
+}
+
+fn is_entangled(field: &AnswerField) -> bool {
+    let dirs = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
+
+    let height = field.height;
+    let width = field.width;
+
+    let mut entangled_pairs = vec![];
+
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
+                for d in 0..4 {
+                    let (Y(dy), X(dx)) = dirs[d];
+                    if field.get((Y(y * 2 + dy), X(x * 2 + dx))) != Edge::Line { continue; }
+
+                    if field.get((Y(y * 2 + 2 * dx - dy), X(x * 2 + 2 * dy - dx))) == Edge::Line
+                    && field.get((Y(y * 2 - 2 * dx - dy), X(x * 2 - 2 * dy - dx))) == Edge::Line
+                    && field.get((Y(y * 2 + dx - 2 * dy), X(x * 2 + dy - 2 * dx))) == Edge::Line
+                    && field.get((Y(y * 2 - dx - 2 * dy), X(x * 2 - dy - 2 * dx))) == Edge::Line
+                    && (field.get((Y(y * 2 + 2 * dx + dy), X(x * 2 + 2 * dy + dx))) == Edge::Line || field.get((Y(y * 2 + dx + 2 * dy), X(x * 2 + dy + 2 * dx))) == Edge::Line)
+                    && (field.get((Y(y * 2 - 2 * dx + dy), X(x * 2 - 2 * dy + dx))) == Edge::Line || field.get((Y(y * 2 - dx + 2 * dy), X(x * 2 - dy + 2 * dx))) == Edge::Line) {
+                        let u = field.root_from_coord((Y(y), X(x)));
+                        let v = field.root_from_coord((Y(y - dy), X(x - dx)));
+
+                        if u < v {
+                            entangled_pairs.push((u, v));
+                        } else {
+                            entangled_pairs.push((v, u));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    entangled_pairs.sort();
+
+    for i in 1..entangled_pairs.len() {
+        if entangled_pairs[i - 1] == entangled_pairs[i] {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Extract a problem from `placement`.
