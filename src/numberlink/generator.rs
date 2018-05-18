@@ -91,12 +91,6 @@ impl AnswerField {
             Edge::Blank
         }
     }
-    fn set_threshold(&mut self, threshold: i32) {
-        self.chain_threshold = threshold;
-    }
-    fn get_threshold(&self) -> i32 {
-        self.chain_threshold
-    }
     fn endpoint_constraint(&self, cd: Coord) -> Endpoint {
         self.endpoint_constraint[cd]
     }

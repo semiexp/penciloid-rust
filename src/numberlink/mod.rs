@@ -92,7 +92,7 @@ impl LinePlacement {
                     // traverse chain
                     let (mut ly, mut lx) = (-1, -1);
                     let (mut cy, mut cx) = (y, x);
-                    'traverse: while true {
+                    'traverse: loop {
                         ids[(Y(cy), X(cx))] = last_id;
                         for d in 0..4 {
                             let (dy, dx) = dirs[d];
