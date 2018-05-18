@@ -1,11 +1,9 @@
 use std::ops::Index;
 
-mod solver;
 mod solver2;
 mod generator;
 mod format;
 
-pub use self::solver::*;
 pub use self::solver2::*;
 pub use self::generator::*;
 pub use self::format::*;
