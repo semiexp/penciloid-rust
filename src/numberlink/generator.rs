@@ -40,6 +40,7 @@ struct AnswerField {
     seed_count: usize,
     endpoint_constraint: Grid<Endpoint>,
     endpoints: i32,
+    endpoint_forced_cells: i32,
     chain_threshold: i32,
     forbid_adjacent_clue: bool,
     symmetry_endpoints: bool,
@@ -63,6 +64,7 @@ impl AnswerField {
                 None => Grid::new(height, width, Endpoint::Any),
             },
             endpoints: 0,
+            endpoint_forced_cells: 0,
             chain_threshold: opt.chain_threshold,
             forbid_adjacent_clue: opt.forbid_adjacent_clue,
             symmetry_endpoints: opt.symmetry_clue,
@@ -71,6 +73,9 @@ impl AnswerField {
 
         for idx in 0..((height * width) as usize) {
             ret.chain_union[idx] = idx;
+            if ret.endpoint_constraint[idx] == Endpoint::Forced {
+                ret.endpoint_forced_cells += 1;
+            }
         }
 
         ret.seeds[0] = (Y(0), X(0));
@@ -145,6 +150,7 @@ impl AnswerField {
 
         self.endpoint_constraint.copy_from(&src.endpoint_constraint);
         self.endpoints = src.endpoints;
+        self.endpoint_forced_cells = src.endpoint_forced_cells;
         self.chain_threshold = src.chain_threshold;
         self.forbid_adjacent_clue = src.forbid_adjacent_clue;
         self.symmetry_endpoints = src.symmetry_endpoints;
@@ -361,7 +367,10 @@ impl AnswerField {
                 self.invalid = true;
                 return;
             }
-            self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
+            if self.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
+                self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
+                self.endpoint_forced_cells += 1;
+            }
             for dy in -1..2 {
                 for dx in -1..2 {
                     if dy == 0 && dx == 0 { continue; }
@@ -398,6 +407,7 @@ impl AnswerField {
                     return;
                 } else if cond == Endpoint::Any {
                     self.endpoint_constraint[(Y(height - 1 - y / 2), X(width - 1 - x / 2))] = Endpoint::Forced;
+                    self.endpoint_forced_cells += 1;
                     self.inspect((Y(height * 2 - 2 - y), X(width * 2 - 2 - x)));
                 }
             }
@@ -625,6 +635,7 @@ impl PlacementGenerator {
                                 self.pool.push(fields.swap_remove(id));
                             } else {
                                 fields[id].endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
+                                fields[id].endpoint_forced_cells += 1;
                                 fields[id].inspect((Y(y), X(x)));
                             }
                             self.pool.push(field);
@@ -947,23 +958,14 @@ fn check_symmetry(field: &AnswerField) -> bool {
     n_equal as f64 >= (n_equal + n_diff) as f64 * 0.85 + 4.0f64
 }
 fn limit_clue_number(field: &mut AnswerField, limit: i32) {
-    let mut n_endpoints = 0;
-    let height = field.height;
-    let width = field.width;
     let limit = limit * 2;
 
-    for y in 0..field.height {
-        for x in 0..field.width {
-            if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
-                n_endpoints += 1;
-            }
-        }
-    }
-
-    if n_endpoints > limit {
+    if field.endpoint_forced_cells > limit {
         field.invalid = true;
     } else {
-        if n_endpoints == limit {
+        if field.endpoint_forced_cells == limit {
+            let height = field.height;
+            let width = field.width;
             for y in 0..height {
                 for x in 0..width {
                     if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
@@ -973,7 +975,7 @@ fn limit_clue_number(field: &mut AnswerField, limit: i32) {
                 }
             }
         }
-        if field.endpoints > limit {
+        if field.endpoint_forced_cells > limit {
             field.invalid = true;
         }
     }
