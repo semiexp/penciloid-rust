@@ -362,7 +362,7 @@ impl AnswerField {
             return;
         }
         
-        if self.forbid_adjacent_clue && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0)) {
+        if line == 1 && undecided == 0 {
             if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Prohibited {
                 self.invalid = true;
                 return;
@@ -371,6 +371,9 @@ impl AnswerField {
                 self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
                 self.endpoint_forced_cells += 1;
             }
+        }
+
+        if self.forbid_adjacent_clue && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0)) {
             for dy in -1..2 {
                 for dx in -1..2 {
                     if dy == 0 && dx == 0 { continue; }
@@ -630,7 +633,7 @@ impl PlacementGenerator {
                         field.decide(nbs[0], Edge::Line);
                         field.decide(nbs[1], Edge::Line);
 
-                        if opt.symmetry_clue && field.invalid {
+                        if field.invalid {
                             if constraint == Endpoint::Prohibited {
                                 self.pool.push(fields.swap_remove(id));
                             } else {
@@ -647,7 +650,7 @@ impl PlacementGenerator {
                         field.decide(nbs[i], Edge::Line);
                         field.decide(nbs[(1 - i)], Edge::Blank);
 
-                        if opt.symmetry_clue && field.invalid {
+                        if field.invalid {
                             fields[id].decide(nbs[i], Edge::Blank);
                             self.pool.push(field);
                             continue;
@@ -661,7 +664,7 @@ impl PlacementGenerator {
                         let i = rng.gen_range(0, nbs.len());
                         field.decide(nbs[i], Edge::Line);
 
-                        if opt.symmetry_clue && field.invalid {
+                        if field.invalid {
                             fields[id].decide(nbs[i], Edge::Blank);
                             self.pool.push(field);
                             continue;
