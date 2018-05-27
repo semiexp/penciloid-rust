@@ -556,6 +556,17 @@ impl AnswerField {
     }
 }
 
+/// A type for an update of `AnswerField`.
+/// - `Corner(e, f)`: both `e` and `f` must be `Line` to make a corner.
+/// - `Endpoint(e, f)`: `e` must be `Line` but `f` must be `Blank` to make an endpoint.
+/// - `Extend(e)`: `e` must be `Line` to extend an existing chain.
+#[derive(Clone, Copy)]
+enum FieldUpdate {
+    Corner(Coord, Coord),
+    Endpoint(Coord, Coord),
+    Extend(Coord),
+}
+
 pub struct PlacementGenerator {
     pool: Vec<AnswerField>,
     active_fields: Vec<AnswerField>,
@@ -622,82 +633,21 @@ impl PlacementGenerator {
 
                 if !field.has_seed() { continue; }
                 let cd = field.random_seed(rng);
-                let (Y(y), X(x)) = cd;
-                let cd_vtx = (Y(y / 2), X(x / 2));
 
-                if field.count_neighbor(cd) == (0, 2) {
-                    let nbs = field.undecided_neighbors(cd);
-                    let constraint = field.endpoint_constraint(cd_vtx);
-                    if (constraint != Endpoint::Forced && rng.next_f64() < 0.9f64) || constraint == Endpoint::Prohibited {
-                        // as angle
-                        field.decide(nbs[0], Edge::Line);
-                        field.decide(nbs[1], Edge::Line);
+                let update = PlacementGenerator::choose_update(&field, cd, rng);
+                PlacementGenerator::apply_update(&mut field, update);
+                PlacementGenerator::check_invalidity(&mut field, opt);
 
-                        if field.invalid {
-                            if constraint == Endpoint::Prohibited {
-                                self.pool.push(fields.swap_remove(id));
-                            } else {
-                                fields[id].endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
-                                fields[id].endpoint_forced_cells += 1;
-                                fields[id].inspect((Y(y), X(x)));
-                            }
-                            self.pool.push(field);
-                            continue;
-                        }
-                    } else {
-                        // as an endpoint
-                        let i = rng.gen_range(0, 2);
-                        field.decide(nbs[i], Edge::Line);
-                        field.decide(nbs[(1 - i)], Edge::Blank);
-
-                        if field.invalid {
-                            fields[id].decide(nbs[i], Edge::Blank);
-                            self.pool.push(field);
-                            continue;
-                        }
-                    }
-                } else {
-                    let nbs = field.undecided_neighbors(cd);
-
-                    if rng.next_f64() < 1.0f64 {
-                        // extend
-                        let i = rng.gen_range(0, nbs.len());
-                        field.decide(nbs[i], Edge::Line);
-
-                        if field.invalid {
-                            fields[id].decide(nbs[i], Edge::Blank);
-                            self.pool.push(field);
-                            continue;
-                        }
-                    } else {
-                        // terminate
-                        for nb in nbs {
-                            field.decide(nb, Edge::Blank);
-                        }
-                    }
-                }
-
-                let mut invalid = field.invalid;
-                if !invalid {
-                    if let Some(limit) = opt.clue_limit {
-                        limit_clue_number(&mut field, limit);
-                        invalid = field.invalid;
-                    }
-                }
-                if !invalid {
-                    if is_entangled(&field) {
-                        invalid = true;
-                    }
-                }
-                if !invalid && opt.symmetry_clue {
-                    invalid = check_symmetry(&field);
-                }
-                
-                if invalid {
-                    // release this field
+                if field.invalid {
                     self.pool.push(field);
+                    PlacementGenerator::deny_update(&mut fields[id], cd, update);
+                    PlacementGenerator::check_invalidity(&mut fields[id], opt);
+                    if fields[id].invalid {
+                        self.pool.push(fields.swap_remove(id));
+                    }
                     continue;
                 }
+
                 if field.num_seeds() == 0 {
                     if !check_answer_validity(&field) {
                         self.pool.push(field);
@@ -730,7 +680,64 @@ impl PlacementGenerator {
         }
         None
     }
+    fn check_invalidity(field: &mut AnswerField, opt: &GeneratorOption) {
+        if field.invalid { return; }
+        if let Some(limit) = opt.clue_limit {
+            limit_clue_number(field, limit);
+            if field.invalid { return; }
+        }
+        if is_entangled(field) {
+            field.invalid = true;
+            return;
+        }
+        if opt.symmetry_clue && check_symmetry(field) {
+            field.invalid = true;
+        }
+    }
+    fn choose_update<R: Rng>(field: &AnswerField, cd: Coord, rng: &mut R) -> FieldUpdate {
+        let (Y(y), X(x)) = cd;
+        let cd_vtx = (Y(y / 2), X(x / 2));
+        let nbs = field.undecided_neighbors(cd);
 
+        if field.count_neighbor(cd) == (0, 2) {
+            let constraint = field.endpoint_constraint(cd_vtx);
+
+            if constraint != Endpoint::Forced && rng.next_f64() < 0.9f64 {
+                FieldUpdate::Corner(nbs[0], nbs[1])
+            } else {
+                let i = rng.gen_range(0, 2);
+                FieldUpdate::Endpoint(nbs[i], nbs[1 - i])
+            }
+        } else {
+            let i = rng.gen_range(0, nbs.len());
+            FieldUpdate::Extend(nbs[i])
+        }
+    }
+    fn apply_update(field: &mut AnswerField, update: FieldUpdate) {
+        match update {
+            FieldUpdate::Corner(e, f) => {
+                field.decide(e, Edge::Line);
+                field.decide(f, Edge::Line);
+            },
+            FieldUpdate::Endpoint(e, f) => {
+                field.decide(e, Edge::Line);
+                field.decide(f, Edge::Blank);
+            },
+            FieldUpdate::Extend(e) => field.decide(e, Edge::Line),
+        }
+    }
+    fn deny_update(field: &mut AnswerField, cd: Coord, update: FieldUpdate) {
+        match update {
+            FieldUpdate::Corner(e, f) => {
+                let (Y(y), X(x)) = cd;
+                field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
+                field.endpoint_forced_cells += 1;
+                field.inspect((Y(y), X(x)));
+            },
+            FieldUpdate::Endpoint(e, f) => field.decide(e, Edge::Blank),
+            FieldUpdate::Extend(e) => field.decide(e, Edge::Blank),
+        }
+    }
 }
 
 fn is_entangled(field: &AnswerField) -> bool {
