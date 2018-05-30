@@ -4,6 +4,7 @@ use super::*;
 extern crate rand;
 
 use rand::{Rng, distributions};
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Endpoint {
@@ -553,6 +554,39 @@ impl AnswerField {
         }
 
         ret
+    }
+}
+impl fmt::Debug for AnswerField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let height = self.height;
+        let width = self.width;
+
+        for y in 0..(2 * height - 1) {
+            for x in 0..(2 * width - 1) {
+                match (y % 2, x % 2) {
+                    (0, 0) => write!(f, "{}", match self.endpoint_constraint[(Y(y / 2), X(x / 2))] {
+                        Endpoint::Any => '#',
+                        Endpoint::Forced => '*',
+                        Endpoint::Prohibited => '+',
+                    })?,
+                    (0, 1) => write!(f, "{}", match self.get((Y(y), X(x))) {
+                        Edge::Undecided => ' ',
+                        Edge::Line => '-',
+                        Edge::Blank => 'x',
+                    })?,
+                    (1, 0) => write!(f, "{}", match self.get((Y(y), X(x))) {
+                        Edge::Undecided => ' ',
+                        Edge::Line => '|',
+                        Edge::Blank => 'x',
+                    })?,
+                    (1, 1) => write!(f, " ")?,
+                    _ => unreachable!(),
+                }
+            }
+            write!(f, "\n")?;
+        }
+
+        Ok(())
     }
 }
 
