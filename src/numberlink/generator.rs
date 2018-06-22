@@ -19,6 +19,7 @@ pub struct GeneratorOption<'a> {
     pub forbid_adjacent_clue: bool,
     pub symmetry_clue: bool,
     pub clue_limit: Option<i32>,
+    pub prioritized_extension: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -206,6 +207,33 @@ impl AnswerField {
     fn random_seed<R: Rng>(&self, rng: &mut R) -> Coord {
         let idx = rng.gen_range(0, self.seed_count);
         self.seeds[idx]
+    }
+    fn complexity(&self, cd: Coord) -> i32 {
+        let (Y(y), X(x)) = cd;
+        let ret =
+            if y > 0 { 4 - self.count_neighbor((Y(y - 2), X(x))).1 } else { 0 }
+          + if x > 0 { 4 - self.count_neighbor((Y(y), X(x - 2))).1 } else { 0 }
+          + if y < self.height * 2 - 2 { 4 - self.count_neighbor((Y(y + 2), X(x))).1 } else { 0 }
+          + if x < self.width * 2 - 2 { 4 - self.count_neighbor((Y(y), X(x + 2))).1 } else { 0 };
+
+        ret
+    }
+    /// Returns a seed with largest complexity among `k` samples
+    fn best_seed<R: Rng>(&self, k: i32, rng: &mut R) -> Coord {
+        let mut seed = self.random_seed(rng);
+        let mut complexity = self.complexity(seed);
+
+        for _ in 1..k {
+            let seed_cand = self.random_seed(rng);
+            let complexity_cand = self.complexity(seed_cand);
+
+            if complexity < complexity_cand {
+                seed = seed_cand;
+                complexity = complexity_cand;
+            }
+        }
+
+        seed
     }
     fn decide(&mut self, cd: Coord, state: Edge) {
         let current = self.field[cd];
@@ -618,6 +646,7 @@ impl PlacementGenerator {
             forbid_adjacent_clue: false,
             symmetry_clue: false,
             clue_limit: None,
+            prioritized_extension: false,
         });
         let beam_width = 100;
         PlacementGenerator {
@@ -666,7 +695,11 @@ impl PlacementGenerator {
                 field.copy_from(&fields[id]);
 
                 if !field.has_seed() { continue; }
-                let cd = field.random_seed(rng);
+                let cd = if opt.prioritized_extension {
+                    field.best_seed(5, rng)
+                } else {
+                    field.random_seed(rng)
+                };
 
                 let update = PlacementGenerator::choose_update(&field, cd, rng);
                 PlacementGenerator::apply_update(&mut field, update);

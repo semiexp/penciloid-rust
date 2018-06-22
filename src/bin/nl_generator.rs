@@ -49,6 +49,7 @@ struct GeneratorOption {
     max_clue: Option<i32>,
     corner: Option<(i32, i32)>,
     use_profiler: bool,
+    prioritized_extension: bool,
 }
 
 fn run_generator(opts: GeneratorOption) {
@@ -229,6 +230,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
                 .and_then(|arg| if arg > 0 { Ok(Some(arg)) } else { Err("'max-clue' must be a positive integer") })
         ).unwrap_or(Ok(None)));
     let use_profiler = matches.opt_present("use-profiler");
+    let prioritized_extension = matches.opt_present("prioritized-extension");
     let corner = match matches.opt_str("corner") {
         Some(s) => {
             let split = s.split(",").collect::<Vec<&str>>();
@@ -255,6 +257,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         max_clue,
         corner,
         use_profiler,
+        prioritized_extension,
     })
 }
 
@@ -274,6 +277,7 @@ fn main() {
     options.optopt("c", "corner", "Put one clue within specified range from each corner", "1,3");
     options.optopt("x", "max-clue", "Maximum value of clues", "10");
     options.optflag("p", "use-profiler", "Enable profiler");
+    options.optflag("r", "prioritized-extension", "Use prioritized extension in generator");
     
     let matches = match options.parse(&args[1..]) {
         Ok(m) => m,
