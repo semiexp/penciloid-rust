@@ -137,6 +137,7 @@ fn run_generator(opts: GeneratorOption) {
                     forbid_adjacent_clue: opts.no_adjacent_clues,
                     symmetry_clue: opts.symmetry_clue,
                     clue_limit: opts.max_clue,
+                    prioritized_extension: opts.prioritized_extension,
                 };
                 
                 let placement = run_timed!(cost_genenerator, use_profiler, generator.generate(&opt, &mut rng));
