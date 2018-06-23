@@ -235,6 +235,20 @@ impl AnswerField {
 
         seed
     }
+    /// Update `endpoint_constraint[cd]`.
+    /// `cd` must be in vertex-coordinate.
+    fn update_endpoint_constraint(&mut self, cd: Coord, constraint: Endpoint) {
+        let (Y(y), X(x)) = cd;
+        if self.endpoint_constraint[cd] == Endpoint::Any {
+            self.endpoint_constraint[cd] = constraint;
+            if constraint == Endpoint::Forced {
+                self.endpoint_forced_cells += 1;
+            }
+            self.inspect((Y(y * 2), X(x * 2)));
+        } else if self.endpoint_constraint[cd] != constraint {
+            self.invalid = true;
+        }
+    }
     fn decide(&mut self, cd: Coord, state: Edge) {
         let current = self.field[cd];
         if current != Edge::Undecided {
@@ -401,19 +415,22 @@ impl AnswerField {
                 self.endpoint_forced_cells += 1;
             }
         }
+        if line == 2 {
+            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced {
+                self.invalid = true;
+                return;
+            }
+            if self.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
+                self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
+            }
+        }
 
         if self.forbid_adjacent_clue && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0)) {
             for dy in -1..2 {
                 for dx in -1..2 {
                     if dy == 0 && dx == 0 { continue; }
                     if y / 2 + dy < 0 || y / 2 + dy >= self.height || x / 2 + dx < 0 || x / 2 + dx >= self.width { continue; }
-                    let cond = self.endpoint_constraint((Y(y / 2 + dy), X(x / 2 + dx)));
-                    if cond == Endpoint::Forced {
-                        self.invalid = true;
-                    } else if cond == Endpoint::Any {
-                        self.endpoint_constraint[(Y(y / 2 + dy), X(x / 2 + dx))] = Endpoint::Prohibited;
-                        self.inspect((Y(y + dy * 2), X(x + dx * 2)));
-                    }
+                    self.update_endpoint_constraint((Y(y / 2 + dy), X(x / 2 + dx)), Endpoint::Prohibited);
                 }
             }
         }
@@ -432,26 +449,9 @@ impl AnswerField {
         if self.symmetry_endpoints {
             let height = self.height;
             let width = self.width;
-            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced || (line == 1 && undecided == 0) {
-                let cond = self.endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)));
-                if cond == Endpoint::Prohibited {
-                    self.invalid = true;
-                    return;
-                } else if cond == Endpoint::Any {
-                    self.endpoint_constraint[(Y(height - 1 - y / 2), X(width - 1 - x / 2))] = Endpoint::Forced;
-                    self.endpoint_forced_cells += 1;
-                    self.inspect((Y(height * 2 - 2 - y), X(width * 2 - 2 - x)));
-                }
-            }
-            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Prohibited || line == 2 {
-                let cond = self.endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)));
-                if cond == Endpoint::Forced {
-                    self.invalid = true;
-                    return;
-                } else if cond == Endpoint::Any {
-                    self.endpoint_constraint[(Y(height - 1 - y / 2), X(width - 1 - x / 2))] = Endpoint::Prohibited;
-                    self.inspect((Y(height * 2 - 2 - y), X(width * 2 - 2 - x)));
-                }
+            let con = self.endpoint_constraint((Y(y / 2), X(x / 2)));
+            if con != Endpoint::Any {
+                self.update_endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)), con);
             }
         }
 
@@ -797,9 +797,7 @@ impl PlacementGenerator {
         match update {
             FieldUpdate::Corner(e, f) => {
                 let (Y(y), X(x)) = cd;
-                field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
-                field.endpoint_forced_cells += 1;
-                field.inspect((Y(y), X(x)));
+                field.update_endpoint_constraint((Y(y / 2), X(x / 2)), Endpoint::Forced);
             },
             FieldUpdate::Endpoint(e, f) => field.decide(e, Edge::Blank),
             FieldUpdate::Extend(e) => field.decide(e, Edge::Blank),
@@ -1046,8 +1044,7 @@ fn limit_clue_number(field: &mut AnswerField, limit: i32) {
             for y in 0..height {
                 for x in 0..width {
                     if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
-                        field.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
-                        field.inspect((Y(y), X(x)));
+                        field.update_endpoint_constraint((Y(y / 2), X(x / 2)), Endpoint::Prohibited);
                     }
                 }
             }
