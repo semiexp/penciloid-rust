@@ -1,16 +1,8 @@
-use super::super::{Grid, Y, X, Coord};
+use super::super::{Grid, Y, X, Coord, Symmetry};
 use grid_loop::{Edge, GridLoop, GridLoopField};
 use super::*;
 
 use rand::Rng;
-
-#[derive(Debug, Clone, Copy)]
-pub struct Symmetry {
-    pub dyad: bool,         // 180-degree symmetry
-    pub tetrad: bool,       // 90-degree symmetry
-    pub horizontal: bool,   // horizontal line symmetry
-    pub vertical: bool,     // vertical line symmetry
-}
 
 pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
     let height = has_clue.height();

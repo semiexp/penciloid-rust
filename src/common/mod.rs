@@ -123,6 +123,14 @@ impl FiniteSearchQueue {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Symmetry {
+    pub dyad: bool,         // 180-degree symmetry
+    pub tetrad: bool,       // 90-degree symmetry
+    pub horizontal: bool,   // horizontal line symmetry
+    pub vertical: bool,     // vertical line symmetry
+}
+
 #[cfg(test)]
 pub fn vec_to_grid<T>(v: &Vec<Vec<T>>) -> Grid<T>
 where
