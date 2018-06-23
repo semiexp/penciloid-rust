@@ -43,7 +43,7 @@ struct GeneratorOption {
     width: i32,
     jobs: i32,
     no_adjacent_clues: bool,
-    symmetry_clue: bool,
+    symmetry: Symmetry,
     minimum_path_length: i32,
     empty_width: i32,
     max_clue: Option<i32>,
@@ -101,7 +101,8 @@ fn run_generator(opts: GeneratorOption) {
                     }
                 }
                 if let Some((lo, hi)) = opts.corner {
-                    if opts.symmetry_clue {
+                    // TODO: better handling for other symmetry types
+                    if opts.symmetry.dyad {
                         for d in 0..2 {
                             let i = rng.gen_range(lo, hi + 1);
                             let (d0, d1) = if d == 0 { (0, 3) } else { (1, 2) };
@@ -135,7 +136,7 @@ fn run_generator(opts: GeneratorOption) {
                     chain_threshold: opts.minimum_path_length,
                     endpoint_constraint: Some(&end),
                     forbid_adjacent_clue: opts.no_adjacent_clues,
-                    symmetry_clue: opts.symmetry_clue,
+                    symmetry: opts.symmetry,
                     clue_limit: opts.max_clue,
                     prioritized_extension: opts.prioritized_extension,
                 };
@@ -211,7 +212,12 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
                 .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'jobs' must be a positive integer") })
         ).unwrap_or(Ok(1)));
     let no_adjacent_clues = matches.opt_present("no-adjacent-clues");
-    let symmetry_clue = matches.opt_present("symmetry");
+    let symmetry = Symmetry {
+        dyad: matches.opt_present("symmetry"),
+        tetrad: false,
+        horizontal: false,
+        vertical: false,
+    };
     let minimum_path_length = try!(
         matches.opt_str("minimum-path-length").map(|s|
             s.parse::<i32>()
@@ -252,7 +258,7 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         width,
         jobs,
         no_adjacent_clues,
-        symmetry_clue,
+        symmetry,
         minimum_path_length,
         empty_width,
         max_clue,

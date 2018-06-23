@@ -1,4 +1,4 @@
-use super::super::{Y, X, Coord, Grid};
+use super::super::{Y, X, Coord, Grid, Symmetry};
 use super::*;
 
 extern crate rand;
@@ -17,7 +17,7 @@ pub struct GeneratorOption<'a> {
     pub chain_threshold: i32,
     pub endpoint_constraint: Option<&'a Grid<Endpoint>>,
     pub forbid_adjacent_clue: bool,
-    pub symmetry_clue: bool,
+    pub symmetry: Symmetry,
     pub clue_limit: Option<i32>,
     pub prioritized_extension: bool,
 }
@@ -45,7 +45,7 @@ struct AnswerField {
     endpoint_forced_cells: i32,
     chain_threshold: i32,
     forbid_adjacent_clue: bool,
-    symmetry_endpoints: bool,
+    symmetry: Symmetry,
     invalid: bool,
 }
 
@@ -69,7 +69,7 @@ impl AnswerField {
             endpoint_forced_cells: 0,
             chain_threshold: opt.chain_threshold,
             forbid_adjacent_clue: opt.forbid_adjacent_clue,
-            symmetry_endpoints: opt.symmetry_clue,
+            symmetry: opt.symmetry,
             invalid: false,
         };
 
@@ -155,7 +155,7 @@ impl AnswerField {
         self.endpoint_forced_cells = src.endpoint_forced_cells;
         self.chain_threshold = src.chain_threshold;
         self.forbid_adjacent_clue = src.forbid_adjacent_clue;
-        self.symmetry_endpoints = src.symmetry_endpoints;
+        self.symmetry = src.symmetry;
         self.invalid = src.invalid;
     }
 
@@ -446,12 +446,20 @@ impl AnswerField {
             }
         }
 
-        if self.symmetry_endpoints {
+        let con = self.endpoint_constraint((Y(y / 2), X(x / 2)));
+        if con != Endpoint::Any {
             let height = self.height;
             let width = self.width;
-            let con = self.endpoint_constraint((Y(y / 2), X(x / 2)));
-            if con != Endpoint::Any {
+            if self.symmetry.tetrad {
+                self.update_endpoint_constraint((Y(x / 2), X(width - 1 - y / 2)), con);
+            } else if self.symmetry.dyad {
                 self.update_endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)), con);
+            }
+            if self.symmetry.horizontal {
+                self.update_endpoint_constraint((Y(height - 1 - y / 2), X(x / 2)), con);
+            }
+            if self.symmetry.vertical {
+                self.update_endpoint_constraint((Y(y / 2), X(width - 1 - x / 2)), con);
             }
         }
 
@@ -644,7 +652,7 @@ impl PlacementGenerator {
             chain_threshold: 1,
             endpoint_constraint: None,
             forbid_adjacent_clue: false,
-            symmetry_clue: false,
+            symmetry: Symmetry::none(),
             clue_limit: None,
             prioritized_extension: false,
         });
@@ -663,6 +671,8 @@ impl PlacementGenerator {
         let height = self.height;
         let width = self.width;
         let fields = &mut self.active_fields;
+
+        // TODO: update `opt` according to symmetry
 
         let template = AnswerField::new(height, width, opt);
 
@@ -757,7 +767,8 @@ impl PlacementGenerator {
             field.invalid = true;
             return;
         }
-        if opt.symmetry_clue && check_symmetry(field) {
+        // TODO: better check for other symmetry types?
+        if opt.symmetry.dyad && check_symmetry(field) {
             field.invalid = true;
         }
     }
