@@ -131,6 +131,17 @@ pub struct Symmetry {
     pub vertical: bool,     // vertical line symmetry
 }
 
+impl Symmetry {
+    pub fn none() -> Symmetry {
+        Symmetry {
+            dyad: false,
+            tetrad: false,
+            horizontal: false,
+            vertical: false,
+        }
+    }
+}
+
 #[cfg(test)]
 pub fn vec_to_grid<T>(v: &Vec<Vec<T>>) -> Grid<T>
 where
