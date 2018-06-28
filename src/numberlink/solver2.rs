@@ -699,7 +699,7 @@ mod tests {
             }
         }
 
-        let ans = solve2(&problem, None, false);
+        let ans = solve2(&problem, None, false, false);
         assert_eq!(ans.len(), 1);
     }
 }
