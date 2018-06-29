@@ -28,7 +28,7 @@ impl Field {
     }
     pub fn decide(&mut self, cell: Coord, val: Value) {
         let current = self.value[cell];
-        if current != UNDECIDED {
+        if current != UNDECIDED && !(current == SOME && val != EMPTY) {
             if current != val {
                 self.inconsistent = true;
             }
