@@ -61,3 +61,11 @@ pub const SOME: Value = Value(-3);
 pub struct Clue(pub i32);
 
 pub const NO_CLUE: Clue = Clue(-1);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClueLoc {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
