@@ -26,10 +26,46 @@ impl Field {
             solved: false,
         }
     }
+    pub fn get_value(&self, cell: Coord) -> Value {
+        self.value[cell]
+    }
+    pub fn inconsistent(&self) -> bool {
+        self.inconsistent
+    }
+    pub fn get_clue(&self, loc: ClueLoc, idx: i32) -> Clue {
+        match loc {
+            ClueLoc::Left => self.clue_front[idx as usize],
+            ClueLoc::Right => self.clue_back[idx as usize],
+            ClueLoc::Top => self.clue_front[(idx + self.size) as usize],
+            ClueLoc::Bottom => self.clue_back[(idx + self.size) as usize],
+        }
+    }
+    pub fn set_clue(&mut self, loc: ClueLoc, idx: i32, clue: Clue) {
+        let current = self.get_clue(loc, idx);
+        if current != NO_CLUE {
+            if current != clue {
+                self.inconsistent = true;
+            }
+            return;
+        }
+        let size = self.size;
+        match loc {
+            ClueLoc::Left => self.clue_front[idx as usize] = clue,
+            ClueLoc::Right => self.clue_back[idx as usize] = clue,
+            ClueLoc::Top => self.clue_front[(idx + size) as usize] = clue,
+            ClueLoc::Bottom => self.clue_back[(idx + size) as usize] = clue,
+        }
+        if loc == ClueLoc::Left || loc == ClueLoc::Right {
+            self.inspect_row(idx);
+        } else {
+            self.inspect_row(idx + size);
+        }
+    }
     pub fn decide(&mut self, cell: Coord, val: Value) {
         let current = self.value[cell];
         if current != UNDECIDED && !(current == SOME && val != EMPTY) {
             if current != val {
+                println!("err {:?} {:?} {:?}", cell, current, val);
                 self.inconsistent = true;
             }
             return;
@@ -52,35 +88,6 @@ impl Field {
             for x2 in 0..self.size {
                 if x != x2 { self.limit_cand((Y(y), X(x2)), limit); }
             }
-        }
-    }
-    fn get_clue(&self, loc: ClueLoc, idx: i32) -> Clue {
-        match loc {
-            ClueLoc::Left => self.clue_front[idx as usize],
-            ClueLoc::Right => self.clue_back[idx as usize],
-            ClueLoc::Top => self.clue_front[(idx + self.size) as usize],
-            ClueLoc::Bottom => self.clue_back[(idx + self.size) as usize],
-        }
-    }
-    fn set_clue(&mut self, loc: ClueLoc, idx: i32, clue: Clue) {
-        let current = self.get_clue(loc, idx);
-        if current != NO_CLUE {
-            if current != clue {
-                self.inconsistent = true;
-            }
-            return;
-        }
-        let size = self.size;
-        match loc {
-            ClueLoc::Left => self.clue_front[idx as usize] = clue,
-            ClueLoc::Right => self.clue_back[idx as usize] = clue,
-            ClueLoc::Top => self.clue_front[(idx + size) as usize] = clue,
-            ClueLoc::Bottom => self.clue_back[(idx + size) as usize] = clue,
-        }
-        if loc == ClueLoc::Left || loc == ClueLoc::Right {
-            self.inspect_row(idx);
-        } else {
-            self.inspect_row(idx + size);
         }
     }
     /// Returns `pos`-th cell of group `gid`.
