@@ -65,7 +65,6 @@ impl Field {
         let current = self.value[cell];
         if current != UNDECIDED && !(current == SOME && val != EMPTY) {
             if current != val {
-                println!("err {:?} {:?} {:?}", cell, current, val);
                 self.inconsistent = true;
             }
             return;
