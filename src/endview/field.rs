@@ -63,6 +63,9 @@ impl Field {
     }
     pub fn decide(&mut self, cell: Coord, val: Value) {
         let current = self.value[cell];
+        if current.0 >= 0 && val == SOME {
+            return;
+        }
         if current != UNDECIDED && !(current == SOME && val != EMPTY) {
             if current != val {
                 self.inconsistent = true;
@@ -232,6 +235,35 @@ impl Field {
                 mask &= !self.cand[c];
                 if mask == Cand(0) {
                     break;
+                }
+            }
+        }
+    }
+    /// Apply *hidden candidate method* to the field.
+    /// Note: runs in O*(2^(n_alpha)) and works only if n_alpha < 32.
+    pub fn hidden_candidate(&mut self) {
+        let size = self.size;
+        let n_alpha = self.n_alpha;
+        for bits in 1..(1u32 << n_alpha) {
+            let mask = Cand(bits);
+            for g in 0..(2 * size) {
+                let mut n_match = 0;
+                for i in 0..size {
+                    if self.cand[self.group(g, i)] & mask != Cand(0) {
+                        n_match += 1;
+                    }
+                }
+                if n_match < bits.count_ones() {
+                    self.inconsistent = true;
+                    return;
+                } else if n_match == bits.count_ones() {
+                    for i in 0..size {
+                        let c = self.group(g, i);
+                        if self.cand[c] & mask != Cand(0) {
+                            self.decide(c, SOME);
+                            self.limit_cand(c, mask);
+                        }
+                    }
                 }
             }
         }
