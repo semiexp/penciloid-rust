@@ -197,7 +197,7 @@ impl Field {
             let mut first_diff_id = -1;
             for i in 0..size {
                 let v = self.value[self.directed_group(group, i, dir)];
-                if v != UNDECIDED && !self.cand[self.directed_group(group, i, dir)].is_set(clue.0) {
+                if v == SOME && !self.cand[self.directed_group(group, i, dir)].is_set(clue.0) {
                     first_diff_id = i;
                 }
             }
