@@ -171,7 +171,7 @@ impl Field {
                         break;
                     }
                 }
-            } 
+            }
             if loc == -1 {
                 self.inconsistent = true;
                 return;
@@ -223,6 +223,58 @@ impl Field {
                     self.limit_cand(c, !Cand::singleton(clue.0));
                     n_back_diff -= 1;
                     if n_back_diff == 0 { break; }
+                }
+            }
+
+            let mut mask = Cand((1u32 << n_alpha) - 1) & !Cand::singleton(clue.0);
+            for i in 0..size {
+                let c = self.directed_group(group, i, !dir);
+                self.limit_cand(c, !Cand::singleton(clue.0));
+                mask &= !self.cand[c];
+                if mask == Cand(0) {
+                    break;
+                }
+            }
+        }
+    }
+    /// Apply *fishy method* (like *X-wing* and *Sword fish* in Sudoku) to the field.
+    /// Note: runs in O*(2^size) and works only if size < 32.
+    pub fn fishy_method(&mut self) {
+        let size = self.size;
+        for i in 0..self.n_alpha {
+            let mut masks = vec![];
+            for y in 0..size {
+                let mut mask = 0u32;
+                for x in 0..size {
+                    if self.cand[(Y(y), X(x))].is_set(i) {
+                        mask |= 1u32 << x;
+                    }
+                }
+                masks.push(mask);
+            }
+            for bits in 1..(1u32 << size) {
+                let mut ors = 0u32;
+                for y in 0..size {
+                    if (bits & (1u32 << y)) != 0 {
+                        ors |= masks[y as usize];
+                    }
+                }
+                if bits.count_ones() > ors.count_ones() {
+                    self.inconsistent = true;
+                    return;
+                } else if bits.count_ones() == ors.count_ones() {
+                    for y in 0..size {
+                        if (bits & (1u32 << y)) == 0 {
+                            masks[y as usize] &= !ors;
+                        }
+                    }
+                }
+            }
+            for y in 0..size {
+                for x in 0..size {
+                    if (masks[y as usize] & (1u32 << x)) == 0 {
+                        self.limit_cand((Y(y), X(x)), !Cand::singleton(i));
+                    }
                 }
             }
         }
