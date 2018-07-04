@@ -8,8 +8,8 @@ pub struct Field {
     value: Grid<Value>,
     clue_front: Vec<Clue>,
     clue_back: Vec<Clue>,
+    total_cands: i32,
     inconsistent: bool,
-    solved: bool,
 }
 
 impl Field {
@@ -22,8 +22,8 @@ impl Field {
             value: Grid::new(size, size, UNDECIDED),
             clue_front: vec![NO_CLUE; (2 * size) as usize],
             clue_back: vec![NO_CLUE; (2 * size) as usize],
+            total_cands: size * size * (n_alpha + 1),
             inconsistent: false,
-            solved: false,
         }
     }
     pub fn from_problem(problem: &Problem) -> Field {
@@ -44,6 +44,12 @@ impl Field {
     }
     pub fn inconsistent(&self) -> bool {
         self.inconsistent
+    }
+    pub fn total_cands(&self) -> i32 {
+        self.total_cands
+    }
+    pub fn is_solved(&self) -> bool {
+        self.total_cands == self.size * self.n_alpha
     }
     pub fn get_clue(&self, loc: ClueLoc, idx: i32) -> Clue {
         match loc {
@@ -84,6 +90,10 @@ impl Field {
                 self.inconsistent = true;
             }
             return;
+        }
+        if current == UNDECIDED {
+            if val == UNDECIDED { return; }
+            self.total_cands -= 1;
         }
 
         self.value[cell] = val;
@@ -126,6 +136,7 @@ impl Field {
 
         let new_cand = current_cand & lim;
         self.cand[cell] = new_cand;
+        self.total_cands -= (current_cand.0.count_ones() - new_cand.0.count_ones()) as i32;
         
         if self.cand[cell] == Cand(0) {
             self.decide(cell, EMPTY);
