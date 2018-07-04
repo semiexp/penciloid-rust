@@ -13,7 +13,7 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn empty_board(size: i32, n_alpha: i32) -> Field {
+    pub fn new(size: i32, n_alpha: i32) -> Field {
         assert!(n_alpha >= 2);
         Field {
             size,
@@ -25,6 +25,19 @@ impl Field {
             inconsistent: false,
             solved: false,
         }
+    }
+    pub fn from_problem(problem: &Problem) -> Field {
+        let size = problem.size();
+        let mut ret = Field::new(size, problem.n_alpha());
+        for &loc in &[ClueLoc::Left, ClueLoc::Right, ClueLoc::Top, ClueLoc::Bottom] {
+            for i in 0..size {
+                let clue = problem.get_clue(loc, i);
+                if clue != NO_CLUE {
+                    ret.set_clue(loc, i, clue);
+                }
+            }
+        }
+        ret
     }
     pub fn get_value(&self, cell: Coord) -> Value {
         self.value[cell]
@@ -320,7 +333,7 @@ mod tests {
     fn test_deduction() {
         {
             // a symbol shouldn't occur more than once in a row / a column
-            let mut field = Field::empty_board(5, 3);
+            let mut field = Field::new(5, 3);
 
             assert_eq!(field.cand[(Y(0), X(0))], Cand(7));
             assert_eq!(field.cand[(Y(0), X(1))], Cand(7));
@@ -336,7 +349,7 @@ mod tests {
         }
         {
             // there must be exactly `n_alpha` symbols in a row / a column
-            let mut field = Field::empty_board(5, 3);
+            let mut field = Field::new(5, 3);
 
             field.decide((Y(1), X(0)), SOME);
             field.decide((Y(1), X(1)), SOME);
@@ -347,7 +360,7 @@ mod tests {
         }
         {
             // there must be exactly `n_alpha` symbols in a row / a column
-            let mut field = Field::empty_board(5, 3);
+            let mut field = Field::new(5, 3);
 
             field.decide((Y(3), X(2)), EMPTY);
             field.decide((Y(4), X(2)), EMPTY);
@@ -356,7 +369,7 @@ mod tests {
             assert_eq!(field.value[(Y(1), X(2))], SOME);
         }
         {
-            let mut field = Field::empty_board(5, 3);
+            let mut field = Field::new(5, 3);
 
             field.limit_cand((Y(0), X(2)), Cand(5));
             field.limit_cand((Y(2), X(2)), Cand(5));
@@ -372,13 +385,26 @@ mod tests {
     #[test]
     fn test_clue() {
         {
-            let mut field = Field::empty_board(5, 3);
+            let mut field = Field::new(5, 3);
 
             field.set_clue(ClueLoc::Left, 0, Clue(0));
 
             assert_eq!(field.cand[(Y(0), X(0))], Cand(1));
             assert_eq!(field.cand[(Y(0), X(3))], Cand(6));
             assert_eq!(field.cand[(Y(0), X(4))], Cand(6));
+        }
+    }
+
+    #[test]
+    fn test_problem() {
+        {
+            let mut problem = Problem::new(5, 3);
+            problem.set_clue(ClueLoc::Top, 1, Clue(1));
+
+            let field = Field::from_problem(&problem);
+            
+            assert_eq!(field.cand[(Y(0), X(1))], Cand(2));
+            assert_eq!(field.cand[(Y(4), X(1))], Cand(5));
         }
     }
 }

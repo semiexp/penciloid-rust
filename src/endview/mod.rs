@@ -69,3 +69,45 @@ pub enum ClueLoc {
     Top,
     Bottom,
 }
+
+#[derive(Debug, Clone)]
+pub struct Problem {
+    size: i32,
+    n_alpha: i32,
+    clues: [Vec<Clue>; 4],
+}
+
+impl Problem {
+    pub fn new(size: i32, n_alpha: i32) -> Problem {
+        Problem {
+            size,
+            n_alpha,
+            clues: [
+                vec![NO_CLUE; size as usize],
+                vec![NO_CLUE; size as usize],
+                vec![NO_CLUE; size as usize],
+                vec![NO_CLUE; size as usize],
+            ],
+        }
+    }
+    pub fn size(&self) -> i32 {
+        self.size
+    }
+    pub fn n_alpha(&self) -> i32 {
+        self.n_alpha
+    }
+    pub fn get_clue(&self, loc: ClueLoc, idx: i32) -> Clue {
+        self.clues[Problem::loc_to_ord(loc)][idx as usize]
+    }
+    pub fn set_clue(&mut self, loc: ClueLoc, idx: i32, clue: Clue) {
+        self.clues[Problem::loc_to_ord(loc)][idx as usize] = clue;
+    }
+    fn loc_to_ord(loc: ClueLoc) -> usize {
+        match loc {
+            ClueLoc::Left => 0,
+            ClueLoc::Right => 1,
+            ClueLoc::Top => 2,
+            ClueLoc::Bottom => 3,
+        }
+    }
+}
