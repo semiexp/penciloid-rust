@@ -1,8 +1,10 @@
 use std::ops::{BitAnd, BitOr, BitAndAssign, BitOrAssign, Not};
 
 mod field;
+mod generator;
 
 pub use self::field::*;
+pub use self::generator::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cand(pub u32);
