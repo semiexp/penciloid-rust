@@ -29,10 +29,7 @@ pub fn generate<R: Rng>(size: i32, n_alpha: i32, rng: &mut R) -> Option<Problem>
             current_problem.set_clue(loc, i, nxt);
 
             let mut field = Field::from_problem(&current_problem);
-            field.hidden_candidate();
-            field.fishy_method();
-            field.hidden_candidate();
-            field.fishy_method();
+            field.trial_and_error();
 
             let keep_update;
             let current_score;
@@ -46,7 +43,19 @@ pub fn generate<R: Rng>(size: i32, n_alpha: i32, rng: &mut R) -> Option<Problem>
 
             if keep_update {
                 if field.is_solved() {
-                    return Some(current_problem);
+                    let mut field = Field::from_problem(&current_problem);
+                    let mut isok = true;
+                    field.apply_methods();
+                    for y in 0..size {
+                        for x in 0..size {
+                            if field.get_value((Y(y), X(x))).0 >= 0 {
+                                isok = false;
+                            }
+                        }
+                    }
+                    if isok {
+                        return Some(current_problem);
+                    }
                 }
                 prev_score = current_score;
                 break;

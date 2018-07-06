@@ -1,6 +1,7 @@
 use super::super::{Y, X, Coord, Grid};
 use super::*;
 
+#[derive(Clone)]
 pub struct Field {
     size: i32,
     n_alpha: i32,
@@ -114,6 +115,69 @@ impl Field {
                 if x != x2 { self.limit_cand((Y(y), X(x2)), limit); }
             }
         }
+    }
+    pub fn apply_methods(&mut self) {
+        loop {
+            let current_cands = self.total_cands();
+
+            self.hidden_candidate();
+            if self.inconsistent() { return; }
+            self.fishy_method();
+            if self.inconsistent() { return; }
+
+            if self.total_cands() == current_cands { break; }
+        }
+    }
+    pub fn trial_and_error(&mut self) {
+        loop {
+            self.apply_methods();
+            if self.inconsistent() { break; }
+            if !self.trial_and_error_step() { break; }
+        }
+    }
+    fn trial_and_error_step(&mut self) -> bool {
+        let size = self.size;
+        let n_alpha = self.n_alpha;
+
+        let mut is_update = false;
+        for y in 0..size {
+            for x in 0..size {
+                let val = self.get_value((Y(y), X(x)));
+                if !(val == UNDECIDED || val == SOME) { continue; }
+
+                let cand = self.cand[(Y(y), X(x))];
+                let mut valid_cands = vec![];
+
+                for i in 0..n_alpha {
+                    if !cand.is_set(i) { continue; }
+
+                    let mut field_cloned = self.clone();
+                    field_cloned.decide((Y(y), X(x)), Value(i));
+
+                    if !field_cloned.inconsistent() {
+                        valid_cands.push((Value(i), field_cloned));
+                    }
+                }
+                if val != SOME {
+                    let mut field_cloned = self.clone();
+                    field_cloned.decide((Y(y), X(x)), EMPTY);
+                    if !field_cloned.inconsistent() {
+                        valid_cands.push((EMPTY, field_cloned));
+                    }
+                }
+
+                if valid_cands.len() == 0 {
+                    self.inconsistent = true;
+                    return false;
+                }
+                if valid_cands.len() == 1 {
+                    let only_cand = valid_cands.pop().unwrap();
+                    *self = only_cand.1;
+                    is_update = true;
+                }
+            }
+        }
+        is_update
     }
     /// Returns `pos`-th cell of group `gid`.
     fn group(&self, gid: i32, pos: i32) -> Coord {
