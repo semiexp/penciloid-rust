@@ -673,8 +673,45 @@ impl PlacementGenerator {
         let fields = &mut self.active_fields;
 
         // TODO: update `opt` according to symmetry
+        let symmetry = Symmetry {
+            dyad: opt.symmetry.dyad || opt.symmetry.tetrad,
+            tetrad: opt.symmetry.tetrad && (height == width),
+            .. opt.symmetry
+        };
+        let mut endpoint_constraint = match opt.endpoint_constraint {
+            Some(e) => e.clone(),
+            None => Grid::new(height, width, Endpoint::Any),
+        };
+        if symmetry.dyad && height % 2 == 1 && width % 2 == 1 {
+            endpoint_constraint[(Y(height / 2), X(width / 2))] = Endpoint::Prohibited;
+        }
+        if opt.forbid_adjacent_clue {
+            if symmetry.horizontal && height % 2 == 0 {
+                for x in 0..width {
+                    endpoint_constraint[(Y(height / 2), X(x))] = Endpoint::Prohibited;
+                    endpoint_constraint[(Y(height / 2 + 1), X(x))] = Endpoint::Prohibited;
+                }
+            }
+            if symmetry.horizontal && width % 2 == 0 {
+                for y in 0..height {
+                    endpoint_constraint[(Y(y), X(width / 2))] = Endpoint::Prohibited;
+                    endpoint_constraint[(Y(y), X(width / 2 + 1))] = Endpoint::Prohibited;
+                }
+            }
+            if symmetry.dyad {
+                endpoint_constraint[(Y(height / 2), X(width / 2))] = Endpoint::Prohibited;
+                endpoint_constraint[(Y(height / 2), X((width - 1) / 2))] = Endpoint::Prohibited;
+                endpoint_constraint[(Y((height - 1) / 2), X(width / 2))] = Endpoint::Prohibited;
+                endpoint_constraint[(Y((height - 1) / 2), X((width - 1) / 2))] = Endpoint::Prohibited;
+            }
+        }
+        let opt = GeneratorOption {
+            endpoint_constraint: Some(&endpoint_constraint),
+            symmetry,
+            .. *opt
+        };
 
-        let template = AnswerField::new(height, width, opt);
+        let template = AnswerField::new(height, width, &opt);
 
         let mut field_base = self.pool.pop().unwrap();
         field_base.copy_from(&template);
@@ -713,12 +750,12 @@ impl PlacementGenerator {
 
                 let update = PlacementGenerator::choose_update(&field, cd, rng);
                 PlacementGenerator::apply_update(&mut field, update);
-                PlacementGenerator::check_invalidity(&mut field, opt);
+                PlacementGenerator::check_invalidity(&mut field, &opt);
 
                 if field.invalid {
                     self.pool.push(field);
                     PlacementGenerator::deny_update(&mut fields[id], cd, update);
-                    PlacementGenerator::check_invalidity(&mut fields[id], opt);
+                    PlacementGenerator::check_invalidity(&mut fields[id], &opt);
                     if fields[id].invalid {
                         self.pool.push(fields.swap_remove(id));
                     }
