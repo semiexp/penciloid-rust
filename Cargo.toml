@@ -3,6 +3,13 @@ name = "puzrs"
 version = "0.1.0"
 authors = ["semiexp <linthya.v@gmail.com>"]
 
+[lib]
+crate-type = ["lib", "cdylib"]
+
 [dependencies]
 rand = "0.5"
 getopts = "0.2"
+
+[target.wasm32-unknown-unknown.dependencies.rand]
+version = "0.5"
+default-features = false
