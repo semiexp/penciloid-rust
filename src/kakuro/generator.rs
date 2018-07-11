@@ -101,7 +101,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
             }
 
             let total_cands = field.total_cands() as i32;
-            if current_total_cands > total_cands || rng.next_f64() < ((current_total_cands - total_cands) as f64 / temperature).exp() {
+            if current_total_cands > total_cands || rng.gen::<f64>() < ((current_total_cands - total_cands) as f64 / temperature).exp() {
                 current_total_cands = total_cands;
                 break;
             } else {

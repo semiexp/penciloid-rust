@@ -106,7 +106,7 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                 let current_score = field.grid_loop().num_decided_edges() - count_prohibited_patterns(has_clue, &field, &current_problem) * 10;
 
                 if prev_score >= current_score {
-                    if !(rng.next_f64() < ((current_score - prev_score) as f64 / temperature).exp()) {
+                    if !(rng.gen::<f64>() < ((current_score - prev_score) as f64 / temperature).exp()) {
                         continue;
                     }
                 }

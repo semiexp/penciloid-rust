@@ -817,7 +817,7 @@ impl PlacementGenerator {
         if field.count_neighbor(cd) == (0, 2) {
             let constraint = field.endpoint_constraint(cd_vtx);
 
-            if constraint != Endpoint::Forced && rng.next_f64() < 0.9f64 {
+            if constraint != Endpoint::Forced && rng.gen::<f64>() < 0.9f64 {
                 FieldUpdate::Corner(nbs[0], nbs[1])
             } else {
                 let i = rng.gen_range(0, 2);

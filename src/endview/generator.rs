@@ -38,7 +38,7 @@ pub fn generate<R: Rng>(size: i32, n_alpha: i32, rng: &mut R) -> Option<Problem>
                 keep_update = false;
             } else {
                 current_score = compute_score(&current_problem, &field);
-                keep_update = prev_score > current_score || rng.next_f64() < ((prev_score - current_score) / temperature).exp();
+                keep_update = prev_score > current_score || rng.gen::<f64>() < ((prev_score - current_score) / temperature).exp();
             }
 
             if keep_update {

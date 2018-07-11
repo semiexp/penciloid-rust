@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["semiexp <linthya.v@gmail.com>"]
 
 [dependencies]
-rand = "0.3"
+rand = "0.5"
 getopts = "0.2"

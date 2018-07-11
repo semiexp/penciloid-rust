@@ -123,7 +123,7 @@ pub fn train(start: EvaluatorParam, problems: &Vec<Grid<Clue>>, expected: &Vec<f
 
             let score2 = evaluate_score(&evaluate_parallel(n_threads, problems, param2), expected);
 
-            if current_score > score2 || rng.next_f64() < ((current_score - score2) / temp).exp() {
+            if current_score > score2 || rng.gen::<f64>() < ((current_score - score2) / temp).exp() {
                 param = param2;
                 current_score = score2;
                 break;
