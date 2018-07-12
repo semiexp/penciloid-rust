@@ -38,7 +38,7 @@ pub fn evaluate_parallel(n_threads: i32, problems: &Vec<Grid<Clue>>, param: Eval
     }
 
     for th in threads {
-        th.join();
+        th.join().unwrap();
     }
 
     let ret = res.lock().unwrap().clone();

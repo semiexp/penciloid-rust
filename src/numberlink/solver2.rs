@@ -513,8 +513,6 @@ struct AnswerInfo {
 }
 
 pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: bool, terminate_on_not_fully_filled: bool) -> AnswerDetail {
-    let height = problem.height();
-    let width = problem.width();
     let mut solver_field = SolverField::new(problem, disallow_unused_cell);
     let mut answer_info = AnswerInfo {
         answers: Vec::new(),
@@ -536,7 +534,6 @@ pub fn solve2(problem: &Grid<Clue>, limit: Option<usize>, disallow_unused_cell: 
     }
 }
 fn prune_cut(field: &SolverField) -> bool {
-    let height = field.height();
     let width = field.width();
     let mut accsum = vec![0; width as usize];
     

@@ -237,7 +237,7 @@ impl GridLoop {
         }
     }
     pub fn check_connectability<T: GridLoopField>(field: &mut T) {
-        let mut grid = field.grid_loop();
+        let grid = field.grid_loop();
         let height = grid.height();
         let width = grid.width();
         let mut visited = Grid::new(height + 1, width + 1, false);

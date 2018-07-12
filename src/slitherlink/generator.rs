@@ -250,10 +250,9 @@ pub fn generate_placement<R: Rng>(height: i32, width: i32, num_clues: i32, symme
     let mut symmetry = symmetry;
 
     symmetry.dyad |= symmetry.tetrad;
-    symmetry.tetrad &= (height == width);
+    symmetry.tetrad &= height == width;
     
     let mut grp_ids = Grid::new(height, width, false);
-    let mut last_id = 0;
 
     let mut clue_positions: Vec<Vec<Coord>> = vec![];
 
@@ -261,7 +260,7 @@ pub fn generate_placement<R: Rng>(height: i32, width: i32, num_clues: i32, symme
         for x in 0..width {
             if !grp_ids[(Y(y), X(x))] {
                 let mut sto = vec![];
-                update_grp(y, x, last_id, symmetry, &mut grp_ids, &mut sto);
+                update_grp(y, x, symmetry, &mut grp_ids, &mut sto);
                 clue_positions.push(sto);
             }
         }
@@ -312,7 +311,7 @@ pub fn generate_placement<R: Rng>(height: i32, width: i32, num_clues: i32, symme
     ret
 }
 
-fn update_grp(y: i32, x: i32, id: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto: &mut Vec<Coord>) {
+fn update_grp(y: i32, x: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto: &mut Vec<Coord>) {
     if grp_ids[(Y(y), X(x))] {
         return;
     }
@@ -320,15 +319,15 @@ fn update_grp(y: i32, x: i32, id: i32, symmetry: Symmetry, grp_ids: &mut Grid<bo
     sto.push((Y(y), X(x)));
 
     if symmetry.tetrad {
-        update_grp(grp_ids.height() - 1 - x, y, id, symmetry, grp_ids, sto);
+        update_grp(grp_ids.height() - 1 - x, y, symmetry, grp_ids, sto);
     } else if symmetry.dyad {
-        update_grp(grp_ids.height() - 1 - y, grp_ids.width() - 1 - x, id, symmetry, grp_ids, sto);
+        update_grp(grp_ids.height() - 1 - y, grp_ids.width() - 1 - x, symmetry, grp_ids, sto);
     }
     if symmetry.horizontal {
-        update_grp(grp_ids.height() - 1 - y, x, id, symmetry, grp_ids, sto);
+        update_grp(grp_ids.height() - 1 - y, x, symmetry, grp_ids, sto);
     }
     if symmetry.vertical {
-        update_grp(y, grp_ids.width() - 1 - x, id, symmetry, grp_ids, sto);
+        update_grp(y, grp_ids.width() - 1 - x, symmetry, grp_ids, sto);
     }
 }
 

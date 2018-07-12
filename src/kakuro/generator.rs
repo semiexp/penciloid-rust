@@ -2,7 +2,7 @@ use super::super::Grid;
 use super::*;
 
 use rand::{Rng, distributions};
-use rand::distributions::IndependentSample;
+use rand::distributions::Distribution;
 use std;
 
 pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
@@ -235,7 +235,7 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
         let mut upd = false;
 
         for _ in 0..10 {
-            let (y, x) = wc.ind_sample(rng);
+            let (y, x) = wc.sample(rng);
             placement[(Y(y), X(x))] = true;
             placement[(Y(height - 1 - y), X(width - 1 - x))] = true;
 

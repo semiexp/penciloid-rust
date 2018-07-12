@@ -3,7 +3,7 @@ use super::*;
 
 extern crate rand;
 
-use rand::{Rng, distributions};
+use rand::Rng;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -843,11 +843,11 @@ impl PlacementGenerator {
     }
     fn deny_update(field: &mut AnswerField, cd: Coord, update: FieldUpdate) {
         match update {
-            FieldUpdate::Corner(e, f) => {
+            FieldUpdate::Corner(_, _) => {
                 let (Y(y), X(x)) = cd;
                 field.update_endpoint_constraint((Y(y / 2), X(x / 2)), Endpoint::Forced);
             },
-            FieldUpdate::Endpoint(e, f) => field.decide(e, Edge::Blank),
+            FieldUpdate::Endpoint(e, _) => field.decide(e, Edge::Blank),
             FieldUpdate::Extend(e) => field.decide(e, Edge::Blank),
         }
     }
