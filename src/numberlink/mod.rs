@@ -1,12 +1,12 @@
 use std::ops::Index;
 
-mod solver2;
-mod generator;
 mod format;
+mod generator;
+mod solver2;
 
-pub use self::solver2::*;
-pub use self::generator::*;
 pub use self::format::*;
+pub use self::generator::*;
+pub use self::solver2::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Clue(pub i32);
@@ -14,7 +14,7 @@ pub struct Clue(pub i32);
 pub const NO_CLUE: Clue = Clue(0);
 pub const UNUSED: Clue = Clue(-1);
 
-use super::{Grid, Y, X, Coord};
+use super::{Coord, Grid, X, Y};
 
 #[derive(Clone)]
 pub struct LinePlacement {
@@ -65,15 +65,28 @@ impl LinePlacement {
     }
     pub fn isolated(&self, cd: Coord) -> bool {
         let (Y(y), X(x)) = cd;
-        !(self.right((Y(y), X(x - 1))) || self.right((Y(y), X(x))) || self.down((Y(y - 1), X(x))) || self.down((Y(y), X(x))))
+        !(self.right((Y(y), X(x - 1))) || self.right((Y(y), X(x))) || self.down((Y(y - 1), X(x)))
+            || self.down((Y(y), X(x))))
     }
     pub fn is_endpoint(&self, cd: Coord) -> bool {
         let (Y(y), X(x)) = cd;
-        let n_lines =
-              if self.get_checked((Y(y * 2 + 0), X(x * 2 - 1))) { 1 } else { 0 }
-            + if self.get_checked((Y(y * 2 - 1), X(x * 2 + 0))) { 1 } else { 0 }
-            + if self.get_checked((Y(y * 2 + 0), X(x * 2 + 1))) { 1 } else { 0 }
-            + if self.get_checked((Y(y * 2 + 1), X(x * 2 + 0))) { 1 } else { 0 };
+        let n_lines = if self.get_checked((Y(y * 2 + 0), X(x * 2 - 1))) {
+            1
+        } else {
+            0
+        } + if self.get_checked((Y(y * 2 - 1), X(x * 2 + 0))) {
+            1
+        } else {
+            0
+        } + if self.get_checked((Y(y * 2 + 0), X(x * 2 + 1))) {
+            1
+        } else {
+            0
+        } + if self.get_checked((Y(y * 2 + 1), X(x * 2 + 0))) {
+            1
+        } else {
+            0
+        };
         n_lines == 1
     }
     pub fn extract_chain_groups(&self) -> Option<Grid<i32>> {
@@ -95,9 +108,13 @@ impl LinePlacement {
                         for d in 0..4 {
                             let (dy, dx) = dirs[d];
 
-                            if (cy + dy, cx + dx) != (ly, lx) && self.get_checked((Y(cy * 2 + dy), X(cx * 2 + dx))) {
-                                ly = cy; lx = cx;
-                                cy += dy; cx += dx;
+                            if (cy + dy, cx + dx) != (ly, lx)
+                                && self.get_checked((Y(cy * 2 + dy), X(cx * 2 + dx)))
+                            {
+                                ly = cy;
+                                lx = cx;
+                                cy += dy;
+                                cx += dx;
                                 continue 'traverse;
                             }
                         }
@@ -110,9 +127,19 @@ impl LinePlacement {
 
         for y in 0..height {
             for x in 0..width {
-                if ids[(Y(y), X(x))] == -1 { return None; }
-                if y < height - 1 && (ids[(Y(y), X(x))] == ids[(Y(y + 1), X(x))]) != self.down((Y(y), X(x))) { return None; }
-                if x < width - 1 && (ids[(Y(y), X(x))] == ids[(Y(y), X(x + 1))]) != self.right((Y(y), X(x))) { return None; }
+                if ids[(Y(y), X(x))] == -1 {
+                    return None;
+                }
+                if y < height - 1
+                    && (ids[(Y(y), X(x))] == ids[(Y(y + 1), X(x))]) != self.down((Y(y), X(x)))
+                {
+                    return None;
+                }
+                if x < width - 1
+                    && (ids[(Y(y), X(x))] == ids[(Y(y), X(x + 1))]) != self.right((Y(y), X(x)))
+                {
+                    return None;
+                }
             }
         }
 

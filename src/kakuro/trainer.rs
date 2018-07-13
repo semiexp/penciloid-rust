@@ -3,36 +3,38 @@ extern crate rand;
 use super::super::Grid;
 use super::*;
 
-use std::thread;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
 
 use rand::Rng;
 
-pub fn evaluate_parallel(n_threads: i32, problems: &Vec<Grid<Clue>>, param: EvaluatorParam) -> Vec<Option<f64>> {
+pub fn evaluate_parallel(
+    n_threads: i32,
+    problems: &Vec<Grid<Clue>>,
+    param: EvaluatorParam,
+) -> Vec<Option<f64>> {
     let res = Arc::new(Mutex::new(vec![None; problems.len()]));
     let checked = Arc::new(Mutex::new(0));
-    
+
     let mut threads = vec![];
 
     for _ in 0..n_threads {
         let problems = problems.clone();
         let res = res.clone();
         let checked = checked.clone();
-        let th = thread::spawn(move || {
-            loop {
-                let id;
-                {
-                    let mut handle = checked.lock().unwrap();
-                    if *handle >= problems.len() {
-                        break;
-                    }
-                    id = *handle;
-                    *handle += 1;
+        let th = thread::spawn(move || loop {
+            let id;
+            {
+                let mut handle = checked.lock().unwrap();
+                if *handle >= problems.len() {
+                    break;
                 }
-                let mut evaluator = Evaluator::new(&problems[id], param);
-                (res.lock().unwrap())[id] = evaluator.evaluate();
+                id = *handle;
+                *handle += 1;
             }
+            let mut evaluator = Evaluator::new(&problems[id], param);
+            (res.lock().unwrap())[id] = evaluator.evaluate();
         });
         threads.push(th);
     }
@@ -96,11 +98,16 @@ fn param_value(p: &mut EvaluatorParam, idx: i32) -> &mut f64 {
     }
 }
 
-pub fn train(start: EvaluatorParam, problems: &Vec<Grid<Clue>>, expected: &Vec<f64>) -> EvaluatorParam {
+pub fn train(
+    start: EvaluatorParam,
+    problems: &Vec<Grid<Clue>>,
+    expected: &Vec<f64>,
+) -> EvaluatorParam {
     let n_threads = 10;
 
     let mut param = start;
-    let mut current_score = evaluate_score(&evaluate_parallel(n_threads, problems, param), expected);
+    let mut current_score =
+        evaluate_score(&evaluate_parallel(n_threads, problems, param), expected);
     let mut temp = 0.001f64;
 
     let mut rng = rand::thread_rng();
@@ -123,7 +130,8 @@ pub fn train(start: EvaluatorParam, problems: &Vec<Grid<Clue>>, expected: &Vec<f
 
             let score2 = evaluate_score(&evaluate_parallel(n_threads, problems, param2), expected);
 
-            if current_score > score2 || rng.gen::<f64>() < ((current_score - score2) / temp).exp() {
+            if current_score > score2 || rng.gen::<f64>() < ((current_score - score2) / temp).exp()
+            {
                 param = param2;
                 current_score = score2;
                 break;

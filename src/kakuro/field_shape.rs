@@ -1,4 +1,4 @@
-use super::super::{Grid, Y, X};
+use super::super::{Grid, X, Y};
 
 #[derive(Clone, Copy)]
 pub struct FieldShapeGrp {
@@ -17,7 +17,11 @@ impl Iterator for FieldShapeGrp {
         let ret = self.start;
         self.start += self.step;
 
-        if ret < self.end { Some(ret) } else { None }
+        if ret < self.end {
+            Some(ret)
+        } else {
+            None
+        }
     }
 }
 #[derive(Clone, Copy)]
@@ -142,12 +146,12 @@ mod tests {
     fn test_field_shape() {
         {
             let clues_vec = vec![
-                vec![true , true , true , true ],
-                vec![true , false, false, false],
-                vec![true , false, false, false],
-                vec![true , true , false, false],
-                vec![true , false, false, false],
-                vec![true , false, false, false],
+                vec![true, true, true, true],
+                vec![true, false, false, false],
+                vec![true, false, false, false],
+                vec![true, true, false, false],
+                vec![true, false, false, false],
+                vec![true, false, false, false],
             ];
             let clues = common::vec_to_grid(&clues_vec);
             let shape = FieldShape::new(&clues);
@@ -158,8 +162,8 @@ mod tests {
             let h1 = shape.clue_locations[g1 as usize];
             let h2 = shape.clue_locations[g2 as usize];
             assert!(match (h1, h2) {
-                (ClueLocation::Horizontal(16), ClueLocation::Vertical(13)) |
-                (ClueLocation::Vertical(13), ClueLocation::Horizontal(16)) => true,
+                (ClueLocation::Horizontal(16), ClueLocation::Vertical(13))
+                | (ClueLocation::Vertical(13), ClueLocation::Horizontal(16)) => true,
                 _ => false,
             });
         }

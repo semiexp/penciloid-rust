@@ -1,4 +1,4 @@
-use super::super::{Y, X, Coord, Grid};
+use super::super::{Coord, Grid, X, Y};
 use super::*;
 
 #[derive(Clone)]
@@ -93,7 +93,9 @@ impl Field {
             return;
         }
         if current == UNDECIDED {
-            if val == UNDECIDED { return; }
+            if val == UNDECIDED {
+                return;
+            }
             self.total_cands -= 1;
         }
 
@@ -109,10 +111,14 @@ impl Field {
             let (Y(y), X(x)) = cell;
             let limit = !Cand::singleton(val.0);
             for y2 in 0..self.size {
-                if y != y2 { self.limit_cand((Y(y2), X(x)), limit); }
+                if y != y2 {
+                    self.limit_cand((Y(y2), X(x)), limit);
+                }
             }
             for x2 in 0..self.size {
-                if x != x2 { self.limit_cand((Y(y), X(x2)), limit); }
+                if x != x2 {
+                    self.limit_cand((Y(y), X(x2)), limit);
+                }
             }
         }
     }
@@ -121,18 +127,28 @@ impl Field {
             let current_cands = self.total_cands();
 
             self.hidden_candidate();
-            if self.inconsistent() { return; }
+            if self.inconsistent() {
+                return;
+            }
             self.fishy_method();
-            if self.inconsistent() { return; }
+            if self.inconsistent() {
+                return;
+            }
 
-            if self.total_cands() == current_cands { break; }
+            if self.total_cands() == current_cands {
+                break;
+            }
         }
     }
     pub fn trial_and_error(&mut self) {
         loop {
             self.apply_methods();
-            if self.inconsistent() { break; }
-            if !self.trial_and_error_step() { break; }
+            if self.inconsistent() {
+                break;
+            }
+            if !self.trial_and_error_step() {
+                break;
+            }
         }
     }
     fn trial_and_error_step(&mut self) -> bool {
@@ -143,13 +159,17 @@ impl Field {
         for y in 0..size {
             for x in 0..size {
                 let val = self.get_value((Y(y), X(x)));
-                if !(val == UNDECIDED || val == SOME) { continue; }
+                if !(val == UNDECIDED || val == SOME) {
+                    continue;
+                }
 
                 let cand = self.cand[(Y(y), X(x))];
                 let mut valid_cands = vec![];
 
                 for i in 0..n_alpha {
-                    if !cand.is_set(i) { continue; }
+                    if !cand.is_set(i) {
+                        continue;
+                    }
 
                     let mut field_cloned = self.clone();
                     field_cloned.decide((Y(y), X(x)), Value(i));
@@ -201,7 +221,7 @@ impl Field {
         let new_cand = current_cand & lim;
         self.cand[cell] = new_cand;
         self.total_cands -= (current_cand.0.count_ones() - new_cand.0.count_ones()) as i32;
-        
+
         if self.cand[cell] == Cand(0) {
             self.decide(cell, EMPTY);
         }
@@ -271,7 +291,11 @@ impl Field {
             }
         }
         for &dir in [true, false].iter() {
-            let clue = if !dir { self.clue_front[group as usize] } else { self.clue_back[group as usize] };
+            let clue = if !dir {
+                self.clue_front[group as usize]
+            } else {
+                self.clue_back[group as usize]
+            };
             if clue == NO_CLUE {
                 continue;
             }
@@ -312,7 +336,9 @@ impl Field {
                 if v != EMPTY {
                     self.limit_cand(c, !Cand::singleton(clue.0));
                     n_back_diff -= 1;
-                    if n_back_diff == 0 { break; }
+                    if n_back_diff == 0 {
+                        break;
+                    }
                 }
             }
 
@@ -477,7 +503,7 @@ mod tests {
             problem.set_clue(ClueLoc::Top, 1, Clue(1));
 
             let field = Field::from_problem(&problem);
-            
+
             assert_eq!(field.cand[(Y(0), X(1))], Cand(2));
             assert_eq!(field.cand[(Y(4), X(1))], Cand(5));
         }

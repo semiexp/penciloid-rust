@@ -1,11 +1,11 @@
-use std::ops::{BitAnd, BitOr, BitAndAssign, BitOrAssign, Not};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
-mod field_shape;
 mod dictionary;
-mod field;
-mod generator;
 mod evaluator;
+mod field;
+mod field_shape;
 mod format;
+mod generator;
 pub mod trainer;
 
 const MAX_VAL: i32 = 9;
@@ -148,14 +148,14 @@ impl FieldTechnique {
         }
     }
 }
-pub use self::field_shape::*;
 pub use self::dictionary::Dictionary;
-pub use self::field::*;
-pub use self::generator::*;
 pub use self::evaluator::*;
+pub use self::field::*;
+pub use self::field_shape::*;
 pub use self::format::*;
+pub use self::generator::*;
 
-use super::{Grid, Y, X};
+use super::{Grid, X, Y};
 pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
     let mut has_clue = Grid::new(ans.height(), ans.width(), false);
     for y in 0..ans.height() {
@@ -169,7 +169,9 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
     for y in 0..ans.height() {
         for x in 0..ans.width() {
             let val = ans[(Y(y), X(x))];
-            if !(1 <= val && val <= MAX_VAL) { continue; }
+            if !(1 <= val && val <= MAX_VAL) {
+                continue;
+            }
 
             let (g1, g2) = shape.cell_to_groups[(Y(y), X(x))];
             match shape.clue_locations[g1 as usize] {
@@ -187,8 +189,13 @@ pub fn answer_to_problem(ans: &Grid<i32>) -> Grid<Clue> {
         for x in 0..ans.width() {
             let loc = (Y(y), X(x));
             let v = ans[loc];
-            if 1 <= v && v <= MAX_VAL { continue; }
-            ret[loc] = Clue::Clue { horizontal: prob_base[loc].0, vertical: prob_base[loc].1 };
+            if 1 <= v && v <= MAX_VAL {
+                continue;
+            }
+            ret[loc] = Clue::Clue {
+                horizontal: prob_base[loc].0,
+                vertical: prob_base[loc].1,
+            };
         }
     }
     ret
@@ -202,7 +209,7 @@ mod tests {
     fn test_cand() {
         assert_eq!(Cand::singleton(1), Cand(0b1));
         assert_eq!(Cand::singleton(2), Cand(0b10));
-        
+
         assert_eq!(Cand(0b101).is_set(1), true);
         assert_eq!(Cand(0b101).is_set(2), false);
         assert_eq!(Cand(0b101).is_set(3), true);
@@ -212,7 +219,7 @@ mod tests {
 
         assert_eq!(Cand(0b10000).count_set_cands(), 1);
         assert_eq!(Cand(0b101101).count_set_cands(), 4);
-        
+
         assert_eq!(Cand(0b10100).smallest_set_cand(), 3);
         assert_eq!(Cand(0b10110).smallest_set_cand(), 2);
         assert_eq!(Cand(0b10000).smallest_set_cand(), 5);
@@ -223,7 +230,7 @@ mod tests {
 
         assert_eq!(Cand(0b11010).exclude(2), Cand(0b11000));
         assert_eq!(Cand(0b11010).exclude(3), Cand(0b11010));
-        
+
         assert_eq!(Cand(0b11010).limit_upper_bound(5), Cand(0b11010));
         assert_eq!(Cand(0b11010).limit_upper_bound(4), Cand(0b01010));
         assert_eq!(Cand(0b11010).limit_upper_bound(3), Cand(0b00010));
@@ -241,7 +248,13 @@ mod tests {
         assert_eq!(Cand(0b100000000).cand_sum(), 9);
         assert_eq!(Cand(0b111111111).cand_sum(), 45);
 
-        assert_eq!(Cand(0b1011011).take_smallest_k(2), (Cand(0b11), Cand(0b1011000)));
-        assert_eq!(Cand(0b1011011).take_largest_k(2), (Cand(0b1010000), Cand(0b1011)));
+        assert_eq!(
+            Cand(0b1011011).take_smallest_k(2),
+            (Cand(0b11), Cand(0b1011000))
+        );
+        assert_eq!(
+            Cand(0b1011011).take_largest_k(2),
+            (Cand(0b1010000), Cand(0b1011))
+        );
     }
 }

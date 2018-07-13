@@ -31,7 +31,10 @@ impl<T: Clone> Grid<T> {
     pub fn is_valid_coord(&self, (Y(y), X(x)): Coord) -> bool {
         0 <= y && y < self.height && 0 <= x && x < self.width
     }
-    pub fn copy_from(&mut self, src: &Grid<T>) where T: Copy {
+    pub fn copy_from(&mut self, src: &Grid<T>)
+    where
+        T: Copy,
+    {
         assert_eq!(self.height, src.height);
         assert_eq!(self.width, src.width);
         self.data.copy_from_slice(&src.data);
@@ -125,10 +128,10 @@ impl FiniteSearchQueue {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Symmetry {
-    pub dyad: bool,         // 180-degree symmetry
-    pub tetrad: bool,       // 90-degree symmetry
-    pub horizontal: bool,   // horizontal line symmetry
-    pub vertical: bool,     // vertical line symmetry
+    pub dyad: bool,       // 180-degree symmetry
+    pub tetrad: bool,     // 90-degree symmetry
+    pub horizontal: bool, // horizontal line symmetry
+    pub vertical: bool,   // vertical line symmetry
 }
 
 impl Symmetry {

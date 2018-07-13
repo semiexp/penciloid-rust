@@ -1,10 +1,14 @@
-use super::super::{Grid, Y, X, Coord, Symmetry};
-use grid_loop::{Edge, GridLoop, GridLoopField};
+use super::super::{Coord, Grid, Symmetry, X, Y};
 use super::*;
+use grid_loop::{Edge, GridLoop, GridLoopField};
 
 use rand::Rng;
 
-pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
+pub fn generate<R: Rng>(
+    has_clue: &Grid<bool>,
+    dic: &Dictionary,
+    rng: &mut R,
+) -> Option<Grid<Clue>> {
     let height = has_clue.height();
     let width = has_clue.width();
     let max_step = height * width * 10;
@@ -29,7 +33,9 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
         for y in 0..height {
             for x in 0..width {
                 let cd = (Y(y), X(x));
-                if has_clue[cd] && (current_problem[cd] == NO_CLUE || has_undecided_nearby(&last_field, cd)) {
+                if has_clue[cd]
+                    && (current_problem[cd] == NO_CLUE || has_undecided_nearby(&last_field, cd))
+                {
                     pos_cand.push(cd);
                 }
             }
@@ -88,7 +94,10 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     }
                 } else {
                     common = interpos_common.clone();
-                    common.add_clue(pos_with_clue[pos_with_clue_idx - 1], current_problem[pos_with_clue[pos_with_clue_idx - 1]]);
+                    common.add_clue(
+                        pos_with_clue[pos_with_clue_idx - 1],
+                        current_problem[pos_with_clue[pos_with_clue_idx - 1]],
+                    );
                 }
                 pos_with_clue_idx += 1;
             }
@@ -103,10 +112,13 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     continue;
                 }
 
-                let current_score = field.grid_loop().num_decided_edges() - count_prohibited_patterns(has_clue, &field, &current_problem) * 10;
+                let current_score = field.grid_loop().num_decided_edges()
+                    - count_prohibited_patterns(has_clue, &field, &current_problem) * 10;
 
                 if prev_score >= current_score {
-                    if !(rng.gen::<f64>() < ((current_score - prev_score) as f64 / temperature).exp()) {
+                    if !(rng.gen::<f64>()
+                        < ((current_score - prev_score) as f64 / temperature).exp())
+                    {
                         continue;
                     }
                 }
@@ -154,7 +166,7 @@ fn has_undecided_nearby(field: &Field, clue_pos: Coord) -> bool {
         for dx in -dx_max..(dx_max + 1) {
             let y2 = y + dy;
             let x2 = x + dx;
-            
+
             let cd = (Y(y2), X(x2));
             if (dy & 1) != (dx & 1) {
                 if field.get_edge_safe(cd) == Edge::Undecided {
@@ -178,44 +190,49 @@ fn has_zero_nearby(problem: &Grid<Clue>, (Y(y), X(x)): Coord) -> bool {
     false
 }
 fn count_prohibited_patterns(has_clue: &Grid<bool>, field: &Field, problem: &Grid<Clue>) -> i32 {
-    let neighbor = [
-        (Y(1), X(0)),
-        (Y(0), X(1)),
-        (Y(-1), X(0)),
-        (Y(0), X(-1)),
-    ];
+    let neighbor = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
     let mut ret = 0;
     for y in 0..has_clue.height() {
         for x in 0..has_clue.width() {
-            if has_clue[(Y(y), X(x))] && field.get_clue((Y(y), X(x))) == NO_CLUE && has_zero_nearby(problem, (Y(y), X(x))) {
-                if
-                    field.get_edge((Y(2 * y + 0), X(2 * x + 1))) == Edge::Blank &&
-                    field.get_edge((Y(2 * y + 1), X(2 * x + 0))) == Edge::Blank &&
-                    field.get_edge((Y(2 * y + 2), X(2 * x + 1))) == Edge::Blank &&
-                    field.get_edge((Y(2 * y + 1), X(2 * x + 2))) == Edge::Blank {
+            if has_clue[(Y(y), X(x))] && field.get_clue((Y(y), X(x))) == NO_CLUE
+                && has_zero_nearby(problem, (Y(y), X(x)))
+            {
+                if field.get_edge((Y(2 * y + 0), X(2 * x + 1))) == Edge::Blank
+                    && field.get_edge((Y(2 * y + 1), X(2 * x + 0))) == Edge::Blank
+                    && field.get_edge((Y(2 * y + 2), X(2 * x + 1))) == Edge::Blank
+                    && field.get_edge((Y(2 * y + 1), X(2 * x + 2))) == Edge::Blank
+                {
                     ret += 1;
                     continue;
                 }
             }
-            if y > 0 && field.get_clue((Y(y - 1), X(x))) != NO_CLUE { continue; }
-            if x > 0 && field.get_clue((Y(y), X(x - 1))) != NO_CLUE { continue; }
-            if y < has_clue.height() - 1 && field.get_clue((Y(y + 1), X(x))) != NO_CLUE { continue; }
-            if x < has_clue.width() - 1 && field.get_clue((Y(y), X(x + 1))) != NO_CLUE { continue; }
+            if y > 0 && field.get_clue((Y(y - 1), X(x))) != NO_CLUE {
+                continue;
+            }
+            if x > 0 && field.get_clue((Y(y), X(x - 1))) != NO_CLUE {
+                continue;
+            }
+            if y < has_clue.height() - 1 && field.get_clue((Y(y + 1), X(x))) != NO_CLUE {
+                continue;
+            }
+            if x < has_clue.width() - 1 && field.get_clue((Y(y), X(x + 1))) != NO_CLUE {
+                continue;
+            }
 
             if field.get_clue((Y(y), X(x))) == Clue(2) {
-                if
-                    field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 + 1))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 + 2))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 - 1))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 - 2))) == Edge::Blank {
+                if field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 + 1))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 + 2))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 - 1))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 - 2))) == Edge::Blank
+                {
                     ret += 1;
                     continue;
                 }
-                if
-                    field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 + 1))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 + 2))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 - 1))) == Edge::Blank &&
-                    field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 - 2))) == Edge::Blank {
+                if field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 + 1))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 + 2))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 - 1))) == Edge::Blank
+                    && field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 - 2))) == Edge::Blank
+                {
                     ret += 1;
                     continue;
                 }
@@ -226,8 +243,14 @@ fn count_prohibited_patterns(has_clue: &Grid<bool>, field: &Field, problem: &Gri
                 for d in 0..4 {
                     let (Y(dy1), X(dx1)) = neighbor[d];
                     let (Y(dy2), X(dx2)) = neighbor[(d + 1) % 4];
-                    let edge1 = field.get_edge_safe((Y(2 * y + 1 + dy1 * 2 + dy2), X(2 * x + 1 + dx1 * 2 + dx2)));
-                    let edge2 = field.get_edge_safe((Y(2 * y + 1 + dy2 * 2 + dy1), X(2 * x + 1 + dx2 * 2 + dx1)));
+                    let edge1 = field.get_edge_safe((
+                        Y(2 * y + 1 + dy1 * 2 + dy2),
+                        X(2 * x + 1 + dx1 * 2 + dx2),
+                    ));
+                    let edge2 = field.get_edge_safe((
+                        Y(2 * y + 1 + dy2 * 2 + dy1),
+                        X(2 * x + 1 + dx2 * 2 + dx1),
+                    ));
 
                     match (edge1, edge2) {
                         (Edge::Blank, Edge::Blank) => n_blank += 1,
@@ -245,13 +268,19 @@ fn count_prohibited_patterns(has_clue: &Grid<bool>, field: &Field, problem: &Gri
     ret
 }
 
-pub fn generate_placement<R: Rng>(height: i32, width: i32, num_clues: i32, symmetry: Symmetry, rng: &mut R) -> Grid<bool> {
+pub fn generate_placement<R: Rng>(
+    height: i32,
+    width: i32,
+    num_clues: i32,
+    symmetry: Symmetry,
+    rng: &mut R,
+) -> Grid<bool> {
     let mut num_clues = num_clues;
     let mut symmetry = symmetry;
 
     symmetry.dyad |= symmetry.tetrad;
     symmetry.tetrad &= height == width;
-    
+
     let mut grp_ids = Grid::new(height, width, false);
 
     let mut clue_positions: Vec<Vec<Coord>> = vec![];
@@ -321,7 +350,13 @@ fn update_grp(y: i32, x: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto:
     if symmetry.tetrad {
         update_grp(grp_ids.height() - 1 - x, y, symmetry, grp_ids, sto);
     } else if symmetry.dyad {
-        update_grp(grp_ids.height() - 1 - y, grp_ids.width() - 1 - x, symmetry, grp_ids, sto);
+        update_grp(
+            grp_ids.height() - 1 - y,
+            grp_ids.width() - 1 - x,
+            symmetry,
+            grp_ids,
+            sto,
+        );
     }
     if symmetry.horizontal {
         update_grp(grp_ids.height() - 1 - y, x, symmetry, grp_ids, sto);
@@ -348,7 +383,7 @@ mod tests {
 
                 assert_eq!(problem.height(), placement.height());
                 assert_eq!(problem.width(), placement.width());
-                
+
                 for y in 0..placement.height() {
                     for x in 0..placement.width() {
                         let clue = problem[(Y(y), X(x))];
@@ -360,7 +395,10 @@ mod tests {
                                     let y2 = y + dy;
                                     let x2 = x + dx;
 
-                                    if 0 <= y2 && y2 < placement.height() && 0 <= x2 && x2 < placement.width() && (dy, dx) != (0, 0) {
+                                    if 0 <= y2 && y2 < placement.height() && 0 <= x2
+                                        && x2 < placement.width()
+                                        && (dy, dx) != (0, 0)
+                                    {
                                         assert!(problem[(Y(y2), X(x2))] != Clue(0));
                                     }
                                 }
@@ -386,20 +424,28 @@ mod tests {
         let mut rng = rand::thread_rng();
         let dic = Dictionary::complete();
 
-        run_placement_test(vec![
-            vec![true , true , true , true , true ],
-            vec![true , false, false, false, true ],
-            vec![true , false, false, false, true ],
-            vec![true , false, false, false, true ],
-            vec![true , true , true , true , true ],
-        ], &dic, &mut rng);
+        run_placement_test(
+            vec![
+                vec![true, true, true, true, true],
+                vec![true, false, false, false, true],
+                vec![true, false, false, false, true],
+                vec![true, false, false, false, true],
+                vec![true, true, true, true, true],
+            ],
+            &dic,
+            &mut rng,
+        );
 
-        run_placement_test(vec![
-            vec![true , false, true , true , true ],
-            vec![false, false, false, false, true ],
-            vec![true , false, false, false, true ],
-            vec![true , false, false, false, false],
-            vec![true , true , true , false, true ],
-        ], &dic, &mut rng);
+        run_placement_test(
+            vec![
+                vec![true, false, true, true, true],
+                vec![false, false, false, false, true],
+                vec![true, false, false, false, true],
+                vec![true, false, false, false, false],
+                vec![true, true, true, false, true],
+            ],
+            &dic,
+            &mut rng,
+        );
     }
 }

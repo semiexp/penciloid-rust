@@ -1,28 +1,28 @@
+extern crate getopts;
 extern crate puzrs;
 extern crate rand;
-extern crate getopts;
 
-use getopts::Options;
 use getopts::Matches;
+use getopts::Options;
 use std::env;
 
 use puzrs::*;
+use rand::Rng;
 use std::io;
 use std::time::Instant;
-use rand::Rng;
 
-use std::thread;
-use std::sync::Mutex;
 use std::io::Write;
+use std::sync::Mutex;
+use std::thread;
 
 macro_rules! run_timed {
-    ($timer: ident, $flag: ident, $e: expr) => {
+    ($timer:ident, $flag:ident, $e:expr) => {
         if $flag {
             let start = Instant::now();
             let ret = $e;
             let end = start.elapsed();
             let cost_time = end.as_secs() as f64 + end.subsec_nanos() as f64 / 1e9f64;
-            
+
             let mut timer_lock = $timer.lock().unwrap();
             *timer_lock += cost_time;
 
@@ -80,7 +80,7 @@ fn run_generator(opts: GeneratorOption) {
             let mut rng = rand::thread_rng();
             loop {
                 let mut end = Grid::new(height, width, numberlink::Endpoint::Any);
-                
+
                 let trans = move |x: i32, y: i32, d: i32| {
                     let mut x = x;
                     let mut y = y;
@@ -140,26 +140,46 @@ fn run_generator(opts: GeneratorOption) {
                     clue_limit: opts.max_clue,
                     prioritized_extension: opts.prioritized_extension,
                 };
-                
-                let placement = run_timed!(cost_genenerator, use_profiler, generator.generate(&opt, &mut rng));
+
+                let placement = run_timed!(
+                    cost_genenerator,
+                    use_profiler,
+                    generator.generate(&opt, &mut rng)
+                );
                 if let Some(placement) = placement {
                     // pretest
-                    let pretest_res = run_timed!(cost_pretest, use_profiler, numberlink::uniqueness_pretest(&placement));
-                    if !pretest_res { continue; }
+                    let pretest_res = run_timed!(
+                        cost_pretest,
+                        use_profiler,
+                        numberlink::uniqueness_pretest(&placement)
+                    );
+                    if !pretest_res {
+                        continue;
+                    }
 
                     let problem = numberlink::extract_problem(&placement, &mut rng);
 
-                    let ans = run_timed!(cost_exact_test, use_profiler, numberlink::solve2(&problem, Some(2), false, true));
+                    let ans = run_timed!(
+                        cost_exact_test,
+                        use_profiler,
+                        numberlink::solve2(&problem, Some(2), false, true)
+                    );
 
                     if ans.len() == 1 && !ans.found_not_fully_filled {
                         let stdin = io::stdout();
                         let handle = &mut stdin.lock();
 
                         let end = start.elapsed();
-                        let cost_time = (end.as_secs() as f64 + end.subsec_nanos() as f64 / 1e9f64) / 60f64;
+                        let cost_time =
+                            (end.as_secs() as f64 + end.subsec_nanos() as f64 / 1e9f64) / 60f64;
                         let mut cnt = gen_probs.lock().unwrap();
                         *cnt += 1;
-                        eprintln!("{} problem(s) in {:.3}[min] ({:.3} [prob/min])", *cnt, cost_time, (*cnt) as f64 / cost_time);
+                        eprintln!(
+                            "{} problem(s) in {:.3}[min] ({:.3} [prob/min])",
+                            *cnt,
+                            cost_time,
+                            (*cnt) as f64 / cost_time
+                        );
                         if use_profiler {
                             let cost_genenerator = *(cost_genenerator.lock().unwrap());
                             let cost_pretest = *(cost_pretest.lock().unwrap());
@@ -177,9 +197,15 @@ fn run_generator(opts: GeneratorOption) {
                             for x in 0..width {
                                 let numberlink::Clue(c) = problem[(Y(y), X(x))];
                                 if c >= 1 {
-                                    write!(handle, "{}{}", c, if x == width - 1 { '\n' } else { ' ' }).unwrap();
+                                    write!(
+                                        handle,
+                                        "{}{}",
+                                        c,
+                                        if x == width - 1 { '\n' } else { ' ' }
+                                    ).unwrap();
                                 } else {
-                                    write!(handle, ".{}", if x == width - 1 { '\n' } else { ' ' }).unwrap();
+                                    write!(handle, ".{}", if x == width - 1 { '\n' } else { ' ' })
+                                        .unwrap();
                                 }
                             }
                         }
@@ -196,21 +222,41 @@ fn run_generator(opts: GeneratorOption) {
 
 fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
     let height = try!(
-        matches.opt_str("h")
+        matches
+            .opt_str("h")
             .ok_or("'height' must be specified")
-            .and_then(|arg| arg.parse::<i32>().map_err(|_| "Could not parse value for 'height'"))
-            .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'height' must be a positive integer") }));
+            .and_then(|arg| arg.parse::<i32>()
+                .map_err(|_| "Could not parse value for 'height'"))
+            .and_then(|arg| if arg > 0 {
+                Ok(arg)
+            } else {
+                Err("'height' must be a positive integer")
+            })
+    );
     let width = try!(
-        matches.opt_str("w")
+        matches
+            .opt_str("w")
             .ok_or("'width' must be specified")
-            .and_then(|arg| arg.parse::<i32>().map_err(|_| "Could not parse value for 'width'"))
-            .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'width' must be a positive integer") }));
+            .and_then(|arg| arg.parse::<i32>()
+                .map_err(|_| "Could not parse value for 'width'"))
+            .and_then(|arg| if arg > 0 {
+                Ok(arg)
+            } else {
+                Err("'width' must be a positive integer")
+            })
+    );
     let jobs = try!(
-        matches.opt_str("j").map(|s|
-            s.parse::<i32>()
+        matches
+            .opt_str("j")
+            .map(|s| s.parse::<i32>()
                 .map_err(|_| "Could not parse value for 'jobs'")
-                .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'jobs' must be a positive integer") })
-        ).unwrap_or(Ok(1)));
+                .and_then(|arg| if arg > 0 {
+                    Ok(arg)
+                } else {
+                    Err("'jobs' must be a positive integer")
+                }))
+            .unwrap_or(Ok(1))
+    );
     let no_adjacent_clues = matches.opt_present("no-adjacent-clues");
     let symmetry = Symmetry {
         dyad: matches.opt_present("symmetry"),
@@ -219,23 +265,41 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
         vertical: false,
     };
     let minimum_path_length = try!(
-        matches.opt_str("minimum-path-length").map(|s|
-            s.parse::<i32>()
+        matches
+            .opt_str("minimum-path-length")
+            .map(|s| s.parse::<i32>()
                 .map_err(|_| "Could not parse value for 'minimum-path-length'")
-                .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'minimum-path-length' must be a positive integer") })
-        ).unwrap_or(Ok(1)));
+                .and_then(|arg| if arg > 0 {
+                    Ok(arg)
+                } else {
+                    Err("'minimum-path-length' must be a positive integer")
+                }))
+            .unwrap_or(Ok(1))
+    );
     let empty_width = try!(
-        matches.opt_str("empty-width").map(|s|
-            s.parse::<i32>()
+        matches
+            .opt_str("empty-width")
+            .map(|s| s.parse::<i32>()
                 .map_err(|_| "Could not parse value for 'empty-width'")
-                .and_then(|arg| if arg > 0 { Ok(arg) } else { Err("'empty-width' must be a positive integer") })
-        ).unwrap_or(Ok(1)));
+                .and_then(|arg| if arg > 0 {
+                    Ok(arg)
+                } else {
+                    Err("'empty-width' must be a positive integer")
+                }))
+            .unwrap_or(Ok(1))
+    );
     let max_clue = try!(
-        matches.opt_str("max-clue").map(|s|
-            s.parse::<i32>()
+        matches
+            .opt_str("max-clue")
+            .map(|s| s.parse::<i32>()
                 .map_err(|_| "Could not parse value for 'max-clue'")
-                .and_then(|arg| if arg > 0 { Ok(Some(arg)) } else { Err("'max-clue' must be a positive integer") })
-        ).unwrap_or(Ok(None)));
+                .and_then(|arg| if arg > 0 {
+                    Ok(Some(arg))
+                } else {
+                    Err("'max-clue' must be a positive integer")
+                }))
+            .unwrap_or(Ok(None))
+    );
     let use_profiler = matches.opt_present("use-profiler");
     let prioritized_extension = matches.opt_present("prioritized-extension");
     let corner = match matches.opt_str("corner") {
@@ -244,13 +308,21 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
             if split.len() != 2 {
                 return Err("Could not parse value for 'corner'");
             }
-            let lo = try!(split[0].parse::<i32>().map_err(|_| "Could not parse value for 'corner'"));
-            let hi = try!(split[1].parse::<i32>().map_err(|_| "Could not parse value for 'corner'"));
+            let lo = try!(
+                split[0]
+                    .parse::<i32>()
+                    .map_err(|_| "Could not parse value for 'corner'")
+            );
+            let hi = try!(
+                split[1]
+                    .parse::<i32>()
+                    .map_err(|_| "Could not parse value for 'corner'")
+            );
             if !(1 <= lo && lo <= hi) {
                 return Err("'corner' must be a valid range on positive integers");
             }
             Some((lo, hi))
-        },
+        }
         None => None,
     };
     Ok(GeneratorOption {
@@ -279,19 +351,38 @@ fn main() {
     options.optopt("j", "jobs", "Number of workers (threads)", "2");
     options.optflag("a", "no-adjacent-clues", "Disallow adjacent clues");
     options.optflag("s", "symmetry", "Force symmetry");
-    options.optopt("m", "minimum-path-length", "Minimum length of paths in the answer", "12");
-    options.optopt("e", "empty-width", "Disallow clues on n cell(s) from the outer border", "1");
-    options.optopt("c", "corner", "Put one clue within specified range from each corner", "1,3");
+    options.optopt(
+        "m",
+        "minimum-path-length",
+        "Minimum length of paths in the answer",
+        "12",
+    );
+    options.optopt(
+        "e",
+        "empty-width",
+        "Disallow clues on n cell(s) from the outer border",
+        "1",
+    );
+    options.optopt(
+        "c",
+        "corner",
+        "Put one clue within specified range from each corner",
+        "1,3",
+    );
     options.optopt("x", "max-clue", "Maximum value of clues", "10");
     options.optflag("p", "use-profiler", "Enable profiler");
-    options.optflag("r", "prioritized-extension", "Use prioritized extension in generator");
-    
+    options.optflag(
+        "r",
+        "prioritized-extension",
+        "Use prioritized extension in generator",
+    );
+
     let matches = match options.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
             eprintln!("error: {}", f);
             return;
-        },
+        }
     };
 
     if matches.opt_present("help") {
@@ -304,7 +395,7 @@ fn main() {
         Err(f) => {
             eprintln!("error: {}", f);
             return;
-        },
+        }
     };
     run_generator(opt);
 }

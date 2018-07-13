@@ -1,4 +1,4 @@
-use super::super::{Grid, Coord, FiniteSearchQueue};
+use super::super::{Coord, FiniteSearchQueue, Grid};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -26,7 +26,11 @@ impl<'a> Field<'a> {
         let mut has_clue = Grid::new(problem.height(), problem.width(), false);
         let mut n_nonclue_cells = 0;
         for i in 0..n_cells {
-            if let Clue::Clue { vertical: _, horizontal: _ } = problem[i] {
+            if let Clue::Clue {
+                vertical: _,
+                horizontal: _,
+            } = problem[i]
+            {
                 has_clue[i] = true;
             } else {
                 n_nonclue_cells += 1;
@@ -34,11 +38,14 @@ impl<'a> Field<'a> {
         }
         let shape = FieldShape::new(&has_clue);
 
-        let mut grps = vec![FieldGrp {
-            unmet_num: 0,
-            unmet_sum: 0,
-            unused: Cand(0),
-        }; shape.group_to_cells.len()];
+        let mut grps = vec![
+            FieldGrp {
+                unmet_num: 0,
+                unmet_sum: 0,
+                unused: Cand(0),
+            };
+            shape.group_to_cells.len()
+        ];
         let n_groups = grps.len();
 
         for i in 0..shape.group_to_cells.len() {
@@ -46,11 +53,17 @@ impl<'a> Field<'a> {
             let clue_val = match loc {
                 ClueLocation::Vertical(v) => match problem[v] {
                     Clue::NoClue => panic!("unexpected condition"),
-                    Clue::Clue { vertical: v, horizontal: _ } => v,
+                    Clue::Clue {
+                        vertical: v,
+                        horizontal: _,
+                    } => v,
                 },
                 ClueLocation::Horizontal(h) => match problem[h] {
                     Clue::NoClue => panic!("unexpected condition"),
-                    Clue::Clue { vertical: _, horizontal: h } => h,
+                    Clue::Clue {
+                        vertical: _,
+                        horizontal: h,
+                    } => h,
                 },
             };
             let mut n_cells = 0;
@@ -115,7 +128,6 @@ impl<'a> Field<'a> {
             self.check_group(g);
         }
         self.queue.finish();
-
     }
     pub fn check_all(&mut self) {
         self.queue.start();
@@ -251,10 +263,14 @@ impl<'a> Field<'a> {
             let mut c1_lim = CAND_ALL;
             let mut c2_lim = CAND_ALL;
             for i in 1..(MAX_VAL + 1) {
-                if !self.cand[c1].is_set(i) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                if !self.cand[c1].is_set(i) && 1 <= (grp.unmet_sum - i)
+                    && (grp.unmet_sum - i) <= MAX_VAL
+                {
                     c2_lim = c2_lim.exclude(grp.unmet_sum - i);
                 }
-                if !self.cand[c2].is_set(i) && 1 <= (grp.unmet_sum - i) && (grp.unmet_sum - i) <= MAX_VAL {
+                if !self.cand[c2].is_set(i) && 1 <= (grp.unmet_sum - i)
+                    && (grp.unmet_sum - i) <= MAX_VAL
+                {
                     c1_lim = c1_lim.exclude(grp.unmet_sum - i);
                 }
             }
@@ -265,9 +281,13 @@ impl<'a> Field<'a> {
         // naked pair (TODO: improve complexity)
         if self.technique.naked_pair {
             for c in self.shape.group_to_cells[gid] {
-                if self.val[c] != -1 || self.cand[c].count_set_cands() != 2 { continue; }
+                if self.val[c] != -1 || self.cand[c].count_set_cands() != 2 {
+                    continue;
+                }
                 for d in self.shape.group_to_cells[gid] {
-                    if self.val[d] != -1 { continue; }
+                    if self.val[d] != -1 {
+                        continue;
+                    }
                     if c != d && self.cand[c] == self.cand[d] {
                         for e in self.shape.group_to_cells[gid] {
                             if c != e && d != e {
@@ -286,7 +306,9 @@ impl<'a> Field<'a> {
             let mut min_sum = 0;
             let mut max_sum = 0;
             for c in self.shape.group_to_cells[gid] {
-                if self.val[c] != -1 { continue; }
+                if self.val[c] != -1 {
+                    continue;
+                }
                 let cand = self.cand[c];
                 min_sum += cand.smallest_set_cand();
                 max_sum += cand.largest_set_cand();
@@ -294,13 +316,17 @@ impl<'a> Field<'a> {
             let mut update_list = [(0, Cand(0)); MAX_VAL as usize];
             let mut update_size = 0;
             for c in self.shape.group_to_cells[gid] {
-                if self.val[c] != -1 { continue; }
+                if self.val[c] != -1 {
+                    continue;
+                }
                 let cand = self.cand[c];
 
                 let current_max = grp.unmet_sum - (min_sum - cand.smallest_set_cand());
                 let current_min = grp.unmet_sum - (max_sum - cand.largest_set_cand());
 
-                let lim = CAND_ALL.limit_upper_bound(current_max).limit_lower_bound(current_min);
+                let lim = CAND_ALL
+                    .limit_upper_bound(current_max)
+                    .limit_lower_bound(current_min);
 
                 if lim != CAND_ALL {
                     update_list[update_size] = (c, lim);
@@ -323,11 +349,26 @@ mod tests {
     fn test_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[(Y(0), X(0))] = Clue::Clue { horizontal: -1, vertical: -1 };
-        problem_base[(Y(0), X(1))] = Clue::Clue { horizontal: -1, vertical: 3 };
-        problem_base[(Y(0), X(2))] = Clue::Clue { horizontal: -1, vertical: 8 };
-        problem_base[(Y(1), X(0))] = Clue::Clue { horizontal: 4, vertical: -1 };
-        problem_base[(Y(2), X(0))] = Clue::Clue { horizontal: 7, vertical: -1 };
+        problem_base[(Y(0), X(0))] = Clue::Clue {
+            horizontal: -1,
+            vertical: -1,
+        };
+        problem_base[(Y(0), X(1))] = Clue::Clue {
+            horizontal: -1,
+            vertical: 3,
+        };
+        problem_base[(Y(0), X(2))] = Clue::Clue {
+            horizontal: -1,
+            vertical: 8,
+        };
+        problem_base[(Y(1), X(0))] = Clue::Clue {
+            horizontal: 4,
+            vertical: -1,
+        };
+        problem_base[(Y(2), X(0))] = Clue::Clue {
+            horizontal: 7,
+            vertical: -1,
+        };
 
         let mut field = Field::new(&problem_base, &dic);
         field.check_all();
@@ -346,11 +387,26 @@ mod tests {
     fn test_inconsistent_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[(Y(0), X(0))] = Clue::Clue { horizontal: -1, vertical: -1 };
-        problem_base[(Y(0), X(1))] = Clue::Clue { horizontal: -1, vertical: 3 };
-        problem_base[(Y(0), X(2))] = Clue::Clue { horizontal: -1, vertical: 6 };
-        problem_base[(Y(1), X(0))] = Clue::Clue { horizontal: 4, vertical: -1 };
-        problem_base[(Y(2), X(0))] = Clue::Clue { horizontal: 5, vertical: -1 };
+        problem_base[(Y(0), X(0))] = Clue::Clue {
+            horizontal: -1,
+            vertical: -1,
+        };
+        problem_base[(Y(0), X(1))] = Clue::Clue {
+            horizontal: -1,
+            vertical: 3,
+        };
+        problem_base[(Y(0), X(2))] = Clue::Clue {
+            horizontal: -1,
+            vertical: 6,
+        };
+        problem_base[(Y(1), X(0))] = Clue::Clue {
+            horizontal: 4,
+            vertical: -1,
+        };
+        problem_base[(Y(2), X(0))] = Clue::Clue {
+            horizontal: 5,
+            vertical: -1,
+        };
 
         let mut field = Field::new(&problem_base, &dic);
         field.check_all();

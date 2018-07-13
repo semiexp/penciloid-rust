@@ -1,6 +1,6 @@
-use super::{Coord, Y, X, Grid, FiniteSearchQueue};
-use std::ops::{Index, IndexMut, Deref, DerefMut};
+use super::{Coord, FiniteSearchQueue, Grid, X, Y};
 use std::iter::IntoIterator;
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use std::mem;
 
@@ -47,13 +47,17 @@ impl IndexMut<EdgeId> for GridLoop {
 }
 impl GridLoop {
     pub fn new(height: i32, width: i32) -> GridLoop {
-        let mut grid = Grid::new(height * 2 + 1, width * 2 + 1, GridLoopItem {
-            edge_status: Edge::Undecided,
-            chain_end_points: (VtxId(0), VtxId(0)),
-            chain_next: EdgeId(0),
-            chain_another_end_edge: EdgeId(0),
-            chain_size: 0,
-        });
+        let mut grid = Grid::new(
+            height * 2 + 1,
+            width * 2 + 1,
+            GridLoopItem {
+                edge_status: Edge::Undecided,
+                chain_end_points: (VtxId(0), VtxId(0)),
+                chain_next: EdgeId(0),
+                chain_another_end_edge: EdgeId(0),
+                chain_size: 0,
+            },
+        );
 
         for y in 0..(height * 2 + 1) {
             for x in 0..(width * 2 + 1) {
@@ -66,7 +70,10 @@ impl GridLoop {
                     chain_end_points: if y % 2 == 0 {
                         (VtxId(id - 1), VtxId(id + 1))
                     } else {
-                        (VtxId(id - (width * 2 + 1) as usize), VtxId(id + (width * 2 + 1) as usize))
+                        (
+                            VtxId(id - (width * 2 + 1) as usize),
+                            VtxId(id + (width * 2 + 1) as usize),
+                        )
                     },
                     chain_next: EdgeId(id),
                     chain_another_end_edge: EdgeId(id),
@@ -83,7 +90,7 @@ impl GridLoop {
             decided_edge: 0,
             queue: FiniteSearchQueue::new(((height * 2 + 1) * (width * 2 + 1)) as usize),
         };
-        
+
         ret.queue.start();
         {
             let edge1 = ret.grid.index((Y(0), X(1)));
@@ -149,7 +156,7 @@ impl GridLoop {
     pub fn num_decided_lines(&self) -> i32 {
         self.decided_line
     }
-    
+
     // public modifier
     pub fn set_inconsistent(&mut self) {
         self.inconsistent = true;
@@ -258,8 +265,16 @@ impl GridLoop {
             }
         }
     }
-    fn apply_inout_rule_dfs<T: GridLoopField>(y: i32, x: i32, v: i32, field: &mut T, side: &mut Grid<i32>) {
-        if side[(Y(y), X(x))] != -1 { return; }
+    fn apply_inout_rule_dfs<T: GridLoopField>(
+        y: i32,
+        x: i32,
+        v: i32,
+        field: &mut T,
+        side: &mut Grid<i32>,
+    ) {
+        if side[(Y(y), X(x))] != -1 {
+            return;
+        }
         side[(Y(y), X(x))] = v;
 
         let dy = [1, 0, -1, 0];
@@ -267,21 +282,43 @@ impl GridLoop {
         for d in 0..4 {
             let y2 = y + dy[d];
             let x2 = x + dx[d];
-            if 0 <= y2 && y2 < field.grid_loop().height() && 0 <= x2 && x2 < field.grid_loop().width() {
+            if 0 <= y2 && y2 < field.grid_loop().height() && 0 <= x2
+                && x2 < field.grid_loop().width()
+            {
                 let v2 = side[(Y(y2), X(x2))];
                 if v2 == -1 {
-                    let edge = field.grid_loop().get_edge((Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])));
+                    let edge = field
+                        .grid_loop()
+                        .get_edge((Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])));
                     if edge != Edge::Undecided {
-                        GridLoop::apply_inout_rule_dfs(y2, x2, if edge == Edge::Line { v ^ 1 } else { v }, field, side);
+                        GridLoop::apply_inout_rule_dfs(
+                            y2,
+                            x2,
+                            if edge == Edge::Line { v ^ 1 } else { v },
+                            field,
+                            side,
+                        );
                     }
                 } else if (v & !1) == (v2 & !1) {
-                    GridLoop::decide_edge(field, (Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])), if v2 == v { Edge::Blank } else { Edge::Line });
+                    GridLoop::decide_edge(
+                        field,
+                        (Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])),
+                        if v2 == v { Edge::Blank } else { Edge::Line },
+                    );
                 }
             }
         }
     }
-    fn check_connectability_dfs(&self, y: i32, x: i32, visited: &mut Grid<bool>, n_lines_dbl: &mut i32) {
-        if visited[(Y(y), X(x))] { return; }
+    fn check_connectability_dfs(
+        &self,
+        y: i32,
+        x: i32,
+        visited: &mut Grid<bool>,
+        n_lines_dbl: &mut i32,
+    ) {
+        if visited[(Y(y), X(x))] {
+            return;
+        }
         visited[(Y(y), X(x))] = true;
 
         let dy = [1, 0, -1, 0];
@@ -291,7 +328,9 @@ impl GridLoop {
             let x2 = x + dx[d];
             if 0 <= y2 && y2 <= self.height() && 0 <= x2 && x2 <= self.width() {
                 let edge = self.get_edge((Y(y * 2 + dy[d]), X(x * 2 + dx[d])));
-                if edge == Edge::Blank { continue; }
+                if edge == Edge::Blank {
+                    continue;
+                }
                 if edge == Edge::Line {
                     *n_lines_dbl += 1;
                 }
@@ -318,7 +357,9 @@ impl GridLoop {
     fn queue_pop_all<T: GridLoopField>(field: &mut T) {
         while !field.grid_loop().queue.empty() {
             let id = field.grid_loop().queue.pop();
-            if field.grid_loop().inconsistent() { continue; }
+            if field.grid_loop().inconsistent() {
+                continue;
+            }
             let cd = field.grid_loop().grid.coord(id);
             field.inspect(cd);
             if field.grid_loop().is_vertex(cd) {
@@ -382,7 +423,7 @@ impl GridLoop {
     fn join<T: GridLoopField>(field: &mut T, edge1: EdgeId, edge2: EdgeId) {
         let mut item1 = field.grid_loop()[edge1];
         let mut item2 = field.grid_loop()[edge2];
-        
+
         if !field.grid_loop().is_end_of_chain(edge1) || !field.grid_loop().is_end_of_chain(edge2) {
             return;
         }
@@ -393,13 +434,17 @@ impl GridLoop {
         // ensure item1.0 == item2.0
         match (item1.chain_end_points, item2.chain_end_points) {
             ((ex, _), (ey, _)) if ex == ey => (),
-            ((ex, _), (_, ey)) if ex == ey => mem::swap(&mut item2.chain_end_points.0, &mut item2.chain_end_points.1),
-            ((_, ex), (ey, _)) if ex == ey => mem::swap(&mut item1.chain_end_points.0, &mut item1.chain_end_points.1),
+            ((ex, _), (_, ey)) if ex == ey => {
+                mem::swap(&mut item2.chain_end_points.0, &mut item2.chain_end_points.1)
+            }
+            ((_, ex), (ey, _)) if ex == ey => {
+                mem::swap(&mut item1.chain_end_points.0, &mut item1.chain_end_points.1)
+            }
             ((_, ex), (_, ey)) if ex == ey => {
                 mem::swap(&mut item1.chain_end_points.0, &mut item1.chain_end_points.1);
                 mem::swap(&mut item2.chain_end_points.0, &mut item2.chain_end_points.1);
-            },
-            _ => return
+            }
+            _ => return,
         }
 
         let origin = item1.chain_end_points.0;
@@ -409,20 +454,23 @@ impl GridLoop {
         let end2_edge = field.grid_loop()[edge2].chain_another_end_edge;
         let status;
 
-        match (field.grid_loop()[edge1].edge_status, field.grid_loop()[edge2].edge_status) {
+        match (
+            field.grid_loop()[edge1].edge_status,
+            field.grid_loop()[edge2].edge_status,
+        ) {
             (status1, status2) if status1 == status2 => status = status1,
             (Edge::Undecided, status2) => {
                 GridLoop::decide_chain(field, edge1, status2);
                 GridLoop::check_chain_neighborhood(field, edge1);
                 GridLoop::join(field, edge1, edge2);
                 return;
-            },
+            }
             (status1, Edge::Undecided) => {
                 GridLoop::decide_chain(field, edge2, status1);
                 GridLoop::check_chain_neighborhood(field, edge2);
                 GridLoop::join(field, edge1, edge2);
                 return;
-            },
+            }
             _ => {
                 field.grid_loop().inconsistent = true;
                 return;
@@ -515,9 +563,12 @@ impl GridLoop {
             // TODO: handle -1 / -2 properly
             let mut cand = -1;
             for &ud in &undecided {
-                if field.grid_loop().is_end_of_chain(ud) && field.grid_loop().is_end_of_chain_vertex(ud, vid) {
+                if field.grid_loop().is_end_of_chain(ud)
+                    && field.grid_loop().is_end_of_chain_vertex(ud, vid)
+                {
                     let ud_another_end = field.grid_loop().another_end_id(vid, ud);
-                    if line_size == field.grid_loop().decided_line || another_end != ud_another_end {
+                    if line_size == field.grid_loop().decided_line || another_end != ud_another_end
+                    {
                         if cand == -1 {
                             cand = ud.0 as i32;
                         } else {
@@ -564,8 +615,7 @@ impl GridLoopField for GridLoop {
             GridLoop::check(self, (Y(y), X(x + 1)));
         }
     }
-    fn inspect(&mut self, _: Coord) {
-    }
+    fn inspect(&mut self, _: Coord) {}
 }
 pub struct QueueActiveGridLoopField<'a, T: GridLoopField + 'a> {
     field: &'a mut T,
@@ -644,7 +694,7 @@ impl<'a> IntoIterator for &'a FixVec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn run_grid_loop_test(input: &[&str], expected: &[&str], inconsistent: bool) {
         let height = (input.len() / 2) as i32;
         let width = (input[0].len() / 2) as i32;
@@ -686,16 +736,22 @@ mod tests {
                         expected_decided_edge += 1;
                         expected_decided_line += 1;
                         expected_edge = Edge::Line;
-                    },
+                    }
                     'x' => {
                         expected_decided_edge += 1;
                         expected_edge = Edge::Blank;
-                    },
+                    }
                     _ => {
                         expected_edge = Edge::Undecided;
-                    },
+                    }
                 }
-                assert_eq!(grid_loop.get_edge((Y(y), X(x))), expected_edge, "Comparing at y={}, x={}", y, x);
+                assert_eq!(
+                    grid_loop.get_edge((Y(y), X(x))),
+                    expected_edge,
+                    "Comparing at y={}, x={}",
+                    y,
+                    x
+                );
             }
         }
 
@@ -708,24 +764,12 @@ mod tests {
     fn test_corner() {
         run_grid_loop_test(
             &[
-                "+-+ + +",
-                "      x",
-                "+ + + +",
-                "       ",
-                "+ + + +",
-                "      |",
-                "+x+ + +",
+                "+-+ + +", "      x", "+ + + +", "       ", "+ + + +", "      |", "+x+ + +"
             ],
             &[
-                "+-+ +x+",
-                "|     x",
-                "+ + + +",
-                "       ",
-                "+ + + +",
-                "x     |",
-                "+x+ +-+",
+                "+-+ +x+", "|     x", "+ + + +", "       ", "+ + + +", "x     |", "+x+ +-+"
             ],
-            false
+            false,
         );
     }
 
@@ -733,24 +777,12 @@ mod tests {
     fn test_two_lines() {
         run_grid_loop_test(
             &[
-                "+ + + +",
-                "       ",
-                "+ +-+ +",
-                "  |    ",
-                "+ + + +",
-                "       ",
-                "+ + + +",
+                "+ + + +", "       ", "+ +-+ +", "  |    ", "+ + + +", "       ", "+ + + +"
             ],
             &[
-                "+ + + +",
-                "  x    ",
-                "+x+-+ +",
-                "  |    ",
-                "+ + + +",
-                "       ",
-                "+ + + +",
+                "+ + + +", "  x    ", "+x+-+ +", "  |    ", "+ + + +", "       ", "+ + + +"
             ],
-            false
+            false,
         );
     }
 
@@ -758,24 +790,12 @@ mod tests {
     fn test_joined_lines() {
         run_grid_loop_test(
             &[
-                "+ + + +",
-                "  x    ",
-                "+x+ + +",
-                "x      ",
-                "+ +x+ +",
-                "  x    ",
-                "+ +-+ +",
+                "+ + + +", "  x    ", "+x+ + +", "x      ", "+ +x+ +", "  x    ", "+ +-+ +"
             ],
             &[
-                "+x+x+ +",
-                "x x    ",
-                "+x+-+ +",
-                "x |    ",
-                "+-+x+ +",
-                "| x    ",
-                "+-+-+ +",
+                "+x+x+ +", "x x    ", "+x+-+ +", "x |    ", "+-+x+ +", "| x    ", "+-+-+ +"
             ],
-            false
+            false,
         );
     }
 
@@ -783,24 +803,12 @@ mod tests {
     fn test_line_close1() {
         run_grid_loop_test(
             &[
-                "+ + + +",
-                "       ",
-                "+ + +-+",
-                "|   |  ",
-                "+ + +-+",
-                "       ",
-                "+ + + +",
+                "+ + + +", "       ", "+ + +-+", "|   |  ", "+ + +-+", "       ", "+ + + +"
             ],
             &[
-                "+ +-+-+",
-                "    x |",
-                "+ +x+-+",
-                "|   | x",
-                "+ +x+-+",
-                "    x |",
-                "+ +-+-+",
+                "+ +-+-+", "    x |", "+ +x+-+", "|   | x", "+ +x+-+", "    x |", "+ +-+-+"
             ],
-            false
+            false,
         );
     }
 
@@ -808,24 +816,12 @@ mod tests {
     fn test_line_close2() {
         run_grid_loop_test(
             &[
-                "+ + + +",
-                "       ",
-                "+ + +-+",
-                "    |  ",
-                "+ + +-+",
-                "       ",
-                "+ + + +",
+                "+ + + +", "       ", "+ + +-+", "    |  ", "+ + +-+", "       ", "+ + + +"
             ],
             &[
-                "+ + + +",
-                "    x  ",
-                "+ +x+-+",
-                "    |  ",
-                "+ +x+-+",
-                "    x  ",
-                "+ + + +",
+                "+ + + +", "    x  ", "+ +x+-+", "    |  ", "+ +x+-+", "    x  ", "+ + + +"
             ],
-            false
+            false,
         );
     }
 
@@ -833,24 +829,12 @@ mod tests {
     fn test_fully_solved() {
         run_grid_loop_test(
             &[
-                "+ + + +",
-                "       ",
-                "+ + +-+",
-                "    | |",
-                "+ + +-+",
-                "       ",
-                "+ + + +",
+                "+ + + +", "       ", "+ + +-+", "    | |", "+ + +-+", "       ", "+ + + +"
             ],
             &[
-                "+x+x+x+",
-                "x x x x",
-                "+x+x+-+",
-                "x x | |",
-                "+x+x+-+",
-                "x x x x",
-                "+x+x+x+",
+                "+x+x+x+", "x x x x", "+x+x+-+", "x x | |", "+x+x+-+", "x x x x", "+x+x+x+"
             ],
-            false
+            false,
         );
     }
 

@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitOr, BitAndAssign, BitOrAssign, Not};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 mod field;
 mod generator;

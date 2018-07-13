@@ -1,6 +1,6 @@
-use super::super::{Y, X, Coord, Grid};
-use grid_loop::{Edge, GridLoop, GridLoopField};
+use super::super::{Coord, Grid, X, Y};
 use super::*;
+use grid_loop::{Edge, GridLoop, GridLoopField};
 
 #[derive(Clone)]
 pub struct Field<'a> {
@@ -72,12 +72,7 @@ impl<'a> Field<'a> {
     }
 
     fn inspect_technique(&mut self, (Y(y), X(x)): Coord) {
-        let neighbor = [
-            (Y(1), X(0)),
-            (Y(0), X(1)),
-            (Y(-1), X(0)),
-            (Y(0), X(-1)),
-        ];
+        let neighbor = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
 
         if y % 2 == 1 && x % 2 == 1 {
             let clue = self.clue[(Y(y / 2), X(x / 2))];
@@ -97,8 +92,16 @@ impl<'a> Field<'a> {
                         GridLoop::decide_edge(self, (Y(y - dy), X(x - dx)), Edge::Line);
                         GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
                         GridLoop::decide_edge(self, (Y(y + 3 * dy), X(x + 3 * dx)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y + dy + 2 * dx), X(x + dx + 2 * dy)), Edge::Blank);
-                        GridLoop::decide_edge(self, (Y(y + dy - 2 * dx), X(x + dx - 2 * dy)), Edge::Blank);
+                        GridLoop::decide_edge(
+                            self,
+                            (Y(y + dy + 2 * dx), X(x + dx + 2 * dy)),
+                            Edge::Blank,
+                        );
+                        GridLoop::decide_edge(
+                            self,
+                            (Y(y + dy - 2 * dx), X(x + dx - 2 * dy)),
+                            Edge::Blank,
+                        );
                     }
                 }
 
@@ -110,8 +113,16 @@ impl<'a> Field<'a> {
                     if self.clue.is_valid_coord(cell2) && self.clue[cell2] == Clue(3) {
                         GridLoop::decide_edge(self, (Y(y - dy1), X(x - dx1)), Edge::Line);
                         GridLoop::decide_edge(self, (Y(y - dy2), X(x - dx2)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y + 2 * dy1 + 3 * dy2), X(x + 2 * dx1 + 3 * dx2)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y + 3 * dy1 + 2 * dy2), X(x + 3 * dx1 + 2 * dx2)), Edge::Line);
+                        GridLoop::decide_edge(
+                            self,
+                            (Y(y + 2 * dy1 + 3 * dy2), X(x + 2 * dx1 + 3 * dx2)),
+                            Edge::Line,
+                        );
+                        GridLoop::decide_edge(
+                            self,
+                            (Y(y + 3 * dy1 + 2 * dy2), X(x + 3 * dx1 + 2 * dx2)),
+                            Edge::Line,
+                        );
                     }
                 }
             }
@@ -148,13 +159,16 @@ impl<'a> GridLoopField for Field<'a> {
     fn inspect(&mut self, (Y(y), X(x)): Coord) {
         if y % 2 == 1 && x % 2 == 1 {
             let clue = self.clue[(Y(y / 2), X(x / 2))];
-            if clue == NO_CLUE || clue == Clue(0) { return; }
+            if clue == NO_CLUE || clue == Clue(0) {
+                return;
+            }
 
             let mut neighbors_code = 0;
             let mut pow3 = 1;
             for i in 0..DICTIONARY_NEIGHBOR_SIZE {
                 let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                neighbors_code += pow3 * match self.grid_loop.get_edge_safe((Y(y + dy), X(x + dx))) {
+                neighbors_code += pow3 * match self.grid_loop.get_edge_safe((Y(y + dy), X(x + dx)))
+                {
                     Edge::Undecided => 0,
                     Edge::Line => 1,
                     Edge::Blank => 2,
@@ -172,7 +186,11 @@ impl<'a> GridLoopField for Field<'a> {
                 let ix = res.trailing_zeros();
                 let i = ix / 2;
                 let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i as usize];
-                GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), if ix % 2 == 0 { Edge::Line } else { Edge::Blank });
+                GridLoop::decide_edge(
+                    self,
+                    (Y(y + dy), X(x + dx)),
+                    if ix % 2 == 0 { Edge::Line } else { Edge::Blank },
+                );
                 res ^= 1u32 << ix;
             }
         }
@@ -223,7 +241,13 @@ mod tests {
                     _ => Edge::Undecided,
                 };
 
-                assert_eq!(field.get_edge((Y(y), X(x))), expected_edge, "Comparing at y={}, x={}", y, x);
+                assert_eq!(
+                    field.get_edge((Y(y), X(x))),
+                    expected_edge,
+                    "Comparing at y={}, x={}",
+                    y,
+                    x
+                );
             }
         }
     }
@@ -231,60 +255,84 @@ mod tests {
     #[test]
     fn test_problem() {
         let dic = Dictionary::complete();
-        
-        run_problem_test(&dic, &[
-            "+x+-+-+ +",
-            "x | x    ",
-            "+x+-+x+ +",
-            "x0x3|    ",
-            "+x+-+x+ +",
-            "x | x    ",
-            "+x+-+-+ +",
-        ], false);
-        run_problem_test(&dic, &[
-            "+x+-+x+x+",
-            "x |3| x x",
-            "+x+x+-+-+",
-            "x | x x3|",
-            "+x+-+x+-+",
-            "x0x2| | x",
-            "+x+x+-+x+",
-        ], true);
-        run_problem_test(&dic, &[
-            "+-+-+-+-+",
-            "|3x x x |",
-            "+-+ +-+x+",
-            "x     | |",
-            "+x+ +x+-+",
-            "x x x0x1x",
-            "+x+x+x+x+",
-        ], false);
-        run_problem_test(&dic, &[
-            "+ +-+-+x+",
-            " 2  x2| x",
-            "+ +x+x+-+",
-            "| x x0x |",
-            "+ + +x+ +",
-            "         ",
-            "+ + + + +",
-        ], false);
-        run_problem_test(&dic, &[
-            "+ +-+ +x+",
-            "   3   1x",
-            "+x+-+x+ +",
-            "   3  |  ",
-            "+ +-+ + +",
-            "         ",
-            "+ + + + +",
-        ], false);
-        run_problem_test(&dic, &[
-            "+-+-+ + +",
-            "|2x      ",
-            "+x+-+ + +",
-            "| |3     ",
-            "+ + + + +",
-            "     3| x",
-            "+ + +-+x+",
-        ], false);
+
+        run_problem_test(
+            &dic,
+            &[
+                "+x+-+-+ +",
+                "x | x    ",
+                "+x+-+x+ +",
+                "x0x3|    ",
+                "+x+-+x+ +",
+                "x | x    ",
+                "+x+-+-+ +",
+            ],
+            false,
+        );
+        run_problem_test(
+            &dic,
+            &[
+                "+x+-+x+x+",
+                "x |3| x x",
+                "+x+x+-+-+",
+                "x | x x3|",
+                "+x+-+x+-+",
+                "x0x2| | x",
+                "+x+x+-+x+",
+            ],
+            true,
+        );
+        run_problem_test(
+            &dic,
+            &[
+                "+-+-+-+-+",
+                "|3x x x |",
+                "+-+ +-+x+",
+                "x     | |",
+                "+x+ +x+-+",
+                "x x x0x1x",
+                "+x+x+x+x+",
+            ],
+            false,
+        );
+        run_problem_test(
+            &dic,
+            &[
+                "+ +-+-+x+",
+                " 2  x2| x",
+                "+ +x+x+-+",
+                "| x x0x |",
+                "+ + +x+ +",
+                "         ",
+                "+ + + + +",
+            ],
+            false,
+        );
+        run_problem_test(
+            &dic,
+            &[
+                "+ +-+ +x+",
+                "   3   1x",
+                "+x+-+x+ +",
+                "   3  |  ",
+                "+ +-+ + +",
+                "         ",
+                "+ + + + +",
+            ],
+            false,
+        );
+        run_problem_test(
+            &dic,
+            &[
+                "+-+-+ + +",
+                "|2x      ",
+                "+x+-+ + +",
+                "| |3     ",
+                "+ + + + +",
+                "     3| x",
+                "+ + +-+x+",
+            ],
+            false,
+        );
     }
 }

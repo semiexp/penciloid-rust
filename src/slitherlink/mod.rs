@@ -1,12 +1,12 @@
-mod field;
 mod dictionary;
-mod generator;
+mod field;
 mod format;
+mod generator;
 
-pub use self::field::*;
 pub use self::dictionary::*;
-pub use self::generator::*;
+pub use self::field::*;
 pub use self::format::*;
+pub use self::generator::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Clue(pub i32);

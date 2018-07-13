@@ -1,13 +1,13 @@
-use std::io;
-use std::fmt;
 use std::error;
-use std::num::ParseIntError;
+use std::fmt;
+use std::io;
 use std::io::BufRead;
+use std::num::ParseIntError;
 
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
-    Format
+    Format,
 }
 
 impl fmt::Display for Error {

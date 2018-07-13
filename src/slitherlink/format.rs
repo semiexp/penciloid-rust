@@ -1,7 +1,7 @@
 use std::io::BufRead;
 
-use format::{Error, next_valid_line};
-use common::{Y, X, Grid};
+use common::{Grid, X, Y};
+use format::{next_valid_line, Error};
 
 use super::*;
 
@@ -14,8 +14,16 @@ pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, 
     {
         try!(next_valid_line(reader, &mut buffer));
         let mut header = buffer.split(' ');
-        height = try!(try!(header.next().ok_or(Error::Format)).trim().parse::<i32>());
-        width = try!(try!(header.next().ok_or(Error::Format)).trim().parse::<i32>());
+        height = try!(
+            try!(header.next().ok_or(Error::Format))
+                .trim()
+                .parse::<i32>()
+        );
+        width = try!(
+            try!(header.next().ok_or(Error::Format))
+                .trim()
+                .parse::<i32>()
+        );
     }
 
     let mut ret = Grid::new(height, width, NO_CLUE);

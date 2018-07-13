@@ -1,11 +1,15 @@
 use super::super::Grid;
 use super::*;
 
-use rand::{Rng, distributions};
 use rand::distributions::Distribution;
+use rand::{distributions, Rng};
 use std;
 
-pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) -> Option<Grid<Clue>> {
+pub fn generate<R: Rng>(
+    has_clue: &Grid<bool>,
+    dic: &Dictionary,
+    rng: &mut R,
+) -> Option<Grid<Clue>> {
     let height = has_clue.height();
     let width = has_clue.width();
 
@@ -26,7 +30,8 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     for _ in 0..n_step {
         let mut move_cand: Vec<Vec<(usize, i32, i32)>> = vec![];
 
-        let mut grp_val_loc = vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
+        let mut grp_val_loc =
+            vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
         for y in 0..height {
             for x in 0..width {
                 let loc = (Y(y), X(x));
@@ -53,31 +58,37 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
                     match (grp_val_loc[g1][v as usize], grp_val_loc[g2][v as usize]) {
                         (None, None) => move_cand.push(vec![(c, answer[loc], v)]),
                         (Some(c1), None) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize] == None {
-                                move_cand.push(vec![
-                                    (c, answer[loc], v),
-                                    (c1, v, answer[loc]),
-                                ]);
+                            if answer[loc] < v
+                                && grp_val_loc[field_shape.cell_to_groups[c1].1]
+                                    [answer[loc] as usize]
+                                    == None
+                            {
+                                move_cand.push(vec![(c, answer[loc], v), (c1, v, answer[loc])]);
                             }
-                        },
+                        }
                         (None, Some(c2)) => {
-                            if answer[loc] < v && grp_val_loc[field_shape.cell_to_groups[c2].0][answer[loc] as usize] == None {
-                                move_cand.push(vec![
-                                    (c, answer[loc], v),
-                                    (c2, v, answer[loc]),
-                                ]);
+                            if answer[loc] < v
+                                && grp_val_loc[field_shape.cell_to_groups[c2].0]
+                                    [answer[loc] as usize]
+                                    == None
+                            {
+                                move_cand.push(vec![(c, answer[loc], v), (c2, v, answer[loc])]);
                             }
-                        },
+                        }
                         (Some(c1), Some(c2)) => {
-                            if grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize] == None &&
-                               grp_val_loc[field_shape.cell_to_groups[c2].0][answer[loc] as usize] == None {
+                            if grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize]
+                                == None
+                                && grp_val_loc[field_shape.cell_to_groups[c2].0]
+                                    [answer[loc] as usize]
+                                    == None
+                            {
                                 move_cand.push(vec![
                                     (c, answer[loc], v),
                                     (c1, v, answer[loc]),
                                     (c2, v, answer[loc]),
                                 ]);
                             }
-                        },
+                        }
                     }
                 }
             }
@@ -101,7 +112,10 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
             }
 
             let total_cands = field.total_cands() as i32;
-            if current_total_cands > total_cands || rng.gen::<f64>() < ((current_total_cands - total_cands) as f64 / temperature).exp() {
+            if current_total_cands > total_cands
+                || rng.gen::<f64>()
+                    < ((current_total_cands - total_cands) as f64 / temperature).exp()
+            {
                 current_total_cands = total_cands;
                 break;
             } else {
@@ -117,15 +131,26 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, dic: &Dictionary, rng: &mut R) ->
     None
 }
 
-fn check_connectivity(grid: &Grid<bool>) -> i32 { // returns the sum of sizes of non-largest components
+fn check_connectivity(grid: &Grid<bool>) -> i32 {
+    // returns the sum of sizes of non-largest components
     fn dfs(y: i32, x: i32, grid: &Grid<bool>, vis: &mut Grid<bool>) -> i32 {
-        if vis[(Y(y), X(x))] || grid[(Y(y), X(x))] { return 0; }
+        if vis[(Y(y), X(x))] || grid[(Y(y), X(x))] {
+            return 0;
+        }
         vis[(Y(y), X(x))] = true;
         let mut ret = 1;
-        if y > 0 { ret += dfs(y - 1, x, grid, vis); }
-        if x > 0 { ret += dfs(y, x - 1, grid, vis); }
-        if y + 1 < grid.height() { ret += dfs(y + 1, x, grid, vis); }
-        if x + 1 < grid.width() { ret += dfs(y, x + 1, grid, vis); }
+        if y > 0 {
+            ret += dfs(y - 1, x, grid, vis);
+        }
+        if x > 0 {
+            ret += dfs(y, x - 1, grid, vis);
+        }
+        if y + 1 < grid.height() {
+            ret += dfs(y + 1, x, grid, vis);
+        }
+        if x + 1 < grid.width() {
+            ret += dfs(y, x + 1, grid, vis);
+        }
         ret
     }
     let mut vis = Grid::new(grid.height(), grid.width(), false);
@@ -156,7 +181,11 @@ pub fn disconnectivity_score(grid: &Grid<bool>) -> i32 {
     }
     ret
 }
-pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -> Option<Grid<bool>> {
+pub fn generate_placement<'a, T: Rng>(
+    height: i32,
+    width: i32,
+    rng: &'a mut T,
+) -> Option<Grid<bool>> {
     let height = height + 1;
     let width = width + 1;
 
@@ -174,15 +203,29 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
         for y in 0..height {
             for x in 0..width {
                 let loc = (Y(y), X(x));
-                if placement[loc] { continue; }
+                if placement[loc] {
+                    continue;
+                }
 
-                if x >= 2 && !placement[(Y(y), X(x - 1))] && placement[(Y(y), X(x - 2))] { continue; }
-                if x < width - 2 && !placement[(Y(y), X(x + 1))] && placement[(Y(y), X(x + 2))] { continue; }
-                if y >= 2 && !placement[(Y(y - 1), X(x))] && placement[(Y(y - 2), X(x))] { continue; }
-                if y < height - 2 && !placement[(Y(y + 1), X(x))] && placement[(Y(y + 2), X(x))] { continue; }
+                if x >= 2 && !placement[(Y(y), X(x - 1))] && placement[(Y(y), X(x - 2))] {
+                    continue;
+                }
+                if x < width - 2 && !placement[(Y(y), X(x + 1))] && placement[(Y(y), X(x + 2))] {
+                    continue;
+                }
+                if y >= 2 && !placement[(Y(y - 1), X(x))] && placement[(Y(y - 2), X(x))] {
+                    continue;
+                }
+                if y < height - 2 && !placement[(Y(y + 1), X(x))] && placement[(Y(y + 2), X(x))] {
+                    continue;
+                }
                 if height % 2 == 1 && width % 2 == 1 && !placement[(Y(height / 2), X(width / 2))] {
-                    if y == height / 2 && (x == width / 2 - 1 || x == width / 2 + 1) { continue; }
-                    if x == width / 2 && (y == height / 2 - 1 || y == height / 2 + 1) { continue; }
+                    if y == height / 2 && (x == width / 2 - 1 || x == width / 2 + 1) {
+                        continue;
+                    }
+                    if x == width / 2 && (y == height / 2 - 1 || y == height / 2 + 1) {
+                        continue;
+                    }
                 }
 
                 let mut wl = 0;
@@ -214,17 +257,20 @@ pub fn generate_placement<'a, T: Rng>(height: i32, width: i32, rng: &'a mut T) -
                     }
                 }
                 let mut weight = std::cmp::max(wl + wr, wu + wd);
-                let adj = 
-                    if wl == 1 { 1 } else { 0 } + 
-                    if wr == 1 { 1 } else { 0 } + 
-                    if wu == 1 { 1 } else { 0 } + 
-                    if wd == 1 { 1 } else { 0 };
+                let adj = if wl == 1 { 1 } else { 0 } + if wr == 1 { 1 } else { 0 } + if wu == 1 {
+                    1
+                } else {
+                    0
+                } + if wd == 1 { 1 } else { 0 };
                 if y == 1 || x == 1 || y == height - 2 || x == width - 2 {
                     weight *= 4;
                 } else if adj <= 1 {
                     weight *= 2;
                 }
-                cand.push(distributions::Weighted { weight: weight as u32, item: (y, x) });
+                cand.push(distributions::Weighted {
+                    weight: weight as u32,
+                    item: (y, x),
+                });
             }
         }
 

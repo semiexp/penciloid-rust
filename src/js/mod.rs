@@ -4,7 +4,12 @@ use rand::SeedableRng;
 static mut SHARED_ARRAY: [u8; 1 << 16] = [0; 1 << 16];
 
 #[no_mangle]
-pub extern "C" fn numberlink_generate(height: i32, width: i32, seed1: f64, seed2: f64) -> *const u8 {
+pub extern "C" fn numberlink_generate(
+    height: i32,
+    width: i32,
+    seed1: f64,
+    seed2: f64,
+) -> *const u8 {
     let seed_array: [u8; 16] = unsafe { std::mem::transmute_copy(&(seed1, seed2)) };
     let mut rng = rand::prng::XorShiftRng::from_seed(seed_array);
     let mut generator = numberlink::PlacementGenerator::new(height, width);
@@ -19,7 +24,9 @@ pub extern "C" fn numberlink_generate(height: i32, width: i32, seed1: f64, seed2
     loop {
         let generated = generator.generate(&cond, &mut rng);
         if let Some(line_placement) = generated {
-            if !numberlink::uniqueness_pretest(&line_placement) { continue; }
+            if !numberlink::uniqueness_pretest(&line_placement) {
+                continue;
+            }
 
             let problem = numberlink::extract_problem(&line_placement, &mut rng);
 

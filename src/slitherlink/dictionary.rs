@@ -1,6 +1,6 @@
-use super::super::{Y, X, Coord};
-use grid_loop::Edge;
+use super::super::{Coord, X, Y};
 use super::Clue;
+use grid_loop::Edge;
 
 pub const DICTIONARY_NEIGHBOR_SIZE: usize = 12;
 pub const DICTIONARY_EDGE_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
@@ -48,13 +48,14 @@ impl Dictionary {
                         let base2 = Dictionary::pattern_to_id(pat);
 
                         dic[ofs + pat_id] = dic[ofs + base1] & dic[ofs + base2];
-                    },
+                    }
                     None => {
                         if Dictionary::is_valid_vertex(pat, 0, 2, 3, 5)
                             && Dictionary::is_valid_vertex(pat, 1, 3, 4, 6)
                             && Dictionary::is_valid_vertex(pat, 5, 7, 8, 10)
                             && Dictionary::is_valid_vertex(pat, 6, 8, 9, 11)
-                            && Dictionary::count_lines(pat, 3, 5, 6, 8) == clue {
+                            && Dictionary::count_lines(pat, 3, 5, 6, 8) == clue
+                        {
                             let mut pat_id_bin = 0u32;
                             for i in 0..DICTIONARY_NEIGHBOR_SIZE {
                                 pat_id_bin |= match pat[i] {
@@ -67,7 +68,7 @@ impl Dictionary {
                         } else {
                             dic[ofs + pat_id] = DICTIONARY_INCONSISTENT;
                         }
-                    },
+                    }
                 }
             }
             for pat_id in 0..DICTIONARY_NEIGHBOR_PATTERN_COUNT {
@@ -110,13 +111,27 @@ impl Dictionary {
             false
         }
     }
-    fn count_lines(pat: [Edge; DICTIONARY_NEIGHBOR_SIZE], p1: usize, p2: usize, p3: usize, p4: usize) -> usize {
-          (if pat[p1] == Edge::Line { 1 } else { 0 })
-        + (if pat[p2] == Edge::Line { 1 } else { 0 })
-        + (if pat[p3] == Edge::Line { 1 } else { 0 })
-        + (if pat[p4] == Edge::Line { 1 } else { 0 })
+    fn count_lines(
+        pat: [Edge; DICTIONARY_NEIGHBOR_SIZE],
+        p1: usize,
+        p2: usize,
+        p3: usize,
+        p4: usize,
+    ) -> usize {
+        (if pat[p1] == Edge::Line { 1 } else { 0 }) + (if pat[p2] == Edge::Line { 1 } else { 0 })
+            + (if pat[p3] == Edge::Line { 1 } else { 0 }) + (if pat[p4] == Edge::Line {
+            1
+        } else {
+            0
+        })
     }
-    fn is_valid_vertex(pat: [Edge; DICTIONARY_NEIGHBOR_SIZE], p1: usize, p2: usize, p3: usize, p4: usize) -> bool {
+    fn is_valid_vertex(
+        pat: [Edge; DICTIONARY_NEIGHBOR_SIZE],
+        p1: usize,
+        p2: usize,
+        p3: usize,
+        p4: usize,
+    ) -> bool {
         let cnt = Dictionary::count_lines(pat, p1, p2, p3, p4);
         cnt == 0 || cnt == 2
     }
