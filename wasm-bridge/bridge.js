@@ -13,17 +13,29 @@ class PuzrsBridge {
 
         fetch(puzrs_wasm_path)
             .then(response => response.arrayBuffer())
-            .then(bytes => WebAssembly.instantiate(bytes, {env}))
+            .then(bytes => WebAssembly.instantiate(bytes, { env }))
             .then(results => {
                 this.isReady = true;
                 this.imported = results.instance.exports;
             });
     }
 
-    generateNumberlink(height, width) {
+    generateNumberlink(constraints) {
+        const height = constraints.height;
+        const width = constraints.width;
         const seed1 = Math.random();
         const seed2 = Math.random();
-        const problemAddress = this.imported.numberlink_generate(height, width, seed1, seed2);
+        const problemAddress = this.imported.numberlink_generate(
+            height,
+            width,
+            constraints.empty_width || 0,
+            constraints.corner_clue ? constraints.corner_clue.low : -1,
+            constraints.corner_clue ? constraints.corner_clue.high : -1,
+            constraints.minimum_chain_length || 3,
+            constraints.forbid_adjacent_clue,
+            seed1,
+            seed2
+        );
         const problemData = new Uint8Array(this.imported.memory.buffer, problemAddress, height * width);
 
         let ret = [];

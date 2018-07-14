@@ -898,6 +898,22 @@ impl PlacementGenerator {
         }
         None
     }
+    pub fn generate_and_test<R: Rng>(
+        &mut self,
+        opt: &GeneratorOption,
+        rng: &mut R,
+    ) -> Option<Grid<Clue>> {
+        if let Some(placement) = self.generate(opt, rng) {
+            if uniqueness_pretest(&placement) {
+                let problem = extract_problem(&placement, rng);
+                let ans = solve2(&problem, Some(2), false, true);
+                if ans.len() == 1 && !ans.found_not_fully_filled {
+                    return Some(problem);
+                }
+            }
+        }
+        None
+    }
     fn check_invalidity(field: &mut AnswerField, opt: &GeneratorOption) {
         if field.invalid {
             return;
