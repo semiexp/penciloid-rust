@@ -22,6 +22,60 @@ pub struct GeneratorOption<'a> {
     pub prioritized_extension: bool,
 }
 
+pub fn generate_endpoint_constraint<R: Rng>(
+    height: i32,
+    width: i32,
+    empty_width: i32,
+    corner_constraint: Option<(i32, i32)>,
+    symmetry: Symmetry,
+    rng: &mut R,
+) -> Grid<Endpoint> {
+    let mut ret = Grid::new(height, width, Endpoint::Any);
+    for d in 0..empty_width {
+        for y in 0..height {
+            ret[(Y(y), X(d))] = Endpoint::Prohibited;
+            ret[(Y(y), X(width - 1 - d))] = Endpoint::Prohibited;
+        }
+        for x in 0..width {
+            ret[(Y(d), X(x))] = Endpoint::Prohibited;
+            ret[(Y(height - 1 - d), X(x))] = Endpoint::Prohibited;
+        }
+    }
+    if let Some((lo, hi)) = corner_constraint {
+        // upper left, upper right, lower left, lower right
+        let mut corner_positions = [-1, -1, -1, -1];
+        for i in 0..4 {
+            if corner_positions[i] != -1 {
+                continue;
+            }
+            corner_positions[i] = rng.gen_range(lo, hi + 1);
+            if symmetry.tetrad || symmetry.vertical || (symmetry.dyad && symmetry.horizontal) {
+                corner_positions[i ^ 1] = corner_positions[i];
+            }
+            if symmetry.tetrad || symmetry.horizontal || (symmetry.dyad && symmetry.vertical) {
+                corner_positions[i ^ 2] = corner_positions[i];
+            }
+            if symmetry.dyad || symmetry.tetrad || (symmetry.vertical && symmetry.horizontal) {
+                corner_positions[i ^ 3] = corner_positions[i];
+            }
+        }
+        for i in 0..4 {
+            let y = if (i & 2) == 0 {
+                corner_positions[i]
+            } else {
+                height - 1 - corner_positions[i]
+            };
+            let x = if (i & 1) == 0 {
+                corner_positions[i]
+            } else {
+                width - 1 - corner_positions[i]
+            };
+            ret[(Y(y), X(x))] = Endpoint::Forced;
+        }
+    }
+    ret
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Edge {
     Undecided,
@@ -1055,8 +1109,8 @@ fn uniqueness_pretest_horizontal(ids: &Grid<i32>) -> bool {
                 if !checked[i as usize] {
                     for &loc in &positions[i as usize] {
                         let (Y(y), X(x)) = loc;
-                        let is_endpoint =
-                            1 == (if y > 0 && ids[(Y(y), X(x))] == ids[(Y(y - 1), X(x))] {
+                        let is_endpoint = 1
+                            == (if y > 0 && ids[(Y(y), X(x))] == ids[(Y(y - 1), X(x))] {
                                 1
                             } else {
                                 0

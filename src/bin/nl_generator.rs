@@ -7,7 +7,6 @@ use getopts::Options;
 use std::env;
 
 use puzrs::*;
-use rand::Rng;
 use std::io;
 use std::time::Instant;
 
@@ -79,59 +78,14 @@ fn run_generator(opts: GeneratorOption) {
 
             let mut rng = rand::thread_rng();
             loop {
-                let mut end = Grid::new(height, width, numberlink::Endpoint::Any);
-
-                let trans = move |x: i32, y: i32, d: i32| {
-                    let mut x = x;
-                    let mut y = y;
-                    if d == 1 || d == 3 {
-                        x = width - 1 - x;
-                    }
-                    if d == 2 || d == 3 {
-                        y = height - 1 - y;
-                    }
-                    (Y(y), X(x))
-                };
-                let fr = opts.empty_width;
-                for y in 0..height {
-                    for x in 0..width {
-                        if y < fr || y >= height - fr || x < fr || x >= width - fr {
-                            end[(Y(y), X(x))] = numberlink::Endpoint::Prohibited;
-                        }
-                    }
-                }
-                if let Some((lo, hi)) = opts.corner {
-                    // TODO: better handling for other symmetry types
-                    if opts.symmetry.dyad {
-                        for d in 0..2 {
-                            let i = rng.gen_range(lo, hi + 1);
-                            let (d0, d1) = if d == 0 { (0, 3) } else { (1, 2) };
-
-                            end[trans(i, i, d0)] = numberlink::Endpoint::Forced;
-                            end[trans(i, i + 1, d0)] = numberlink::Endpoint::Prohibited;
-                            end[trans(i + 1, i, d0)] = numberlink::Endpoint::Prohibited;
-                            for j in 0..i {
-                                end[trans(j, j, d0)] = numberlink::Endpoint::Prohibited;
-                            }
-                            end[trans(i, i, d1)] = numberlink::Endpoint::Forced;
-                            end[trans(i, i + 1, d1)] = numberlink::Endpoint::Prohibited;
-                            end[trans(i + 1, i, d1)] = numberlink::Endpoint::Prohibited;
-                            for j in 0..i {
-                                end[trans(j, j, d1)] = numberlink::Endpoint::Prohibited;
-                            }
-                        }
-                    } else {
-                        for d in 0..4 {
-                            let i = rng.gen_range(lo, hi + 1);
-                            end[trans(i, i, d)] = numberlink::Endpoint::Forced;
-                            end[trans(i, i + 1, d)] = numberlink::Endpoint::Prohibited;
-                            end[trans(i + 1, i, d)] = numberlink::Endpoint::Prohibited;
-                            for j in 0..i {
-                                end[trans(j, j, d)] = numberlink::Endpoint::Prohibited;
-                            }
-                        }
-                    }
-                }
+                let end = numberlink::generate_endpoint_constraint(
+                    height,
+                    width,
+                    opts.empty_width,
+                    opts.corner,
+                    opts.symmetry,
+                    &mut rng,
+                );
                 let opt = numberlink::GeneratorOption {
                     chain_threshold: opts.minimum_path_length,
                     endpoint_constraint: Some(&end),
