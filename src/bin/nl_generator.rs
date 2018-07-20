@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::thread;
 
 macro_rules! run_timed {
-    ($timer:ident, $flag:ident, $e:expr) => {
+    ($timer: ident, $flag: ident, $e: expr) => {
         if $flag {
             let start = Instant::now();
             let ret = $e;
@@ -173,7 +173,24 @@ fn run_generator(opts: GeneratorOption) {
         th.join().unwrap();
     }
 }
-
+fn parse_symmetry(s: String) -> Result<Symmetry, &'static str> {
+    let mut ret = Symmetry::none();
+    let tokens = s.split(',');
+    for token in tokens {
+        if token == "d" || token == "dyad" || token == "180" {
+            ret.dyad = true;
+        } else if token == "t" || token == "tetrad" || token == "90" {
+            ret.tetrad = true;
+        } else if token == "h" || token == "horizontal" {
+            ret.horizontal = true;
+        } else if token == "v" || token == "vertical" {
+            ret.vertical = true;
+        } else {
+            return Err("Unrecognized symmetry option");
+        }
+    }
+    return Ok(ret);
+}
 fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
     let height = try!(
         matches
@@ -212,12 +229,12 @@ fn parse_options(matches: Matches) -> Result<GeneratorOption, &'static str> {
             .unwrap_or(Ok(1))
     );
     let no_adjacent_clues = matches.opt_present("no-adjacent-clues");
-    let symmetry = Symmetry {
-        dyad: matches.opt_present("symmetry"),
-        tetrad: false,
-        horizontal: false,
-        vertical: false,
-    };
+    let symmetry = try!(
+        matches
+            .opt_str("s")
+            .map(parse_symmetry)
+            .unwrap_or(Ok(Symmetry::none()))
+    );
     let minimum_path_length = try!(
         matches
             .opt_str("minimum-path-length")
@@ -304,7 +321,7 @@ fn main() {
     options.optopt("w", "width", "Width of desired problems", "10");
     options.optopt("j", "jobs", "Number of workers (threads)", "2");
     options.optflag("a", "no-adjacent-clues", "Disallow adjacent clues");
-    options.optflag("s", "symmetry", "Force symmetry");
+    options.optopt("s", "symmetry", "Force symmetry", "180");
     options.optopt(
         "m",
         "minimum-path-length",
