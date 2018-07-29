@@ -1,4 +1,4 @@
-use super::super::{Coord, Grid, Symmetry, X, Y};
+use super::super::{Coord, FiniteSearchQueue, Grid, Symmetry, X, Y};
 use super::*;
 
 extern crate rand;
@@ -101,6 +101,7 @@ struct AnswerField {
     forbid_adjacent_clue: bool,
     symmetry: Symmetry,
     invalid: bool,
+    search_queue: FiniteSearchQueue,
 }
 
 impl AnswerField {
@@ -125,6 +126,7 @@ impl AnswerField {
             forbid_adjacent_clue: opt.forbid_adjacent_clue,
             symmetry: opt.symmetry,
             invalid: false,
+            search_queue: FiniteSearchQueue::new((height * width) as usize),
         };
 
         for idx in 0..((height * width) as usize) {
@@ -317,7 +319,26 @@ impl AnswerField {
             self.invalid = true;
         }
     }
+
+    fn queue_pop_all(&mut self) {
+        while !self.search_queue.empty() && !self.invalid {
+            let idx = self.search_queue.pop();
+            let (Y(y), X(x)) = self.chain_connectivity.coord(idx);
+            self.inspect_int((Y(y * 2), X(x * 2)));
+        }
+    }
+
     fn decide(&mut self, cd: Coord, state: Edge) {
+        if !self.search_queue.is_started() {
+            self.search_queue.start();
+            self.decide_int(cd, state);
+            self.queue_pop_all();
+            self.search_queue.finish();
+        } else {
+            self.decide_int(cd, state);
+        }
+    }
+    fn decide_int(&mut self, cd: Coord, state: Edge) {
         let current = self.field[cd];
         if current != Edge::Undecided {
             if current != state {
@@ -419,7 +440,21 @@ impl AnswerField {
         }
     }
     /// Inspect vertex (y, x)
-    fn inspect(&mut self, (Y(y), X(x)): Coord) {
+    fn inspect(&mut self, cd: Coord) {
+        if !self.search_queue.is_started() {
+            self.search_queue.start();
+            let (Y(y), X(x)) = cd;
+            self.search_queue
+                .push(self.chain_connectivity.index((Y(y / 2), X(x / 2))));
+            self.queue_pop_all();
+            self.search_queue.finish();
+        } else {
+            let (Y(y), X(x)) = cd;
+            self.search_queue
+                .push(self.chain_connectivity.index((Y(y / 2), X(x / 2))));
+        }
+    }
+    fn inspect_int(&mut self, (Y(y), X(x)): Coord) {
         let (line, undecided) = self.count_neighbor((Y(y), X(x)));
         let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
         if line == 0 {
@@ -644,6 +679,18 @@ impl AnswerField {
             (1, 0) => self.decide(end1_undecided[0], Edge::Line),
             _ => (),
         }
+    }
+    fn forbid_further_endpoint(&mut self) {
+        self.search_queue.start();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if self.endpoint_constraint[(Y(y), X(x))] == Endpoint::Any {
+                    self.update_endpoint_constraint((Y(y), X(x)), Endpoint::Prohibited);
+                }
+            }
+        }
+        self.queue_pop_all();
+        self.search_queue.finish();
     }
     /// Convert into `LinePlacement`
     fn as_line_placement(&self) -> LinePlacement {
@@ -1250,16 +1297,7 @@ fn limit_clue_number(field: &mut AnswerField, limit: i32) {
         field.invalid = true;
     } else {
         if field.endpoint_forced_cells == limit {
-            let height = field.height;
-            let width = field.width;
-            for y in 0..height {
-                for x in 0..width {
-                    if field.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
-                        field
-                            .update_endpoint_constraint((Y(y / 2), X(x / 2)), Endpoint::Prohibited);
-                    }
-                }
-            }
+            field.forbid_further_endpoint();
         }
         if field.endpoint_forced_cells > limit {
             field.invalid = true;
