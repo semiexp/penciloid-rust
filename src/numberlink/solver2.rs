@@ -778,11 +778,6 @@ fn search(
                 continue;
             }
         }
-        if right_effective && field.get_edge((Y(y * 2 + 1), X(x * 2 + 2))) == Edge::Line {
-            if !field.down_left[(Y(y), X(x))] {
-                continue;
-            }
-        }
         if right_effective && field.get_edge((Y(y * 2 - 1), X(x * 2 + 2))) == Edge::Line {
             if line_chain > 0 && field.get_edge((Y(y * 2 - 2), X(x * 2 + 1))) == Edge::Blank
                 && field.get_edge((Y(y * 2 - 1), X((x - line_chain) * 2))) == Edge::Line
