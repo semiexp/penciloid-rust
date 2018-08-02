@@ -1,10 +1,9 @@
-use super::super::{Coord, FiniteSearchQueue, Grid, Symmetry, X, Y};
+use super::super::{Coord, Grid, Symmetry, X, Y};
 use super::*;
 
 extern crate rand;
 
 use rand::Rng;
-use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Endpoint {
@@ -76,692 +75,6 @@ pub fn generate_endpoint_constraint<R: Rng>(
     ret
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Edge {
-    Undecided,
-    Line,
-    Blank,
-}
-
-#[derive(Clone)]
-struct AnswerField {
-    height: i32,
-    width: i32,
-    chain_union: Grid<usize>,      // height * width
-    chain_connectivity: Grid<i32>, // height * width
-    chain_length: Grid<i32>,       // height * width
-    field: Grid<Edge>,             // (2 * height - 1) * (2 * width - 1)
-    seed_idx: Grid<i32>,
-    seeds: Vec<Coord>,
-    seed_count: usize,
-    endpoint_constraint: Grid<Endpoint>,
-    endpoints: i32,
-    endpoint_forced_cells: i32,
-    chain_threshold: i32,
-    forbid_adjacent_clue: bool,
-    symmetry: Symmetry,
-    invalid: bool,
-    search_queue: FiniteSearchQueue,
-}
-
-impl AnswerField {
-    fn new(height: i32, width: i32, opt: &GeneratorOption) -> AnswerField {
-        let mut ret = AnswerField {
-            height: height,
-            width: width,
-            chain_union: Grid::new(height, width, 0),
-            chain_connectivity: Grid::new(height, width, -1),
-            chain_length: Grid::new(height, width, 0),
-            field: Grid::new(2 * height - 1, 2 * width - 1, Edge::Undecided),
-            seed_idx: Grid::new(2 * height - 1, 2 * width - 1, -1),
-            seeds: vec![(Y(0), X(0)); (height * width) as usize],
-            seed_count: 0,
-            endpoint_constraint: match opt.endpoint_constraint {
-                Some(ep) => ep.clone(),
-                None => Grid::new(height, width, Endpoint::Any),
-            },
-            endpoints: 0,
-            endpoint_forced_cells: 0,
-            chain_threshold: opt.chain_threshold,
-            forbid_adjacent_clue: opt.forbid_adjacent_clue,
-            symmetry: opt.symmetry,
-            invalid: false,
-            search_queue: FiniteSearchQueue::new((height * width) as usize),
-        };
-
-        for idx in 0..((height * width) as usize) {
-            ret.chain_union[idx] = idx;
-            if ret.endpoint_constraint[idx] == Endpoint::Forced {
-                ret.endpoint_forced_cells += 1;
-            }
-        }
-
-        ret.seeds[0] = (Y(0), X(0));
-        ret.seeds[1] = (Y(0), X(2 * width - 2));
-        ret.seeds[2] = (Y(2 * height - 2), X(0));
-        ret.seeds[3] = (Y(2 * height - 2), X(2 * width - 2));
-        ret.seed_count = 4;
-        ret.seed_idx[(Y(0), X(0))] = 0;
-        ret.seed_idx[(Y(0), X(2 * width - 2))] = 1;
-        ret.seed_idx[(Y(2 * height - 2), X(0))] = 2;
-        ret.seed_idx[(Y(2 * height - 2), X(2 * width - 2))] = 3;
-        ret
-    }
-    fn get(&self, cd: Coord) -> Edge {
-        if self.field.is_valid_coord(cd) {
-            self.field[cd]
-        } else {
-            Edge::Blank
-        }
-    }
-    fn endpoint_constraint(&self, cd: Coord) -> Endpoint {
-        self.endpoint_constraint[cd]
-    }
-    /// Counts the number of (Line, Undecided) around `cd`
-    fn count_neighbor(&self, cd: Coord) -> (i32, i32) {
-        let (Y(y), X(x)) = cd;
-        let mut line = 0;
-        let mut undecided = 0;
-        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-        for &(dy, dx) in &dirs {
-            let e = self.get((Y(y + dy), X(x + dx)));
-            if e == Edge::Line {
-                line += 1;
-            } else if e == Edge::Undecided {
-                undecided += 1;
-            }
-        }
-        (line, undecided)
-    }
-    /// Returns all neighbors whose state is `Undecided` around `cd`
-    fn undecided_neighbors(&self, cd: Coord) -> Vec<Coord> {
-        let (Y(y), X(x)) = cd;
-        let mut ret = vec![];
-        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-        for &(dy, dx) in &dirs {
-            let cd2 = (Y(y + dy), X(x + dx));
-            let e = self.get(cd2);
-            if e == Edge::Undecided {
-                ret.push(cd2);
-            }
-        }
-        ret
-    }
-    /// Returns whether vertex `cd` is a seed
-    fn is_seed(&self, cd: Coord) -> bool {
-        let nb = self.count_neighbor(cd);
-        nb == (0, 2) || (nb.0 == 1 && nb.1 > 0)
-    }
-    fn num_seeds(&self) -> usize {
-        self.seed_count
-    }
-
-    /// Copy `src` into this `AnswerField`.
-    /// the shape of these `AnswerField`s must match.
-    fn copy_from(&mut self, src: &AnswerField) {
-        self.chain_union.copy_from(&src.chain_union);
-        self.chain_connectivity.copy_from(&src.chain_connectivity);
-        self.chain_length.copy_from(&src.chain_length);
-        self.field.copy_from(&src.field);
-        self.seed_idx.copy_from(&src.seed_idx);
-
-        self.seeds[0..src.seed_count].copy_from_slice(&src.seeds[0..src.seed_count]);
-        self.seed_count = src.seed_count;
-
-        self.endpoint_constraint.copy_from(&src.endpoint_constraint);
-        self.endpoints = src.endpoints;
-        self.endpoint_forced_cells = src.endpoint_forced_cells;
-        self.chain_threshold = src.chain_threshold;
-        self.forbid_adjacent_clue = src.forbid_adjacent_clue;
-        self.symmetry = src.symmetry;
-        self.invalid = src.invalid;
-    }
-
-    /// Returns the representative node of the union containing `x` in `chain_connectivity`.
-    /// Performs path compression to reduce complexity.
-    fn root_mut(&mut self, x: usize) -> usize {
-        if self.chain_connectivity[x] < 0 {
-            x as usize
-        } else {
-            let parent = self.chain_connectivity[x] as usize;
-            let ret = self.root_mut(parent);
-            self.chain_connectivity[x] = ret as i32;
-            ret
-        }
-    }
-
-    /// Returns the representative node of the union containing `x` in `chain_connectivity`.
-    fn root(&self, x: usize) -> usize {
-        if self.chain_connectivity[x] < 0 {
-            x as usize
-        } else {
-            let parent = self.chain_connectivity[x] as usize;
-            self.root(parent)
-        }
-    }
-    fn root_from_coord(&self, cd: Coord) -> usize {
-        self.root(self.chain_connectivity.index(cd))
-    }
-
-    /// Join `x` and `y` in `chain_connectivity`
-    fn join(&mut self, x: usize, y: usize) {
-        let x = self.root_mut(x);
-        let y = self.root_mut(y);
-        if x != y {
-            if self.chain_connectivity[x] < self.chain_connectivity[y] {
-                self.chain_connectivity[x] += self.chain_connectivity[y];
-                self.chain_connectivity[y] = x as i32;
-            } else {
-                self.chain_connectivity[y] += self.chain_connectivity[x];
-                self.chain_connectivity[x] = y as i32;
-            }
-        }
-    }
-    /// Returns whether there is at least one seed
-    fn has_seed(&self) -> bool {
-        self.seed_count != 0
-    }
-    /// Returns a random seed using `rng`
-    fn random_seed<R: Rng>(&self, rng: &mut R) -> Coord {
-        let idx = rng.gen_range(0, self.seed_count);
-        self.seeds[idx]
-    }
-    fn complexity(&self, cd: Coord) -> i32 {
-        let (Y(y), X(x)) = cd;
-        let ret = if y > 0 {
-            4 - self.count_neighbor((Y(y - 2), X(x))).1
-        } else {
-            0
-        } + if x > 0 {
-            4 - self.count_neighbor((Y(y), X(x - 2))).1
-        } else {
-            0
-        } + if y < self.height * 2 - 2 {
-            4 - self.count_neighbor((Y(y + 2), X(x))).1
-        } else {
-            0
-        } + if x < self.width * 2 - 2 {
-            4 - self.count_neighbor((Y(y), X(x + 2))).1
-        } else {
-            0
-        };
-
-        ret
-    }
-    /// Returns a seed with largest complexity among `k` samples
-    fn best_seed<R: Rng>(&self, k: i32, rng: &mut R) -> Coord {
-        let mut seed = self.random_seed(rng);
-        let mut complexity = self.complexity(seed);
-
-        for _ in 1..k {
-            let seed_cand = self.random_seed(rng);
-            let complexity_cand = self.complexity(seed_cand);
-
-            if complexity < complexity_cand {
-                seed = seed_cand;
-                complexity = complexity_cand;
-            }
-        }
-
-        seed
-    }
-    /// Update `endpoint_constraint[cd]`.
-    /// `cd` must be in vertex-coordinate.
-    fn update_endpoint_constraint(&mut self, cd: Coord, constraint: Endpoint) {
-        let (Y(y), X(x)) = cd;
-        if self.endpoint_constraint[cd] == Endpoint::Any {
-            self.endpoint_constraint[cd] = constraint;
-            if constraint == Endpoint::Forced {
-                self.endpoint_forced_cells += 1;
-            }
-            self.inspect((Y(y * 2), X(x * 2)));
-        } else if self.endpoint_constraint[cd] != constraint {
-            self.invalid = true;
-        }
-    }
-
-    fn queue_pop_all(&mut self) {
-        while !self.search_queue.empty() && !self.invalid {
-            let idx = self.search_queue.pop();
-            let (Y(y), X(x)) = self.chain_connectivity.coord(idx);
-            self.inspect_int((Y(y * 2), X(x * 2)));
-        }
-    }
-
-    fn decide(&mut self, cd: Coord, state: Edge) {
-        if !self.search_queue.is_started() {
-            self.search_queue.start();
-            self.decide_int(cd, state);
-            self.queue_pop_all();
-            self.search_queue.finish();
-        } else {
-            self.decide_int(cd, state);
-        }
-    }
-    fn decide_int(&mut self, cd: Coord, state: Edge) {
-        let current = self.field[cd];
-        if current != Edge::Undecided {
-            if current != state {
-                self.invalid = true;
-            }
-            return;
-        }
-        self.field[cd] = state;
-
-        let (Y(y), X(x)) = cd;
-
-        // update chain information
-        if state == Edge::Line {
-            let end1 = (Y(y / 2), X(x / 2));
-            let end2 = (Y((y + 1) / 2), X((x + 1) / 2));
-
-            let end1_id = self.chain_union.index(end1);
-            let end2_id = self.chain_union.index(end2);
-            let another_end1_id = self.chain_union[end1_id];
-            let another_end2_id = self.chain_union[end2_id];
-
-            if another_end1_id == end2_id {
-                // invalid: a self-loop will be formed
-                self.invalid = true;
-                return;
-            }
-
-            let new_length = self.chain_length[end1_id] + self.chain_length[end2_id] + 1;
-
-            self.chain_union[another_end1_id] = another_end2_id;
-            self.chain_union[another_end2_id] = another_end1_id;
-            self.chain_length[another_end1_id] = new_length;
-            self.chain_length[another_end2_id] = new_length;
-
-            self.join(another_end1_id, another_end2_id);
-            self.root_mut(another_end1_id);
-            self.root_mut(another_end2_id);
-
-            if new_length < self.chain_threshold {
-                let cd = self.chain_union.coord(another_end1_id);
-                self.extend_chain(cd);
-            }
-        }
-
-        // check incident vertices
-        if y % 2 == 1 {
-            if self.count_neighbor((Y(y - 1), X(x))) == (1, 0) {
-                self.endpoints += 1;
-            }
-            if self.count_neighbor((Y(y + 1), X(x))) == (1, 0) {
-                self.endpoints += 1;
-            }
-            self.inspect((Y(y - 1), X(x)));
-            self.inspect((Y(y + 1), X(x)));
-        } else {
-            if self.count_neighbor((Y(y), X(x - 1))) == (1, 0) {
-                self.endpoints += 1;
-            }
-            if self.count_neighbor((Y(y), X(x + 1))) == (1, 0) {
-                self.endpoints += 1;
-            }
-            self.inspect((Y(y), X(x - 1)));
-            self.inspect((Y(y), X(x + 1)));
-        }
-
-        // check for canonization rule
-        if state == Edge::Line {
-            if y % 2 == 1 {
-                let related = [(Y(y), X(x - 2)), (Y(y - 1), X(x - 1)), (Y(y + 1), X(x - 1))];
-                for i in 0..3 {
-                    if self.get(related[i]) == Edge::Line {
-                        self.decide(related[(i + 1) % 3], Edge::Blank);
-                        self.decide(related[(i + 2) % 3], Edge::Blank);
-                    }
-                }
-                let related = [(Y(y), X(x + 2)), (Y(y - 1), X(x + 1)), (Y(y + 1), X(x + 1))];
-                for i in 0..3 {
-                    if self.get(related[i]) == Edge::Line {
-                        self.decide(related[(i + 1) % 3], Edge::Blank);
-                        self.decide(related[(i + 2) % 3], Edge::Blank);
-                    }
-                }
-            } else {
-                let related = [(Y(y - 2), X(x)), (Y(y - 1), X(x - 1)), (Y(y - 1), X(x + 1))];
-                for i in 0..3 {
-                    if self.get(related[i]) == Edge::Line {
-                        self.decide(related[(i + 1) % 3], Edge::Blank);
-                        self.decide(related[(i + 2) % 3], Edge::Blank);
-                    }
-                }
-                let related = [(Y(y + 2), X(x)), (Y(y + 1), X(x - 1)), (Y(y + 1), X(x + 1))];
-                for i in 0..3 {
-                    if self.get(related[i]) == Edge::Line {
-                        self.decide(related[(i + 1) % 3], Edge::Blank);
-                        self.decide(related[(i + 2) % 3], Edge::Blank);
-                    }
-                }
-            }
-        }
-    }
-    /// Inspect vertex (y, x)
-    fn inspect(&mut self, cd: Coord) {
-        if !self.search_queue.is_started() {
-            self.search_queue.start();
-            let (Y(y), X(x)) = cd;
-            self.search_queue
-                .push(self.chain_connectivity.index((Y(y / 2), X(x / 2))));
-            self.queue_pop_all();
-            self.search_queue.finish();
-        } else {
-            let (Y(y), X(x)) = cd;
-            self.search_queue
-                .push(self.chain_connectivity.index((Y(y / 2), X(x / 2))));
-        }
-    }
-    fn inspect_int(&mut self, (Y(y), X(x)): Coord) {
-        let (line, undecided) = self.count_neighbor((Y(y), X(x)));
-        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-        if line == 0 {
-            if undecided == 0 {
-                self.invalid = true;
-                return;
-            }
-            if undecided == 1 {
-                for &(dy, dx) in &dirs {
-                    let e = self.get((Y(y + dy), X(x + dx)));
-                    if e == Edge::Undecided {
-                        self.decide((Y(y + dy), X(x + dx)), Edge::Line);
-                    }
-                }
-            }
-        } else if line == 2 {
-            for &(dy, dx) in &dirs {
-                let e = self.get((Y(y + dy), X(x + dx)));
-                if e == Edge::Undecided {
-                    self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
-                }
-            }
-        } else if line == 1 {
-            // avoid too short chains
-            if self.chain_length[(Y(y / 2), X(x / 2))] < self.chain_threshold {
-                self.extend_chain((Y(y / 2), X(x / 2)));
-
-                let (Y(ay), X(ax)) = self.chain_union
-                    .coord(self.chain_union[(Y(y / 2), X(x / 2))]);
-                if self.count_neighbor((Y(ay * 2), X(ax * 2))) == (1, 0) {
-                    let minimum_len =
-                        self.chain_threshold - self.chain_length[(Y(y / 2), X(x / 2))];
-                    for &(dy, dx) in &dirs {
-                        if self.get((Y(y + dy), X(x + dx))) == Edge::Undecided {
-                            let (Y(ay), X(ax)) = self.chain_union
-                                .coord(self.chain_union[(Y(y / 2 + dy), X(x / 2 + dx))]);
-                            if self.count_neighbor((Y(ay * 2), X(ax * 2))) == (1, 0)
-                                && self.chain_length[(Y(y / 2 + dy), X(x / 2 + dx))] < minimum_len
-                            {
-                                self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
-                            }
-                        }
-                    }
-                }
-            }
-        } else if line >= 3 {
-            self.invalid = true;
-            return;
-        }
-
-        if line == 1 && undecided == 0 {
-            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Prohibited {
-                self.invalid = true;
-                return;
-            }
-            if self.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
-                self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Forced;
-                self.endpoint_forced_cells += 1;
-            }
-        }
-        if line == 2 {
-            if self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced {
-                self.invalid = true;
-                return;
-            }
-            if self.endpoint_constraint[(Y(y / 2), X(x / 2))] == Endpoint::Any {
-                self.endpoint_constraint[(Y(y / 2), X(x / 2))] = Endpoint::Prohibited;
-            }
-        }
-
-        if self.forbid_adjacent_clue
-            && (self.endpoint_constraint((Y(y / 2), X(x / 2))) == Endpoint::Forced
-                || (line == 1 && undecided == 0))
-        {
-            for dy in -1..2 {
-                for dx in -1..2 {
-                    if dy == 0 && dx == 0 {
-                        continue;
-                    }
-                    if y / 2 + dy < 0 || y / 2 + dy >= self.height || x / 2 + dx < 0
-                        || x / 2 + dx >= self.width
-                    {
-                        continue;
-                    }
-                    self.update_endpoint_constraint(
-                        (Y(y / 2 + dy), X(x / 2 + dx)),
-                        Endpoint::Prohibited,
-                    );
-                }
-            }
-        }
-        if self.forbid_adjacent_clue && line + undecided == 2 {
-            let adj = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
-            for &(Y(dy), X(dx)) in &adj {
-                if self.get((Y(y + dy), X(x + dx))) != Edge::Blank {
-                    let nb = self.count_neighbor((Y(y + 2 * dy), X(x + 2 * dx)));
-                    if nb.0 + nb.1 == 2 {
-                        self.decide((Y(y + dy), X(x + dx)), Edge::Line);
-                    }
-                }
-            }
-        }
-
-        let con = self.endpoint_constraint((Y(y / 2), X(x / 2)));
-        if con != Endpoint::Any {
-            let height = self.height;
-            let width = self.width;
-            if self.symmetry.tetrad {
-                self.update_endpoint_constraint((Y(x / 2), X(width - 1 - y / 2)), con);
-            } else if self.symmetry.dyad {
-                self.update_endpoint_constraint((Y(height - 1 - y / 2), X(width - 1 - x / 2)), con);
-            }
-            if self.symmetry.horizontal {
-                self.update_endpoint_constraint((Y(height - 1 - y / 2), X(x / 2)), con);
-            }
-            if self.symmetry.vertical {
-                self.update_endpoint_constraint((Y(y / 2), X(width - 1 - x / 2)), con);
-            }
-        }
-
-        match self.endpoint_constraint((Y(y / 2), X(x / 2))) {
-            Endpoint::Any => (),
-            Endpoint::Forced => {
-                if line == 1 {
-                    for &(dy, dx) in &dirs {
-                        let e = self.get((Y(y + dy), X(x + dx)));
-                        if e == Edge::Undecided {
-                            self.decide((Y(y + dy), X(x + dx)), Edge::Blank);
-                        }
-                    }
-                } else if line >= 2 {
-                    self.invalid = true;
-                }
-            }
-            Endpoint::Prohibited => {
-                if line == 1 {
-                    if undecided == 0 {
-                        self.invalid = true;
-                        return;
-                    } else if undecided == 1 {
-                        for &(dy, dx) in &dirs {
-                            let e = self.get((Y(y + dy), X(x + dx)));
-                            if e == Edge::Undecided {
-                                self.decide((Y(y + dy), X(x + dx)), Edge::Line);
-                            }
-                        }
-                    }
-                } else if undecided == 2 {
-                    for &(dy, dx) in &dirs {
-                        let e = self.get((Y(y + dy), X(x + dx)));
-                        if e == Edge::Undecided {
-                            self.decide((Y(y + dy), X(x + dx)), Edge::Line);
-                        }
-                    }
-                }
-            }
-        }
-
-        let is_seed = self.is_seed((Y(y), X(x)));
-        let seed_idx = self.seed_idx[(Y(y), X(x))];
-
-        if seed_idx != -1 && !is_seed {
-            // (y, x) is no longer a seed
-            let moved = self.seeds[self.seed_count - 1];
-            self.seed_idx[moved] = seed_idx;
-            self.seeds[seed_idx as usize] = moved;
-            self.seed_count -= 1;
-            self.seed_idx[(Y(y), X(x))] = -1;
-        } else if seed_idx == -1 && is_seed {
-            // (y, x) is now a seed
-            self.seed_idx[(Y(y), X(x))] = self.seed_count as i32;
-            self.seeds[self.seed_count] = (Y(y), X(x));
-            self.seed_count += 1;
-        }
-    }
-    /// Extend the chain one of whose endpoint is `(y, x)`
-    fn extend_chain(&mut self, (Y(y), X(x)): Coord) {
-        let end1_id = self.chain_union.index((Y(y), X(x)));
-        let end2_id = self.chain_union[end1_id];
-
-        let end1 = (Y(y * 2), X(x * 2));
-        let (Y(y2), X(x2)) = self.chain_union.coord(end2_id);
-        let end2 = (Y(y2 * 2), X(x2 * 2));
-
-        let end1_undecided = self.undecided_neighbors(end1);
-        let end2_undecided = self.undecided_neighbors(end2);
-
-        if end1_undecided.len() == 0 {
-            let con = self.endpoint_constraint[(Y(y2), X(x2))];
-            match con {
-                Endpoint::Forced => {
-                    self.invalid = true;
-                    return;
-                }
-                Endpoint::Any => {
-                    self.endpoint_constraint[(Y(y2), X(x2))] = Endpoint::Prohibited;
-                    self.inspect((Y(y2 * 2), X(x2 * 2)));
-                }
-                Endpoint::Prohibited => (),
-            }
-        }
-        if end2_undecided.len() == 0 {
-            let con = self.endpoint_constraint[(Y(y), X(x))];
-            match con {
-                Endpoint::Forced => {
-                    self.invalid = true;
-                    return;
-                }
-                Endpoint::Any => {
-                    self.endpoint_constraint[(Y(y), X(x))] = Endpoint::Prohibited;
-                    self.inspect((Y(y * 2), X(x * 2)));
-                }
-                Endpoint::Prohibited => (),
-            }
-        }
-        match (end1_undecided.len(), end2_undecided.len()) {
-            (0, 0) => {
-                self.invalid = true;
-                return;
-            }
-            (0, 1) => self.decide(end2_undecided[0], Edge::Line),
-            (1, 0) => self.decide(end1_undecided[0], Edge::Line),
-            _ => (),
-        }
-    }
-    fn forbid_further_endpoint(&mut self) {
-        self.search_queue.start();
-        for y in 0..self.height {
-            for x in 0..self.width {
-                if self.endpoint_constraint[(Y(y), X(x))] == Endpoint::Any {
-                    self.update_endpoint_constraint((Y(y), X(x)), Endpoint::Prohibited);
-                }
-            }
-        }
-        self.queue_pop_all();
-        self.search_queue.finish();
-    }
-    /// Convert into `LinePlacement`
-    fn as_line_placement(&self) -> LinePlacement {
-        let height = self.height;
-        let width = self.width;
-        let mut ret = LinePlacement::new(height, width);
-
-        for y in 0..height {
-            for x in 0..width {
-                if y < height - 1 {
-                    if self.get((Y(y * 2 + 1), X(x * 2))) == Edge::Line {
-                        ret.set_down((Y(y), X(x)), true);
-                    }
-                }
-                if x < width - 1 {
-                    if self.get((Y(y * 2), X(x * 2 + 1))) == Edge::Line {
-                        ret.set_right((Y(y), X(x)), true);
-                    }
-                }
-            }
-        }
-
-        ret
-    }
-}
-impl fmt::Debug for AnswerField {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let height = self.height;
-        let width = self.width;
-
-        for y in 0..(2 * height - 1) {
-            for x in 0..(2 * width - 1) {
-                match (y % 2, x % 2) {
-                    (0, 0) => write!(
-                        f,
-                        "{}",
-                        match self.endpoint_constraint[(Y(y / 2), X(x / 2))] {
-                            Endpoint::Any => '#',
-                            Endpoint::Forced => '*',
-                            Endpoint::Prohibited => '+',
-                        }
-                    )?,
-                    (0, 1) => write!(
-                        f,
-                        "{}",
-                        match self.get((Y(y), X(x))) {
-                            Edge::Undecided => ' ',
-                            Edge::Line => '-',
-                            Edge::Blank => 'x',
-                        }
-                    )?,
-                    (1, 0) => write!(
-                        f,
-                        "{}",
-                        match self.get((Y(y), X(x))) {
-                            Edge::Undecided => ' ',
-                            Edge::Line => '|',
-                            Edge::Blank => 'x',
-                        }
-                    )?,
-                    (1, 1) => write!(f, " ")?,
-                    _ => unreachable!(),
-                }
-            }
-            write!(f, "\n")?;
-        }
-
-        Ok(())
-    }
-}
-
 /// A type for an update of `AnswerField`.
 /// - `Corner(e, f)`: both `e` and `f` must be `Line` to make a corner.
 /// - `Endpoint(e, f)`: `e` must be `Line` but `f` must be `Blank` to make an endpoint.
@@ -816,7 +129,6 @@ impl PlacementGenerator {
         let width = self.width;
         let fields = &mut self.active_fields;
 
-        // TODO: update `opt` according to symmetry
         let symmetry = Symmetry {
             dyad: opt.symmetry.dyad || opt.symmetry.tetrad,
             tetrad: opt.symmetry.tetrad && (height == width),
@@ -861,11 +173,7 @@ impl PlacementGenerator {
         let mut field_base = self.pool.pop().unwrap();
         field_base.copy_from(&template);
 
-        for y in 0..height {
-            for x in 0..width {
-                field_base.inspect((Y(y * 2), X(x * 2)));
-            }
-        }
+        field_base.inspect_all();
 
         fields.push(field_base);
 
@@ -882,7 +190,7 @@ impl PlacementGenerator {
 
                 let id = rng.gen_range(0, fields.len());
 
-                if fields[id].invalid || !fields[id].has_seed() {
+                if fields[id].is_invalid() || !fields[id].has_seed() {
                     self.pool.push(fields.swap_remove(id));
                     continue;
                 }
@@ -903,17 +211,17 @@ impl PlacementGenerator {
                 PlacementGenerator::apply_update(&mut field, update);
                 PlacementGenerator::check_invalidity(&mut field, &opt);
 
-                if field.invalid {
+                if field.is_invalid() {
                     self.pool.push(field);
                     PlacementGenerator::deny_update(&mut fields[id], cd, update);
                     PlacementGenerator::check_invalidity(&mut fields[id], &opt);
-                    if fields[id].invalid {
+                    if fields[id].is_invalid() {
                         self.pool.push(fields.swap_remove(id));
                     }
                     continue;
                 }
 
-                if field.num_seeds() == 0 {
+                if !field.has_seed() {
                     if !check_answer_validity(&field) {
                         self.pool.push(field);
                         continue 'outer;
@@ -962,22 +270,22 @@ impl PlacementGenerator {
         None
     }
     fn check_invalidity(field: &mut AnswerField, opt: &GeneratorOption) {
-        if field.invalid {
+        if field.is_invalid() {
             return;
         }
         if let Some(limit) = opt.clue_limit {
             limit_clue_number(field, limit);
-            if field.invalid {
+            if field.is_invalid() {
                 return;
             }
         }
         if is_entangled(field) {
-            field.invalid = true;
+            field.set_invalid();
             return;
         }
         // TODO: better check for other symmetry types?
         if opt.symmetry.dyad && check_symmetry(field) {
-            field.invalid = true;
+            field.set_invalid();
         }
     }
     fn choose_update<R: Rng>(field: &AnswerField, cd: Coord, rng: &mut R) -> FieldUpdate {
@@ -986,7 +294,7 @@ impl PlacementGenerator {
         let nbs = field.undecided_neighbors(cd);
 
         if field.count_neighbor(cd) == (0, 2) {
-            let constraint = field.endpoint_constraint(cd_vtx);
+            let constraint = field.get_endpoint_constraint(cd_vtx);
 
             if constraint != Endpoint::Forced && rng.gen::<f64>() < 0.9f64 {
                 FieldUpdate::Corner(nbs[0], nbs[1])
@@ -1027,31 +335,35 @@ impl PlacementGenerator {
 fn is_entangled(field: &AnswerField) -> bool {
     let dirs = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
 
-    let height = field.height;
-    let width = field.width;
+    let height = field.height();
+    let width = field.width();
 
     let mut entangled_pairs = vec![];
 
     for y in 1..(height - 1) {
         for x in 1..(width - 1) {
-            if field.endpoint_constraint[(Y(y), X(x))] == Endpoint::Forced {
+            if field.get_endpoint_constraint((Y(y), X(x))) == Endpoint::Forced {
                 for d in 0..4 {
                     let (Y(dy), X(dx)) = dirs[d];
-                    if field.get((Y(y * 2 + dy), X(x * 2 + dx))) != Edge::Line {
+                    if field.get_edge((Y(y * 2 + dy), X(x * 2 + dx))) != Edge::Line {
                         continue;
                     }
 
-                    if field.get((Y(y * 2 + 2 * dx - dy), X(x * 2 + 2 * dy - dx))) == Edge::Line
-                        && field.get((Y(y * 2 - 2 * dx - dy), X(x * 2 - 2 * dy - dx))) == Edge::Line
-                        && field.get((Y(y * 2 + dx - 2 * dy), X(x * 2 + dy - 2 * dx))) == Edge::Line
-                        && field.get((Y(y * 2 - dx - 2 * dy), X(x * 2 - dy - 2 * dx))) == Edge::Line
-                        && (field.get((Y(y * 2 + 2 * dx + dy), X(x * 2 + 2 * dy + dx)))
+                    if field.get_edge((Y(y * 2 + 2 * dx - dy), X(x * 2 + 2 * dy - dx)))
+                        == Edge::Line
+                        && field.get_edge((Y(y * 2 - 2 * dx - dy), X(x * 2 - 2 * dy - dx)))
                             == Edge::Line
-                            || field.get((Y(y * 2 + dx + 2 * dy), X(x * 2 + dy + 2 * dx)))
+                        && field.get_edge((Y(y * 2 + dx - 2 * dy), X(x * 2 + dy - 2 * dx)))
+                            == Edge::Line
+                        && field.get_edge((Y(y * 2 - dx - 2 * dy), X(x * 2 - dy - 2 * dx)))
+                            == Edge::Line
+                        && (field.get_edge((Y(y * 2 + 2 * dx + dy), X(x * 2 + 2 * dy + dx)))
+                            == Edge::Line
+                            || field.get_edge((Y(y * 2 + dx + 2 * dy), X(x * 2 + dy + 2 * dx)))
                                 == Edge::Line)
-                        && (field.get((Y(y * 2 - 2 * dx + dy), X(x * 2 - 2 * dy + dx)))
+                        && (field.get_edge((Y(y * 2 - 2 * dx + dy), X(x * 2 - 2 * dy + dx)))
                             == Edge::Line
-                            || field.get((Y(y * 2 - dx + 2 * dy), X(x * 2 - dy + 2 * dx)))
+                            || field.get_edge((Y(y * 2 - dx + 2 * dy), X(x * 2 - dy + 2 * dx)))
                                 == Edge::Line)
                     {
                         let u = field.root_from_coord((Y(y), X(x)));
@@ -1216,8 +528,8 @@ fn uniqueness_pretest_horizontal(ids: &Grid<i32>) -> bool {
 /// Check whether `field` is valid.
 /// A field is considered invalid if it contains a self-touching line.
 fn check_answer_validity(field: &AnswerField) -> bool {
-    let height = field.height;
-    let width = field.width;
+    let height = field.height();
+    let width = field.width();
     let mut ids = Grid::new(height, width, -1);
     let mut id = 1;
     for y in 0..height {
@@ -1247,13 +559,13 @@ fn check_answer_validity(field: &AnswerField) -> bool {
         for x in 0..(2 * width - 1) {
             if y % 2 == 1 && x % 2 == 0 {
                 if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))])
-                    != (field.get((Y(y), X(x))) == Edge::Line)
+                    != (field.get_edge((Y(y), X(x))) == Edge::Line)
                 {
                     return false;
                 }
             } else if y % 2 == 0 && x % 2 == 1 {
                 if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))])
-                    != (field.get((Y(y), X(x))) == Edge::Line)
+                    != (field.get_edge((Y(y), X(x))) == Edge::Line)
                 {
                     return false;
                 }
@@ -1267,14 +579,14 @@ fn check_answer_validity(field: &AnswerField) -> bool {
 fn check_symmetry(field: &AnswerField) -> bool {
     let mut n_equal = 0i32;
     let mut n_diff = 0i32;
-    let height = field.height;
-    let width = field.width;
+    let height = field.height();
+    let width = field.width();
 
     for y in 0..(2 * height - 1) {
         for x in 0..(2 * width - 1) {
             if y % 2 != x % 2 {
-                let e1 = field.get((Y(y), X(x)));
-                let e2 = field.get((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+                let e1 = field.get_edge((Y(y), X(x)));
+                let e2 = field.get_edge((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
 
                 if e1 == Edge::Undecided && e2 == Edge::Undecided {
                     continue;
@@ -1293,14 +605,14 @@ fn check_symmetry(field: &AnswerField) -> bool {
 fn limit_clue_number(field: &mut AnswerField, limit: i32) {
     let limit = limit * 2;
 
-    if field.endpoint_forced_cells > limit {
-        field.invalid = true;
+    if field.endpoint_forced_cells() > limit {
+        field.set_invalid();
     } else {
-        if field.endpoint_forced_cells == limit {
+        if field.endpoint_forced_cells() == limit {
             field.forbid_further_endpoint();
         }
-        if field.endpoint_forced_cells > limit {
-            field.invalid = true;
+        if field.endpoint_forced_cells() > limit {
+            field.set_invalid();
         }
     }
 }
@@ -1314,7 +626,7 @@ fn fill_line_id(cd: Coord, field: &AnswerField, ids: &mut Grid<i32>, id: i32) {
 
     let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
     for &(dy, dx) in &dirs {
-        if field.get((Y(y * 2 + dy), X(x * 2 + dx))) == Edge::Line {
+        if field.get_edge((Y(y * 2 + dy), X(x * 2 + dx))) == Edge::Line {
             fill_line_id((Y(y + dy), X(x + dx)), field, ids, id);
         }
     }
