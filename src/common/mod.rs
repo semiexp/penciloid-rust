@@ -121,8 +121,13 @@ impl FiniteSearchQueue {
         self.stored[ret] = false;
         ret
     }
-    pub fn empty(&mut self) -> bool {
+    pub fn empty(&self) -> bool {
         self.top == self.end
+    }
+    pub fn clear(&mut self) {
+        while !self.empty() {
+            self.pop();
+        }
     }
 }
 

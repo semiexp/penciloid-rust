@@ -262,6 +262,17 @@ impl AnswerField {
     /// Update `endpoint_constraint[cd]`.
     /// `cd` must be in vertex-coordinate.
     pub fn update_endpoint_constraint(&mut self, cd: Coord, constraint: Endpoint) {
+        if !self.search_queue.is_started() {
+            self.search_queue.start();
+            self.update_endpoint_constraint_int(cd, constraint);
+            self.queue_pop_all();
+            self.search_queue.finish();
+        } else {
+            self.update_endpoint_constraint_int(cd, constraint);
+        }
+    }
+
+    fn update_endpoint_constraint_int(&mut self, cd: Coord, constraint: Endpoint) {
         let (Y(y), X(x)) = cd;
         if self.endpoint_constraint[cd] == Endpoint::Any {
             self.endpoint_constraint[cd] = constraint;
@@ -280,6 +291,7 @@ impl AnswerField {
             let (Y(y), X(x)) = self.chain_connectivity.coord(idx);
             self.inspect_int((Y(y * 2), X(x * 2)));
         }
+        self.search_queue.clear();
     }
 
     pub fn decide(&mut self, cd: Coord, state: Edge) {
@@ -406,7 +418,7 @@ impl AnswerField {
 
         for y in 0..height {
             for x in 0..width {
-                self.inspect((Y(y), X(x)));
+                self.inspect((Y(y * 2), X(x * 2)));
             }
         }
 
@@ -416,6 +428,8 @@ impl AnswerField {
 
     /// Inspect vertex (y, x)
     fn inspect(&mut self, cd: Coord) {
+        assert_eq!(self.search_queue.is_started(), true);
+
         let (Y(y), X(x)) = cd;
         self.search_queue
             .push(self.chain_connectivity.index((Y(y / 2), X(x / 2))));
