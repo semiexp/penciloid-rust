@@ -241,8 +241,7 @@ impl SolverField {
         let current_state = self.get_edge(cd);
         if current_state != Edge::Undecided {
             if current_state != state {
-                self.inconsistent = true;
-                return true;
+                return self.set_inconsistent();
             }
             return false;
         }
