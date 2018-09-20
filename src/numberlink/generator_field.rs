@@ -34,6 +34,13 @@ pub struct AnswerField {
     search_queue: FiniteSearchQueue,
 }
 
+#[derive(PartialEq, Eq)]
+enum Cnt<T> {
+    None,
+    One(T),
+    Many,
+}
+
 impl AnswerField {
     pub fn new(height: i32, width: i32, opt: &GeneratorOption) -> AnswerField {
         let mut ret = AnswerField {
@@ -133,6 +140,23 @@ impl AnswerField {
             let e = self.get_edge(cd2);
             if e == Edge::Undecided {
                 ret.push(cd2);
+            }
+        }
+        ret
+    }
+
+    fn undecided_neighbors_summary(&self, cd: Coord) -> Cnt<Coord> {
+        let (Y(y), X(x)) = cd;
+        let mut ret = Cnt::None;
+        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+        for &(dy, dx) in &dirs {
+            let cd2 = (Y(y + dy), X(x + dx));
+            let e = self.get_edge(cd2);
+            if e == Edge::Undecided {
+                ret = match ret {
+                    Cnt::None => Cnt::One(cd2),
+                    _ => return Cnt::Many,
+                }
             }
         }
         ret
@@ -583,7 +607,7 @@ impl AnswerField {
                             }
                         }
                     }
-                } else if undecided == 2 {
+                } else if line == 0 && undecided == 2 {
                     for &(dy, dx) in &dirs {
                         let e = self.get_edge((Y(y + dy), X(x + dx)));
                         if e == Edge::Undecided {
@@ -621,10 +645,10 @@ impl AnswerField {
         let (Y(y2), X(x2)) = self.chain_union.coord(end2_id);
         let end2 = (Y(y2 * 2), X(x2 * 2));
 
-        let end1_undecided = self.undecided_neighbors(end1);
-        let end2_undecided = self.undecided_neighbors(end2);
+        let end1_undecided = self.undecided_neighbors_summary(end1);
+        let end2_undecided = self.undecided_neighbors_summary(end2);
 
-        if end1_undecided.len() == 0 {
+        if end1_undecided == Cnt::None {
             let con = self.endpoint_constraint[(Y(y2), X(x2))];
             match con {
                 Endpoint::Forced => {
@@ -638,7 +662,7 @@ impl AnswerField {
                 Endpoint::Prohibited => (),
             }
         }
-        if end2_undecided.len() == 0 {
+        if end2_undecided == Cnt::None {
             let con = self.endpoint_constraint[(Y(y), X(x))];
             match con {
                 Endpoint::Forced => {
@@ -652,13 +676,12 @@ impl AnswerField {
                 Endpoint::Prohibited => (),
             }
         }
-        match (end1_undecided.len(), end2_undecided.len()) {
-            (0, 0) => {
+        match (end1_undecided, end2_undecided) {
+            (Cnt::None, Cnt::None) => {
                 self.invalid = true;
                 return;
             }
-            (0, 1) => self.decide(end2_undecided[0], Edge::Line),
-            (1, 0) => self.decide(end1_undecided[0], Edge::Line),
+            (Cnt::None, Cnt::One(e)) | (Cnt::One(e), Cnt::None) => self.decide(e, Edge::Line),
             _ => (),
         }
     }
