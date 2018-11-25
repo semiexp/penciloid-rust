@@ -5,8 +5,6 @@ mod common;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod endview;
 #[cfg(not(target_arch = "wasm32"))]
-pub mod format;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod grid_loop;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod kakuro;
@@ -14,11 +12,11 @@ pub mod kakuro;
 pub mod numberlink;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod slitherlink;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod io;
 
 #[cfg(target_arch = "wasm32")]
 mod endview;
-#[cfg(target_arch = "wasm32")]
-mod format;
 #[cfg(target_arch = "wasm32")]
 mod grid_loop;
 #[cfg(target_arch = "wasm32")]

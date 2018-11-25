@@ -4,7 +4,7 @@ mod dictionary;
 mod evaluator;
 mod field;
 mod field_shape;
-mod format;
+mod io;
 mod generator;
 pub mod trainer;
 
@@ -152,7 +152,7 @@ pub use self::dictionary::Dictionary;
 pub use self::evaluator::*;
 pub use self::field::*;
 pub use self::field_shape::*;
-pub use self::format::*;
+pub use self::io::*;
 pub use self::generator::*;
 
 use super::{Grid, X, Y};
