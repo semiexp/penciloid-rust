@@ -13,6 +13,8 @@ pub mod numberlink;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod slitherlink;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod cli;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod io;
 
 #[cfg(target_arch = "wasm32")]
