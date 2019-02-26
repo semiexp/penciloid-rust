@@ -13,6 +13,8 @@ pub mod numberlink;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod slitherlink;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod tapa;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod io;
@@ -27,6 +29,8 @@ mod kakuro;
 mod numberlink;
 #[cfg(target_arch = "wasm32")]
 mod slitherlink;
+#[cfg(target_arch = "wasm32")]
+mod tapa;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use common::*;
