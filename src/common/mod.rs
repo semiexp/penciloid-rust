@@ -1,5 +1,8 @@
 use std::ops::{Index, IndexMut};
 
+mod graph_separation;
+pub use self::graph_separation::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Y(pub i32);
 

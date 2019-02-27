@@ -1,4 +1,4 @@
-use super::super::{Coord, Grid, X, Y};
+use super::super::{Coord, GraphSeparation, Grid, X, Y};
 use super::{Cell, Clue, Dictionary, DICTIONARY_INCONSISTENT, DICTIONARY_NEIGHBOR_OFFSET, NO_CLUE};
 
 pub struct Field<'a> {
@@ -16,6 +16,12 @@ impl<'a> Field<'a> {
             inconsistent: false,
             dic,
         }
+    }
+    pub fn height(&self) -> i32 {
+        self.cell.height()
+    }
+    pub fn width(&self) -> i32 {
+        self.cell.width()
     }
     pub fn inconsistent(&self) -> bool {
         self.inconsistent
@@ -60,6 +66,49 @@ impl<'a> Field<'a> {
         for dy in -1..2 {
             for dx in -1..2 {
                 self.inspect((Y(y + dy), X(x + dx)));
+            }
+        }
+    }
+    pub fn inspect_connectivity(&mut self) {
+        let height = self.height();
+        let width = self.width();
+        let cells = (height * width) as usize;
+        let mut graph = GraphSeparation::new(cells, cells * 2);
+
+        for y in 0..height {
+            for x in 0..width {
+                let c = self.cell((Y(y), X(x)));
+                graph.set_weight(
+                    (y * width + x) as usize,
+                    if c == Cell::Black { 1 } else { 0 },
+                );
+                if c != Cell::White {
+                    if self.cell_checked((Y(y + 1), X(x))) != Cell::White {
+                        graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
+                    }
+                    if self.cell_checked((Y(y), X(x + 1))) != Cell::White {
+                        graph.add_edge((y * width + x) as usize, (y * width + (x + 1)) as usize);
+                    }
+                }
+            }
+        }
+
+        graph.build();
+
+        for y in 0..height {
+            for x in 0..width {
+                if self.cell((Y(y), X(x))) == Cell::Undecided {
+                    let sep = graph.separate((y * width + x) as usize);
+                    let mut nonzero = 0;
+                    for v in sep {
+                        if v > 0 {
+                            nonzero += 1;
+                        }
+                    }
+                    if nonzero >= 2 {
+                        self.decide((Y(y), X(x)), Cell::Black);
+                    }
+                }
             }
         }
     }
@@ -120,6 +169,26 @@ mod tests {
         assert_eq!(field.cell((Y(1), X(4))), Cell::Black);
         assert_eq!(field.cell((Y(2), X(4))), Cell::Black);
         assert_eq!(field.cell((Y(3), X(4))), Cell::Black);
+        assert_eq!(field.inconsistent(), false);
+    }
+
+    #[test]
+    fn test_tapa_connectivity() {
+        let dic = Dictionary::complete();
+
+        let mut field = Field::new(5, 6, &dic);
+        field.decide((Y(0), X(0)), Cell::Black);
+        field.decide((Y(4), X(5)), Cell::Black);
+        field.decide((Y(1), X(0)), Cell::White);
+        field.decide((Y(2), X(1)), Cell::White);
+        field.decide((Y(0), X(3)), Cell::White);
+        field.decide((Y(0), X(2)), Cell::Undecided);
+        field.decide((Y(1), X(1)), Cell::Undecided);
+
+        field.inspect_connectivity();
+
+        assert_eq!(field.cell((Y(0), X(1))), Cell::Black);
+        assert_eq!(field.cell((Y(1), X(2))), Cell::Black);
         assert_eq!(field.inconsistent(), false);
     }
 }
