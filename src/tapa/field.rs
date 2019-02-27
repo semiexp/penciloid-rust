@@ -63,9 +63,31 @@ impl<'a> Field<'a> {
         self.cell[loc] = v;
 
         let (Y(y), X(x)) = loc;
+
+        if v == Cell::Black {
+            self.avoid_cluster((Y(y - 1), X(x - 1)), (Y(y - 1), X(x)), (Y(y), X(x - 1)));
+            self.avoid_cluster((Y(y - 1), X(x + 1)), (Y(y - 1), X(x)), (Y(y), X(x + 1)));
+            self.avoid_cluster((Y(y + 1), X(x - 1)), (Y(y + 1), X(x)), (Y(y), X(x - 1)));
+            self.avoid_cluster((Y(y + 1), X(x + 1)), (Y(y + 1), X(x)), (Y(y), X(x + 1)));
+        }
+
         for dy in -1..2 {
             for dx in -1..2 {
                 self.inspect((Y(y + dy), X(x + dx)));
+            }
+        }
+    }
+    fn avoid_cluster(&mut self, loc1: Coord, loc2: Coord, loc3: Coord) {
+        if self.cell_checked(loc1) == Cell::Black {
+            if self.cell_checked(loc2) == Cell::Black {
+                self.decide(loc3, Cell::White);
+            }
+            if self.cell_checked(loc3) == Cell::Black {
+                self.decide(loc2, Cell::White);
+            }
+        } else {
+            if self.cell_checked(loc2) == Cell::Black && self.cell_checked(loc3) == Cell::Black {
+                self.decide(loc1, Cell::White);
             }
         }
     }
@@ -158,7 +180,7 @@ mod tests {
     use super::super::clue_pattern_to_id;
 
     #[test]
-    fn test_tapa_field() {
+    fn test_tapa_field_clues() {
         let dic = Dictionary::complete();
 
         let mut field = Field::new(5, 6, &dic);
@@ -173,7 +195,20 @@ mod tests {
     }
 
     #[test]
-    fn test_tapa_connectivity() {
+    fn test_tapa_field_cluster() {
+        let dic = Dictionary::complete();
+
+        let mut field = Field::new(5, 6, &dic);
+        field.decide(((Y(1), X(1))), Cell::Black);
+        field.decide(((Y(1), X(2))), Cell::Black);
+        field.decide(((Y(2), X(2))), Cell::Black);
+
+        assert_eq!(field.cell((Y(2), X(1))), Cell::White);
+        assert_eq!(field.inconsistent(), false);
+    }
+
+    #[test]
+    fn test_tapa_field_connectivity() {
         let dic = Dictionary::complete();
 
         let mut field = Field::new(5, 6, &dic);
