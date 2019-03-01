@@ -1,5 +1,7 @@
 use super::super::{Coord, GraphSeparation, Grid, X, Y};
-use super::{Cell, Clue, Dictionary, DICTIONARY_INCONSISTENT, DICTIONARY_NEIGHBOR_OFFSET, NO_CLUE};
+use super::{Cell, Clue, Dictionary, CLUE_VALUES, DICTIONARY_INCONSISTENT,
+            DICTIONARY_NEIGHBOR_OFFSET, NO_CLUE};
+use std::fmt;
 
 pub struct Field<'a> {
     cell: Grid<Cell>,
@@ -28,6 +30,9 @@ impl<'a> Field<'a> {
     }
     pub fn set_inconsistent(&mut self) {
         self.inconsistent = true;
+    }
+    pub fn clue(&self, loc: Coord) -> Clue {
+        self.clue[loc]
     }
     pub fn add_clue(&mut self, loc: Coord, clue: Clue) {
         let current_clue = self.clue[loc];
@@ -174,6 +179,44 @@ impl<'a> Field<'a> {
     }
 }
 
+impl<'a> fmt::Display for Field<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let height = self.height();
+        let width = self.width();
+        for y in 0..height {
+            for x in 0..width {
+                match self.cell((Y(y), X(x))) {
+                    Cell::Undecided => write!(f, ".... ")?,
+                    Cell::Black => write!(f, "#### ")?,
+                    Cell::White => {
+                        let clue = self.clue((Y(y), X(x)));
+                        if clue == NO_CLUE {
+                            write!(f, "____ ")?;
+                        } else {
+                            let Clue(id) = clue;
+                            if id == 0 {
+                                write!(f, "0____ ")?;
+                            } else {
+                                for i in 0..4 {
+                                    let v = CLUE_VALUES[id as usize][i];
+                                    if v == -1 {
+                                        write!(f, "_")?;
+                                    } else {
+                                        write!(f, "{}", v)?;
+                                    }
+                                }
+                                write!(f, " ")?;
+                            }
+                        }
+                    }
+                }
+            }
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,6 +267,43 @@ mod tests {
 
         assert_eq!(field.cell((Y(0), X(1))), Cell::Black);
         assert_eq!(field.cell((Y(1), X(2))), Cell::Black);
+        assert_eq!(field.inconsistent(), false);
+    }
+
+    #[test]
+    fn test_tapa_field_problem() {
+        let dic = Dictionary::complete();
+
+        let mut field = Field::new(6, 5, &dic);
+        field.add_clue((Y(1), X(0)), clue_pattern_to_id(&[1, 3]).unwrap());
+        field.add_clue((Y(1), X(2)), clue_pattern_to_id(&[2, 4]).unwrap());
+        field.add_clue((Y(3), X(1)), clue_pattern_to_id(&[3, 3]).unwrap());
+        field.add_clue((Y(4), X(3)), clue_pattern_to_id(&[4]).unwrap());
+
+        field.inspect_connectivity();
+        field.inspect_connectivity();
+        field.inspect_connectivity();
+
+        let expected = [
+            [1, 1, 1, 1, 1],
+            [0, 1, 0, 0, 1],
+            [1, 0, 1, 1, 1],
+            [1, 0, 1, 0, 0],
+            [1, 0, 1, 0, 0],
+            [1, 1, 1, 1, 0],
+        ];
+        for y in 0..6 {
+            for x in 0..5 {
+                assert_eq!(
+                    field.cell((Y(y), X(x))),
+                    if expected[y as usize][x as usize] == 1 {
+                        Cell::Black
+                    } else {
+                        Cell::White
+                    }
+                );
+            }
+        }
         assert_eq!(field.inconsistent(), false);
     }
 }
