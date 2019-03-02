@@ -148,6 +148,105 @@ impl<'a, 'b> Field<'a, 'b> {
             }
         }
     }
+    pub fn inspect_connectivity_advanced(&mut self) {
+        let height = self.height();
+        let width = self.width();
+        let cells = (height * width) as usize;
+        let mut graph = GraphSeparation::new(cells, cells * 2);
+
+        let mut edge_down = Grid::new(height, width, true);
+        let mut edge_right = Grid::new(height, width, true);
+
+        for y in 0..height {
+            for x in 0..width {
+                let clue = self.clue((Y(y), X(x)));
+                if clue != NO_CLUE {
+                    let Clue(c) = clue;
+                    if c <= 4 {
+                        // clues containing only 1's
+                        // TODO: check the condition more properly
+
+                        for dy in -1..2 {
+                            for dx in -1..2 {
+                                let cd2 = (Y(y + dy), X(x + dx));
+                                if edge_down.is_valid_coord(cd2) {
+                                    if dy != 1 {
+                                        edge_down[cd2] = false;
+                                    }
+                                    if dx != 1 {
+                                        edge_right[cd2] = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for y in 0..height {
+            for x in 0..width {
+                let c = self.cell((Y(y), X(x)));
+                graph.set_weight(
+                    (y * width + x) as usize,
+                    if c == Cell::Black { 1 } else { 0 },
+                );
+                if c != Cell::White {
+                    if edge_down[(Y(y), X(x))] && self.cell_checked((Y(y + 1), X(x))) != Cell::White
+                    {
+                        graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
+                    }
+                    if edge_right[(Y(y), X(x))]
+                        && self.cell_checked((Y(y), X(x + 1))) != Cell::White
+                    {
+                        graph.add_edge((y * width + x) as usize, (y * width + (x + 1)) as usize);
+                    }
+                }
+            }
+        }
+
+        graph.build();
+
+        let mut black_root = None;
+        for y in 0..height {
+            for x in 0..width {
+                if self.cell((Y(y), X(x))) == Cell::Black {
+                    let root = graph.union_root((y * width + x) as usize);
+                    match black_root {
+                        Some(b) => if b != root {
+                            self.inconsistent = true;
+                            return;
+                        },
+                        None => black_root = Some(root),
+                    }
+                }
+            }
+        }
+
+        for y in 0..height {
+            for x in 0..width {
+                if self.cell((Y(y), X(x))) == Cell::Undecided {
+                    let root = graph.union_root((y * width + x) as usize);
+                    if let Some(b) = black_root {
+                        if b != root {
+                            self.decide((Y(y), X(x)), Cell::White);
+                            continue;
+                        }
+                    }
+                    let sep = graph.separate((y * width + x) as usize);
+                    let mut nonzero = 0;
+                    for v in sep {
+                        if v > 0 {
+                            nonzero += 1;
+                        }
+                    }
+                    if nonzero >= 2 {
+                        self.decide((Y(y), X(x)), Cell::Black);
+                    }
+                }
+            }
+        }
+    }
     pub fn inspect_connectivity_clue_aware(&mut self) {
         let height = self.height();
         let width = self.width();

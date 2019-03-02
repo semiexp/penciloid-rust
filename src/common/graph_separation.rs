@@ -87,6 +87,9 @@ where
             e = self.next_edge[e];
         }
     }
+    pub fn union_root(&self, u: usize) -> usize {
+        self.root[u]
+    }
     pub fn separate(&self, sep: usize) -> Vec<T> {
         let mut ret = vec![];
 
