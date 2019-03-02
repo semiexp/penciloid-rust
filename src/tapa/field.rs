@@ -225,7 +225,6 @@ impl<'a, 'b> Field<'a, 'b> {
                         continue;
                     }
                     if id[cd2] == -1 {
-                        // hoge
                         visit(cd2, cd, cell, id, parent_id, lowlink, weight, id_last);
                         lowlink[cd] = cmp::min(lowlink[cd], lowlink[cd2]);
                         weight[cd] += weight[cd2];
@@ -306,7 +305,7 @@ impl<'a, 'b> Field<'a, 'b> {
                                     if !id.is_valid_coord(cd3) || id[cd3] == -1 {
                                         continue;
                                     }
-                                    if id[cd3] <= id[cd2] {
+                                    if parent_id[cd3] == id[cd] && id[cd3] <= id[cd2] {
                                         closest = cmp::max(closest, (id[cd3], j));
                                     }
                                 }
