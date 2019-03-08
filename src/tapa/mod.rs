@@ -41,6 +41,9 @@ pub const CLUE_VALUES: [[i32; 5]; CLUE_TYPES] = [
     [7, -1, -1, -1, -1],
     [8, -1, -1, -1, -1],
 ];
+pub const CLUE_MAX: [i32; CLUE_TYPES] = [
+    0, 1, 1, 1, 1, 2, 3, 2, 2, 3, 4, 5, 2, 2, 3, 4, 3, 3, 4, 5, 6, 7, 8
+];
 
 pub fn clue_pattern_to_id(pat: &[i32]) -> Option<Clue> {
     let mut sorted = Vec::from(pat);

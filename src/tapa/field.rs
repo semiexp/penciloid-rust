@@ -1,14 +1,16 @@
 use super::super::{Coord, GraphSeparation, Grid, X, Y};
-use super::{Cell, Clue, ConsecutiveRegionDictionary, Dictionary, CLUE_VALUES,
+use super::{Cell, Clue, ConsecutiveRegionDictionary, Dictionary, CLUE_MAX, CLUE_VALUES,
             CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET, CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE,
             DICTIONARY_INCONSISTENT, DICTIONARY_NEIGHBOR_OFFSET, DICTIONARY_NEIGHBOR_SIZE, NO_CLUE};
 use std::fmt;
 use std::cmp;
 
+#[derive(Clone)]
 pub struct Field<'a, 'b> {
     cell: Grid<Cell>,
     clue: Grid<Clue>,
     inconsistent: bool,
+    decided_cells: i32,
     dic: &'a Dictionary,
     consecutive_dic: &'b ConsecutiveRegionDictionary,
 }
@@ -24,6 +26,7 @@ impl<'a, 'b> Field<'a, 'b> {
             cell: Grid::new(height, width, Cell::Undecided),
             clue: Grid::new(height, width, NO_CLUE),
             inconsistent: false,
+            decided_cells: 0,
             dic,
             consecutive_dic,
         }
@@ -39,6 +42,12 @@ impl<'a, 'b> Field<'a, 'b> {
     }
     pub fn set_inconsistent(&mut self) {
         self.inconsistent = true;
+    }
+    pub fn decided_cells(&self) -> i32 {
+        self.decided_cells
+    }
+    pub fn fully_solved(&self) -> bool {
+        self.decided_cells == self.height() * self.width()
     }
     pub fn clue(&self, loc: Coord) -> Clue {
         self.clue[loc]
@@ -75,6 +84,7 @@ impl<'a, 'b> Field<'a, 'b> {
         }
 
         self.cell[loc] = v;
+        self.decided_cells += 1;
 
         let (Y(y), X(x)) = loc;
 
@@ -162,9 +172,8 @@ impl<'a, 'b> Field<'a, 'b> {
                 let clue = self.clue((Y(y), X(x)));
                 if clue != NO_CLUE {
                     let Clue(c) = clue;
-                    if c <= 4 {
+                    if CLUE_MAX[c as usize] <= 1 {
                         // clues containing only 1's
-                        // TODO: check the condition more properly
 
                         for dy in -1..2 {
                             for dx in -1..2 {
@@ -468,6 +477,56 @@ impl<'a, 'b> Field<'a, 'b> {
             }
         }
     }
+    pub fn solve(&mut self) {
+        while !self.inconsistent {
+            let decided_cells = self.decided_cells;
+            self.inspect_connectivity();
+            self.inspect_connectivity_advanced();
+            if self.decided_cells == decided_cells {
+                break;
+            }
+        }
+    }
+    pub fn trial_and_error(&mut self) {
+        let height = self.height();
+        let width = self.width();
+        let mut updated = true;
+        while updated {
+            self.solve();
+            if self.inconsistent {
+                break;
+            }
+            updated = false;
+            for y in 0..height {
+                for x in 0..width {
+                    if self.cell((Y(y), X(x))) == Cell::Undecided {
+                        let mut trial_black = self.clone();
+                        trial_black.decide((Y(y), X(x)), Cell::Black);
+                        trial_black.solve();
+
+                        if trial_black.inconsistent() {
+                            self.decide((Y(y), X(x)), Cell::White);
+                            self.solve();
+                            updated = true;
+                        }
+
+                        let mut trial_white = self.clone();
+                        trial_white.decide((Y(y), X(x)), Cell::White);
+                        trial_white.solve();
+
+                        if trial_white.inconsistent() {
+                            self.decide((Y(y), X(x)), Cell::Black);
+                            self.solve();
+                            updated = true;
+                        }
+                    }
+                    if self.inconsistent {
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<'a, 'b> fmt::Display for Field<'a, 'b> {
@@ -601,6 +660,8 @@ mod tests {
                 }
             }
             assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.decided_cells(), 30);
+            assert_eq!(field.fully_solved(), true);
         }
         {
             let mut field = Field::new(2, 7, &dic, &consecutive_dic);
