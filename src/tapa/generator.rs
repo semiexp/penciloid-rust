@@ -51,7 +51,15 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, rng: &mut R) -> Option<Grid<Clue>
                         < ((current_progress - field.decided_cells()) as f64 / temperature).exp());
 
             if update {
-                if field.fully_solved() {
+                let mut clue_filled = true;
+                for y in 0..height {
+                    for x in 0..width {
+                        if has_clue[(Y(y), X(x))] && problem[(Y(y), X(x))] == NO_CLUE {
+                            clue_filled = false;
+                        }
+                    }
+                }
+                if field.fully_solved() && clue_filled {
                     println!("{}", field);
                     return Some(problem);
                 }
