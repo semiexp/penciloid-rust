@@ -5,30 +5,85 @@ use rand::distributions::Distribution;
 use rand::{distributions, Rng};
 use std::cmp;
 
-pub fn generate<R: Rng>(has_clue: &Grid<bool>, rng: &mut R) -> Option<Grid<Clue>> {
-    let height = has_clue.height();
-    let width = has_clue.width();
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ClueConstraint {
+    Any,
+    Forced,
+    Prohibited,
+}
+
+pub fn generate<R: Rng>(clue_constraint: &Grid<ClueConstraint>, rng: &mut R) -> Option<Grid<Clue>> {
+    let height = clue_constraint.height();
+    let width = clue_constraint.width();
+    let mut has_clue = Grid::new(height, width, false);
+
     let dic = Dictionary::complete();
     let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
     let mut problem = Grid::new(height, width, NO_CLUE);
-    let mut current_progress = 0i32;
+    let mut field = Field::new(height, width, &dic, &consecutive_dic);
+    let mut current_energy = 0i32;
+    let mut n_clues = 0;
 
-    let n_step = height * width * 10;
-    let mut temperature = 10f64;
+    for y in 0..height {
+        for x in 0..width {
+            if clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
+                has_clue[(Y(y), X(x))] = true;
+                n_clues += 1;
+            }
+        }
+    }
 
-    for _ in 0..n_step {
+    let n_step = height * width * 20;
+    let mut temperature = 20f64;
+
+    for s in 0..n_step {
         let mut update_cand = vec![];
         for y in 0..height {
             for x in 0..width {
-                if has_clue[(Y(y), X(x))] {
-                    for v in 0..CLUE_TYPES {
-                        if v == 0 || v == 6 || v == 8 || v == 11 || v == 19 || v == 20 || v == 21
-                            || v == 22
+                if field.cell((Y(y), X(x))) == Cell::Black
+                    || clue_constraint[(Y(y), X(x))] == ClueConstraint::Prohibited
+                {
+                    continue;
+                }
+                let y2 = height - 1 - y;
+                let x2 = width - 1 - x;
+                if -1 <= y - y2 && y - y2 <= 1 && -1 <= x - x2 && x - x2 <= 1
+                    && (y != y2 || x != x2)
+                {
+                    continue;
+                }
+                let mut isok = true;
+                for dy in -1..2 {
+                    for dx in -1..2 {
+                        if (dy != 0 || dx != 0) && has_clue.is_valid_coord((Y(y + dy), X(x + dx)))
+                            && has_clue[(Y(y + dy), X(x + dx))]
                         {
+                            isok = false;
+                        }
+                    }
+                }
+                let mut isok2 = false;
+                for dy in -2..3 {
+                    for dx in -2..3 {
+                        let loc = (Y(y + dy), X(x + dx));
+                        if field.cell_checked(loc) == Cell::Undecided {
+                            isok2 = true;
+                        }
+                    }
+                }
+                if (has_clue[(Y(y), X(x))] && problem[(Y(y), X(x))] == NO_CLUE)
+                    || (isok && isok2
+                        && (problem[(Y(y), X(x))] != NO_CLUE || rng.gen::<f64>() < 1.0))
+                {
+                    for v in (-1)..(CLUE_TYPES as i32) {
+                        if v == -1 && clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
                             continue;
                         }
-                        let next_clue = Clue(v as i32);
+                        if v == 0 || v == 21 || v == 22 {
+                            continue;
+                        }
+                        let next_clue = Clue(v);
                         if problem[(Y(y), X(x))] != next_clue {
                             update_cand.push(((Y(y), X(x)), next_clue));
                         }
@@ -39,16 +94,35 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, rng: &mut R) -> Option<Grid<Clue>
 
         rng.shuffle(&mut update_cand);
 
+        let mut applicable_cands = vec![];
+
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
+            let mut n_clues2 = n_clues;
+            let (Y(y), X(x)) = loc;
+            let loc2 = (Y(height - 1 - y), X(width - 1 - x));
+            if clue == NO_CLUE {
+                if loc == loc2 {
+                    n_clues2 -= 1;
+                } else if problem[loc2] == NO_CLUE {
+                    n_clues2 -= 2;
+                }
+            } else {
+                if !has_clue[loc] {
+                    n_clues2 += 1;
+                }
+                if loc != loc2 && !has_clue[loc2] {
+                    n_clues2 += 1;
+                }
+            }
 
             problem[loc] = clue;
             let field = solve_test(&problem, &has_clue, &dic, &consecutive_dic);
+            let energy = field.decided_cells() - 4 * n_clues2;
 
             let update = !field.inconsistent()
-                && (current_progress < field.decided_cells()
-                    || rng.gen::<f64>()
-                        < ((current_progress - field.decided_cells()) as f64 / temperature).exp());
+                && (current_energy < energy
+                    || rng.gen::<f64>() < ((energy - current_energy) as f64 / temperature).exp());
 
             if update {
                 let mut clue_filled = true;
@@ -60,14 +134,47 @@ pub fn generate<R: Rng>(has_clue: &Grid<bool>, rng: &mut R) -> Option<Grid<Clue>
                     }
                 }
                 if field.fully_solved() && clue_filled {
-                    println!("{}", field);
                     return Some(problem);
                 }
-                current_progress = field.decided_cells();
-                break;
-            } else {
-                problem[loc] = previous_clue;
+
+                applicable_cands.push((loc, clue, energy, n_clues2, field));
             }
+            problem[loc] = previous_clue;
+
+            if applicable_cands.len() >= 1 {
+                break;
+            }
+        }
+
+        if applicable_cands.len() >= 1 {
+            let mut best_cand = applicable_cands.swap_remove(0);
+            while applicable_cands.len() > 0 {
+                let cand2 = applicable_cands.swap_remove(0);
+                if best_cand.3 < cand2.3 {
+                    best_cand = cand2;
+                }
+            }
+
+            let (loc, clue, energy, n_clues2, field2) = best_cand;
+
+            current_energy = energy;
+            n_clues = n_clues2;
+            problem[loc] = clue;
+            field = field2;
+
+            let (Y(y), X(x)) = loc;
+            let loc2 = (Y(height - 1 - y), X(width - 1 - x));
+            if clue == NO_CLUE {
+                if problem[loc2] == NO_CLUE {
+                    has_clue[loc] = false;
+                    has_clue[loc2] = false;
+                }
+            } else {
+                has_clue[loc] = true;
+                has_clue[loc2] = true;
+            }
+        } else {
+            break;
         }
 
         temperature *= 0.995f64;
