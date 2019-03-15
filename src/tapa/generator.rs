@@ -12,12 +12,16 @@ pub enum ClueConstraint {
     Prohibited,
 }
 
-pub fn generate<R: Rng>(clue_constraint: &Grid<ClueConstraint>, rng: &mut R) -> Option<Grid<Clue>> {
+pub fn generate<R: Rng>(
+    clue_constraint: &Grid<ClueConstraint>,
+    max_clue: Option<i32>,
+    rng: &mut R,
+) -> Option<Grid<Clue>> {
     let height = clue_constraint.height();
     let width = clue_constraint.width();
     let mut has_clue = Grid::new(height, width, false);
 
-    let dic = Dictionary::complete();
+    let dic = Dictionary::new();
     let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
     let mut problem = Grid::new(height, width, NO_CLUE);
@@ -113,6 +117,11 @@ pub fn generate<R: Rng>(clue_constraint: &Grid<ClueConstraint>, rng: &mut R) -> 
                 }
                 if loc != loc2 && !has_clue[loc2] {
                     n_clues2 += 1;
+                }
+            }
+            if let Some(max_clue) = max_clue {
+                if max_clue < n_clues2 {
+                    continue;
                 }
             }
 
