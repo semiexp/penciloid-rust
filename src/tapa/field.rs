@@ -459,7 +459,7 @@ impl<'a, 'b> Field<'a, 'b> {
                 };
                 pow *= 3;
             }
-            let neighbor = self.dic.consult_raw(clue, neighbor);
+            let neighbor = self.dic.neighbor_pattern_raw(clue, neighbor);
 
             if neighbor == DICTIONARY_INCONSISTENT {
                 self.inconsistent = true;
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_tapa_field_clues() {
-        let dic = Dictionary::complete();
+        let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 6, &dic, &consecutive_dic);
@@ -590,7 +590,7 @@ mod tests {
 
     #[test]
     fn test_tapa_field_cluster() {
-        let dic = Dictionary::complete();
+        let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 6, &dic, &consecutive_dic);
@@ -604,7 +604,7 @@ mod tests {
 
     #[test]
     fn test_tapa_field_connectivity() {
-        let dic = Dictionary::complete();
+        let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 6, &dic, &consecutive_dic);
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn test_tapa_field_problem() {
-        let dic = Dictionary::complete();
+        let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         {
@@ -691,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_tapa_field_connectivity_clue_aware() {
-        let dic = Dictionary::complete();
+        let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         {

@@ -15,14 +15,15 @@ pub const DICTIONARY_NEIGHBOR_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
 pub const DICTIONARY_INCONSISTENT: u32 = 0xffffffff;
 
 const DICTIONARY_NEIGHBOR_PATTERN_COUNT: usize = 6561; // 3^8
-const DICTIONARY_SIZE: usize = DICTIONARY_NEIGHBOR_PATTERN_COUNT * CLUE_TYPES;
+const DICTIONARY_NEIGHBOR_PATTERN_TOTAL_SIZE: usize =
+    DICTIONARY_NEIGHBOR_PATTERN_COUNT * CLUE_TYPES;
 
 pub struct Dictionary {
-    dic: Vec<u32>,
+    neighbor_pattern: Vec<u32>,
 }
 impl Dictionary {
-    pub fn complete() -> Dictionary {
-        let mut dic = vec![0u32; DICTIONARY_SIZE];
+    pub fn new() -> Dictionary {
+        let mut neighbor_pattern = vec![0u32; DICTIONARY_NEIGHBOR_PATTERN_TOTAL_SIZE];
         for ty in 0..CLUE_TYPES {
             let ofs = ty * DICTIONARY_NEIGHBOR_PATTERN_COUNT;
             for pat_id in 0..DICTIONARY_NEIGHBOR_PATTERN_COUNT {
@@ -40,11 +41,11 @@ impl Dictionary {
                 match undecided_loc {
                     Some(p) => {
                         pat[p] = Cell::Black;
-                        let cand1 = dic[ofs + Dictionary::pattern_to_id(&pat)];
+                        let cand1 = neighbor_pattern[ofs + Dictionary::pattern_to_id(&pat)];
                         pat[p] = Cell::White;
-                        let cand2 = dic[ofs + Dictionary::pattern_to_id(&pat)];
+                        let cand2 = neighbor_pattern[ofs + Dictionary::pattern_to_id(&pat)];
 
-                        dic[ofs + pat_id] = cand1 & cand2;
+                        neighbor_pattern[ofs + pat_id] = cand1 & cand2;
                     }
                     None => {
                         let chains = Dictionary::neighbor_chain(&pat);
@@ -60,25 +61,26 @@ impl Dictionary {
                                     _ => unreachable!(),
                                 } << (2 * i);
                             }
-                            dic[ofs + pat_id] = pat_id_bin;
+                            neighbor_pattern[ofs + pat_id] = pat_id_bin;
                         } else {
-                            dic[ofs + pat_id] = DICTIONARY_INCONSISTENT;
+                            neighbor_pattern[ofs + pat_id] = DICTIONARY_INCONSISTENT;
                         }
                     }
                 }
             }
         }
 
-        Dictionary { dic }
+        Dictionary { neighbor_pattern }
     }
 
-    pub fn consult_raw(&self, c: Clue, neighbor_code: u32) -> u32 {
+    pub fn neighbor_pattern_raw(&self, c: Clue, neighbor_code: u32) -> u32 {
         let Clue(c) = c;
-        self.dic[c as usize * DICTIONARY_NEIGHBOR_PATTERN_COUNT + neighbor_code as usize]
+        self.neighbor_pattern
+            [c as usize * DICTIONARY_NEIGHBOR_PATTERN_COUNT + neighbor_code as usize]
     }
-    pub fn consult(&self, c: Clue, neighbor: &mut [Cell]) -> bool {
+    pub fn neighbor_pattern(&self, c: Clue, neighbor: &mut [Cell]) -> bool {
         let id = Dictionary::pattern_to_id(neighbor);
-        let res = self.consult_raw(c, id as u32);
+        let res = self.neighbor_pattern_raw(c, id as u32);
 
         if res == DICTIONARY_INCONSISTENT {
             true
@@ -218,7 +220,8 @@ impl ConsecutiveRegionDictionary {
                         pow3 *= 3;
                     }
 
-                    if dic_base.consult_raw(Clue(ty as i32), ternary_id) == DICTIONARY_INCONSISTENT
+                    if dic_base.neighbor_pattern_raw(Clue(ty as i32), ternary_id)
+                        == DICTIONARY_INCONSISTENT
                     {
                         for j in 0..len {
                             parts |= 1 << (((p + j) % 8) as u32);
@@ -331,60 +334,60 @@ mod tests {
     }
     #[test]
     fn test_tapa_dictionary() {
-        let complete_dic = Dictionary::complete();
+        let complete_dic = Dictionary::new();
 
         {
             let mut original = str_to_pattern("????????");
             let clue = clue_pattern_to_id(&[]).unwrap();
             let expected = str_to_pattern("........");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("????????");
             let clue = clue_pattern_to_id(&[8]).unwrap();
             let expected = str_to_pattern("########");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("..??..??");
             let clue = clue_pattern_to_id(&[1]).unwrap();
             let expected = str_to_pattern("..??..??");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("??.?????");
             let clue = clue_pattern_to_id(&[4]).unwrap();
             let expected = str_to_pattern("??.???#?");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("?.??????");
             let clue = clue_pattern_to_id(&[1, 1, 3]).unwrap();
             let expected = str_to_pattern("#.#?#?#?");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("?????.??");
             let clue = clue_pattern_to_id(&[2, 4]).unwrap();
             let expected = str_to_pattern("?#?##.##");
-            complete_dic.consult(clue, &mut original);
+            complete_dic.neighbor_pattern(clue, &mut original);
             assert_eq!(original, expected);
         }
         {
             let mut original = str_to_pattern("?#??#???");
             let clue = clue_pattern_to_id(&[1, 1, 1, 1]).unwrap();
-            assert_eq!(complete_dic.consult(clue, &mut original), true);
+            assert_eq!(complete_dic.neighbor_pattern(clue, &mut original), true);
         }
     }
 
     #[test]
     fn test_tapa_consecutive_dictionary() {
-        let dic_base = Dictionary::complete();
+        let dic_base = Dictionary::new();
         let dic = ConsecutiveRegionDictionary::new(&dic_base);
 
         {
