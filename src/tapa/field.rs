@@ -163,6 +163,15 @@ impl<'a, 'b> Field<'a, 'b> {
         let width = self.width();
         let cells = (height * width) as usize;
         let mut graph = GraphSeparation::new(cells, cells * 2);
+        let mut activated_cell = Grid::new(height, width, true);
+
+        for y in 0..height {
+            for x in 0..width {
+                if self.cell((Y(y), X(x))) == Cell::White {
+                    activated_cell[(Y(y), X(x))] = false;
+                }
+            }
+        }
 
         let mut edge_down = Grid::new(height, width, true);
         let mut edge_right = Grid::new(height, width, true);
@@ -189,6 +198,55 @@ impl<'a, 'b> Field<'a, 'b> {
                             }
                         }
                     }
+
+                    let mut virtually_ignored_cell_pattern = 0u32;
+                    for i in 0..8 {
+                        let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                        let v = self.cell_checked((Y(y + dy), X(x + dx)));
+
+                        if v == Cell::White {
+                            virtually_ignored_cell_pattern |= (3 << (i * 2));
+                        } else {
+                            let mut is_degree_2;
+                            if dy == 0 || dx == 0 {
+                                is_degree_2 = self.cell_checked((Y(y + dy * 2), X(x + dx * 2)))
+                                    == Cell::White;
+                            } else {
+                                is_degree_2 = self.cell_checked((Y(y + dy), X(x + dx * 2)))
+                                    == Cell::White
+                                    && self.cell_checked((Y(y + dy * 2), X(x + dx))) == Cell::White;
+                            }
+                            {
+                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 1) % 8];
+                                if self.cell_checked((Y(y + dy), X(x + dx))) == Cell::White {
+                                    is_degree_2 = false;
+                                }
+                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 7) % 8];
+                                if self.cell_checked((Y(y + dy), X(x + dx))) == Cell::White {
+                                    is_degree_2 = false;
+                                }
+                            }
+
+                            if is_degree_2 {
+                                virtually_ignored_cell_pattern |= (1 << (i * 2));
+                            } else {
+                                if v == Cell::Black {
+                                    virtually_ignored_cell_pattern |= (2 << (i * 2));
+                                }
+                            }
+                        }
+                    }
+
+                    let res = self.dic
+                        .virtually_ignored_cell(clue, virtually_ignored_cell_pattern);
+                    if res != 0 {
+                        for i in 0..8 {
+                            if ((res >> i) & 1) != 0 {
+                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                activated_cell[(Y(y + dy), X(x + dx))] = false;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -198,15 +256,18 @@ impl<'a, 'b> Field<'a, 'b> {
                 let c = self.cell((Y(y), X(x)));
                 graph.set_weight(
                     (y * width + x) as usize,
-                    if c == Cell::Black { 1 } else { 0 },
+                    if c == Cell::Black && activated_cell[(Y(y), X(x))] {
+                        1
+                    } else {
+                        0
+                    },
                 );
                 if c != Cell::White {
-                    if edge_down[(Y(y), X(x))] && self.cell_checked((Y(y + 1), X(x))) != Cell::White
+                    if edge_down[(Y(y), X(x))] && y < height - 1 && activated_cell[(Y(y + 1), X(x))]
                     {
                         graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
                     }
-                    if edge_right[(Y(y), X(x))]
-                        && self.cell_checked((Y(y), X(x + 1))) != Cell::White
+                    if edge_right[(Y(y), X(x))] && x < width - 1 && activated_cell[(Y(y), X(x + 1))]
                     {
                         graph.add_edge((y * width + x) as usize, (y * width + (x + 1)) as usize);
                     }
@@ -219,7 +280,7 @@ impl<'a, 'b> Field<'a, 'b> {
         let mut black_root = None;
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::Black {
+                if self.cell((Y(y), X(x))) == Cell::Black && activated_cell[(Y(y), X(x))] {
                     let root = graph.union_root((y * width + x) as usize);
                     match black_root {
                         Some(b) => if b != root {
@@ -234,7 +295,7 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::Undecided {
+                if self.cell((Y(y), X(x))) == Cell::Undecided && activated_cell[(Y(y), X(x))] {
                     let root = graph.union_root((y * width + x) as usize);
                     if let Some(b) = black_root {
                         if b != root {
@@ -621,6 +682,24 @@ mod tests {
         assert_eq!(field.cell((Y(0), X(1))), Cell::Black);
         assert_eq!(field.cell((Y(1), X(2))), Cell::Black);
         assert_eq!(field.inconsistent(), false);
+    }
+
+    #[test]
+    fn test_tapa_field_virtually_ignored_cells() {
+        let dic = Dictionary::new();
+        let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
+
+        let mut field = Field::new(5, 7, &dic, &consecutive_dic);
+        field.add_clue((Y(1), X(3)), clue_pattern_to_id(&[1, 2]).unwrap());
+        field.add_clue((Y(3), X(3)), clue_pattern_to_id(&[1, 3]).unwrap());
+        field.decide((Y(0), X(0)), Cell::Black);
+        field.decide((Y(0), X(6)), Cell::Black);
+
+        field.inspect_connectivity_advanced();
+
+        assert_eq!(field.cell((Y(4), X(2))), Cell::Black);
+        assert_eq!(field.cell((Y(4), X(3))), Cell::Black);
+        assert_eq!(field.cell((Y(4), X(4))), Cell::Black);
     }
 
     #[test]

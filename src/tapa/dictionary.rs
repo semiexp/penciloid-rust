@@ -14,12 +14,19 @@ pub const DICTIONARY_NEIGHBOR_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
 ];
 pub const DICTIONARY_INCONSISTENT: u32 = 0xffffffff;
 
+// 0: undecided, 1: black, 2: white
 const DICTIONARY_NEIGHBOR_PATTERN_COUNT: usize = 6561; // 3^8
 const DICTIONARY_NEIGHBOR_PATTERN_TOTAL_SIZE: usize =
     DICTIONARY_NEIGHBOR_PATTERN_COUNT * CLUE_TYPES;
 
+// 0: undecided, 1: degree=2, 2: black, 3: white
+const DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT: usize = 1 << 16; // 4^8 = 2^16
+const DICTIONARY_VIRTUALLY_IGNORED_TOTAL_SIZE: usize =
+    DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT * CLUE_TYPES;
+
 pub struct Dictionary {
     neighbor_pattern: Vec<u32>,
+    virtually_ignored_cell: Vec<u32>,
 }
 impl Dictionary {
     pub fn new() -> Dictionary {
@@ -70,7 +77,68 @@ impl Dictionary {
             }
         }
 
-        Dictionary { neighbor_pattern }
+        let mut virtually_ignored_cell = vec![0u32; DICTIONARY_VIRTUALLY_IGNORED_TOTAL_SIZE];
+        for ty in 0..CLUE_TYPES {
+            let ofs = ty * DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT;
+            for pat_id in 0..DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT {
+                let mut ori = None;
+                for i in 0..8 {
+                    if ((pat_id >> (2 * i)) & 3) != 1 {
+                        ori = Some(i);
+                        break;
+                    }
+                }
+
+                if let Some(ori) = ori {
+                    let mut chain_length = 0;
+                    let mut ignored_cells_mask = 0u32;
+                    for i in 0..9 {
+                        let i = (i + ori) % 8;
+
+                        if ((pat_id >> (2 * i)) & 3) != 1 {
+                            if chain_length > 0 {
+                                let mut pat_id_blackened = pat_id;
+                                for j in 0..(chain_length + 2) {
+                                    let j = (i - j + 8) % 8;
+                                    pat_id_blackened =
+                                        (pat_id_blackened & !(3 << (2 * j))) | (2 << (2 * j));
+                                }
+
+                                let mut ternary_pat_id = 0;
+                                let mut pow3 = 1;
+                                for j in 0..8 {
+                                    let p = (pat_id_blackened >> (2 * j)) & 3;
+                                    let p = if p == 0 { 0 } else { p - 1 };
+                                    ternary_pat_id += p * pow3;
+                                    pow3 *= 3;
+                                }
+
+                                if neighbor_pattern
+                                    [ty * DICTIONARY_NEIGHBOR_PATTERN_COUNT + ternary_pat_id]
+                                    == DICTIONARY_INCONSISTENT
+                                {
+                                    for j in 0..chain_length {
+                                        let j = (i - j + 7) % 8;
+                                        ignored_cells_mask |= (1 << j);
+                                    }
+                                }
+
+                                chain_length = 0;
+                            }
+                        } else {
+                            chain_length += 1;
+                        }
+                    }
+
+                    virtually_ignored_cell[ofs + pat_id] = ignored_cells_mask;
+                }
+            }
+        }
+
+        Dictionary {
+            neighbor_pattern,
+            virtually_ignored_cell,
+        }
     }
 
     pub fn neighbor_pattern_raw(&self, c: Clue, neighbor_code: u32) -> u32 {
@@ -96,6 +164,12 @@ impl Dictionary {
             }
             false
         }
+    }
+
+    pub fn virtually_ignored_cell(&self, c: Clue, neighbor_code: u32) -> u32 {
+        let Clue(c) = c;
+        self.virtually_ignored_cell
+            [c as usize * DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT + neighbor_code as usize]
     }
 
     fn neighbor_chain(pattern: &[Cell]) -> Vec<i32> {
