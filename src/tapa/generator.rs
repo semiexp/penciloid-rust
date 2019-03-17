@@ -38,7 +38,7 @@ pub fn generate<R: Rng>(
         }
     }
 
-    let n_step = height * width * 20;
+    let n_step = height * width * 10;
     let mut temperature = 20f64;
 
     for s in 0..n_step {
@@ -126,7 +126,15 @@ pub fn generate<R: Rng>(
             }
 
             problem[loc] = clue;
-            let field = solve_test(&problem, &has_clue, &dic, &consecutive_dic);
+            let field = if previous_clue == NO_CLUE {
+                let mut f = field.clone();
+                f.add_clue(loc, clue);
+                f.solve();
+                f.trial_and_error();
+                f
+            } else {
+                solve_test(&problem, &has_clue, &dic, &consecutive_dic)
+            };
             let energy = field.decided_cells() - 4 * n_clues2;
 
             let update = !field.inconsistent()
