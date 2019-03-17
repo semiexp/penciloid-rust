@@ -13,6 +13,7 @@ pub struct Field<'a, 'b> {
     decided_cells: i32,
     dic: &'a Dictionary,
     consecutive_dic: &'b ConsecutiveRegionDictionary,
+    checking_region: Option<(Coord, Coord)>,
 }
 
 impl<'a, 'b> Field<'a, 'b> {
@@ -29,6 +30,7 @@ impl<'a, 'b> Field<'a, 'b> {
             decided_cells: 0,
             dic,
             consecutive_dic,
+            checking_region: None,
         }
     }
     pub fn height(&self) -> i32 {
@@ -75,6 +77,12 @@ impl<'a, 'b> Field<'a, 'b> {
         }
     }
     pub fn decide(&mut self, loc: Coord, v: Cell) {
+        if let Some(((Y(y1), X(x1)), (Y(y2), X(x2)))) = self.checking_region {
+            let (Y(y), X(x)) = loc;
+            if !(y1 <= y && y < y2 && x1 <= x && x < x2) {
+                return;
+            }
+        }
         let current_status = self.cell_checked(loc);
         if current_status != Cell::Undecided {
             if current_status != v {
@@ -561,7 +569,9 @@ impl<'a, 'b> Field<'a, 'b> {
             for y in 0..height {
                 for x in 0..width {
                     if self.cell((Y(y), X(x))) == Cell::Undecided {
+                        let checking_region = ((Y(y - 2), X(x - 2)), (Y(y + 3), X(x + 3)));
                         let mut trial_black = self.clone();
+                        trial_black.checking_region = Some(checking_region);
                         trial_black.decide((Y(y), X(x)), Cell::Black);
                         trial_black.solve();
 
@@ -572,6 +582,7 @@ impl<'a, 'b> Field<'a, 'b> {
                         }
 
                         let mut trial_white = self.clone();
+                        trial_white.checking_region = Some(checking_region);
                         trial_white.decide((Y(y), X(x)), Cell::White);
                         trial_white.solve();
 
