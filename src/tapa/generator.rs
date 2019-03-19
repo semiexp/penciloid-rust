@@ -12,26 +12,30 @@ pub enum ClueConstraint {
     Prohibited,
 }
 
+pub struct GeneratorOption {
+    pub clue_constraint: Grid<ClueConstraint>,
+    pub max_clue: Option<i32>,
+    pub use_trial_and_error: bool,
+}
+
 pub fn generate<R: Rng>(
-    clue_constraint: &Grid<ClueConstraint>,
-    max_clue: Option<i32>,
+    opts: &GeneratorOption,
+    dic: &Dictionary,
+    consecutive_dic: &ConsecutiveRegionDictionary,
     rng: &mut R,
 ) -> Option<Grid<Clue>> {
-    let height = clue_constraint.height();
-    let width = clue_constraint.width();
+    let height = opts.clue_constraint.height();
+    let width = opts.clue_constraint.width();
     let mut has_clue = Grid::new(height, width, false);
 
-    let dic = Dictionary::new();
-    let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
-
     let mut problem = Grid::new(height, width, NO_CLUE);
-    let mut field = Field::new(height, width, &dic, &consecutive_dic);
+    let mut field = Field::new(height, width, dic, consecutive_dic);
     let mut current_energy = 0i32;
     let mut n_clues = 0;
 
     for y in 0..height {
         for x in 0..width {
-            if clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
+            if opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
                 has_clue[(Y(y), X(x))] = true;
                 n_clues += 1;
             }
@@ -46,7 +50,7 @@ pub fn generate<R: Rng>(
         for y in 0..height {
             for x in 0..width {
                 if field.cell((Y(y), X(x))) == Cell::Black
-                    || clue_constraint[(Y(y), X(x))] == ClueConstraint::Prohibited
+                    || opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Prohibited
                 {
                     continue;
                 }
@@ -81,7 +85,7 @@ pub fn generate<R: Rng>(
                         && (problem[(Y(y), X(x))] != NO_CLUE || rng.gen::<f64>() < 1.0))
                 {
                     for v in (-1)..(CLUE_TYPES as i32) {
-                        if v == -1 && clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
+                        if v == -1 && opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
                             continue;
                         }
                         if v == 0 || v == 21 || v == 22 {
@@ -119,7 +123,7 @@ pub fn generate<R: Rng>(
                     n_clues2 += 1;
                 }
             }
-            if let Some(max_clue) = max_clue {
+            if let Some(max_clue) = opts.max_clue {
                 if max_clue < n_clues2 {
                     continue;
                 }
@@ -130,10 +134,18 @@ pub fn generate<R: Rng>(
                 let mut f = field.clone();
                 f.add_clue(loc, clue);
                 f.solve();
-                f.trial_and_error();
+                if opts.use_trial_and_error {
+                    f.trial_and_error();
+                }
                 f
             } else {
-                solve_test(&problem, &has_clue, &dic, &consecutive_dic)
+                solve_test(
+                    &problem,
+                    &has_clue,
+                    opts.use_trial_and_error,
+                    dic,
+                    consecutive_dic,
+                )
             };
             let energy = field.decided_cells() - 4 * n_clues2;
 
@@ -203,6 +215,7 @@ pub fn generate<R: Rng>(
 fn solve_test<'a, 'b>(
     problem: &Grid<Clue>,
     has_clue: &Grid<bool>,
+    use_trial_and_error: bool,
     dic: &'a Dictionary,
     consecutive_dic: &'b ConsecutiveRegionDictionary,
 ) -> Field<'a, 'b> {
@@ -226,7 +239,9 @@ fn solve_test<'a, 'b>(
     }
 
     ret.solve();
-    ret.trial_and_error();
+    if use_trial_and_error {
+        ret.trial_and_error();
+    }
 
     ret
 }
