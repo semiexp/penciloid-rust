@@ -27,6 +27,7 @@ const DICTIONARY_VIRTUALLY_IGNORED_TOTAL_SIZE: usize =
 pub struct Dictionary {
     neighbor_pattern: Vec<u32>,
     virtually_ignored_cell: Vec<u32>,
+    virtual_disconnection: Vec<u32>,
 }
 impl Dictionary {
     pub fn new() -> Dictionary {
@@ -74,6 +75,32 @@ impl Dictionary {
                         }
                     }
                 }
+            }
+        }
+
+        let mut virtual_disconnection = vec![0u32; DICTIONARY_NEIGHBOR_PATTERN_TOTAL_SIZE];
+        for ty in 0..CLUE_TYPES {
+            let ofs = ty * DICTIONARY_NEIGHBOR_PATTERN_COUNT;
+            for pat_id in 0..DICTIONARY_NEIGHBOR_PATTERN_COUNT {
+                let mut disconnection = 0u32;
+                let pat = Dictionary::id_to_pattern(pat_id);
+                for i in 0..DICTIONARY_NEIGHBOR_SIZE {
+                    if pat[i] == Cell::White
+                        || pat[(i + 1) % DICTIONARY_NEIGHBOR_SIZE] == Cell::White
+                    {
+                        continue;
+                    }
+                    let mut pat = pat.clone();
+                    pat[i] = Cell::Black;
+                    pat[(i + 1) % DICTIONARY_NEIGHBOR_SIZE] = Cell::Black;
+
+                    if neighbor_pattern[ofs + Dictionary::pattern_to_id(&pat)]
+                        == DICTIONARY_INCONSISTENT
+                    {
+                        disconnection |= 1 << i;
+                    }
+                }
+                virtual_disconnection[ofs + pat_id] = disconnection;
             }
         }
 
@@ -138,6 +165,7 @@ impl Dictionary {
         Dictionary {
             neighbor_pattern,
             virtually_ignored_cell,
+            virtual_disconnection,
         }
     }
 
@@ -170,6 +198,11 @@ impl Dictionary {
         let Clue(c) = c;
         self.virtually_ignored_cell
             [c as usize * DICTIONARY_VIRTUALLY_IGNORED_CELL_COUNT + neighbor_code as usize]
+    }
+    pub fn virtual_disconnection(&self, c: Clue, neighbor_code: u32) -> u32 {
+        let Clue(c) = c;
+        self.virtual_disconnection
+            [c as usize * DICTIONARY_NEIGHBOR_PATTERN_COUNT + neighbor_code as usize]
     }
 
     fn neighbor_chain(pattern: &[Cell]) -> Vec<i32> {

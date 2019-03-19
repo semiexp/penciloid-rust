@@ -207,6 +207,38 @@ impl<'a, 'b> Field<'a, 'b> {
                         }
                     }
 
+                    let mut virtual_disconnection_pattern = 0u32;
+                    let mut pow3 = 1;
+                    for i in 0..8 {
+                        let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                        let v = self.cell_checked((Y(y + dy), X(x + dx)));
+                        virtual_disconnection_pattern += pow3 * match v {
+                            Cell::Undecided => 0,
+                            Cell::Black => 1,
+                            Cell::White => 2,
+                        };
+                        pow3 *= 3;
+                    }
+
+                    let res = self.dic
+                        .virtual_disconnection(clue, virtual_disconnection_pattern);
+                    if res != 0 {
+                        for i in 0..8 {
+                            if ((res >> i) & 1) != 0 {
+                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                if i < 2 {
+                                    edge_down[(Y(y + dy), X(x + dx))] = false;
+                                } else if i < 4 {
+                                    edge_right[(Y(y + dy), X(x + dx))] = false;
+                                } else if i < 6 {
+                                    edge_down[(Y(y + dy - 1), X(x + dx))] = false;
+                                } else {
+                                    edge_right[(Y(y + dy), X(x + dx - 1))] = false;
+                                }
+                            }
+                        }
+                    }
+
                     let mut virtually_ignored_cell_pattern = 0u32;
                     for i in 0..8 {
                         let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
@@ -711,6 +743,26 @@ mod tests {
         assert_eq!(field.cell((Y(4), X(2))), Cell::Black);
         assert_eq!(field.cell((Y(4), X(3))), Cell::Black);
         assert_eq!(field.cell((Y(4), X(4))), Cell::Black);
+    }
+
+    #[test]
+    fn test_tapa_field_virtual_disconnection() {
+        let dic = Dictionary::new();
+        let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
+
+        let mut field = Field::new(5, 5, &dic, &consecutive_dic);
+        field.add_clue((Y(1), X(2)), clue_pattern_to_id(&[1, 2]).unwrap());
+        field.decide((Y(0), X(1)), Cell::Black);
+        field.decide((Y(0), X(2)), Cell::Black);
+        field.decide((Y(3), X(2)), Cell::White);
+        field.decide((Y(4), X(4)), Cell::Black);
+
+        field.inspect_connectivity_advanced();
+
+        assert_eq!(field.cell((Y(4), X(1))), Cell::Black);
+        assert_eq!(field.cell((Y(4), X(2))), Cell::Black);
+        assert_eq!(field.cell((Y(4), X(3))), Cell::Black);
+        assert_eq!(field.inconsistent(), false);
     }
 
     #[test]
