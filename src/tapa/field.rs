@@ -65,6 +65,7 @@ impl<'a, 'b> Field<'a, 'b> {
 
         self.clue[loc] = clue;
         self.decide(loc, Cell::White);
+        self.inspect(loc);
     }
     pub fn cell(&self, loc: Coord) -> Cell {
         self.cell[loc]
@@ -681,15 +682,24 @@ mod tests {
         let dic = Dictionary::new();
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
-        let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-        field.add_clue((Y(2), X(1)), clue_pattern_to_id(&[]).unwrap());
-        field.add_clue((Y(2), X(3)), clue_pattern_to_id(&[4]).unwrap());
+        {
+            let mut field = Field::new(5, 6, &dic, &consecutive_dic);
+            field.add_clue((Y(2), X(1)), clue_pattern_to_id(&[]).unwrap());
+            field.add_clue((Y(2), X(3)), clue_pattern_to_id(&[4]).unwrap());
 
-        assert_eq!(field.cell((Y(2), X(0))), Cell::White);
-        assert_eq!(field.cell((Y(1), X(4))), Cell::Black);
-        assert_eq!(field.cell((Y(2), X(4))), Cell::Black);
-        assert_eq!(field.cell((Y(3), X(4))), Cell::Black);
-        assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.cell((Y(2), X(0))), Cell::White);
+            assert_eq!(field.cell((Y(1), X(4))), Cell::Black);
+            assert_eq!(field.cell((Y(2), X(4))), Cell::Black);
+            assert_eq!(field.cell((Y(3), X(4))), Cell::Black);
+            assert_eq!(field.inconsistent(), false);
+        }
+        {
+            let mut field = Field::new(5, 6, &dic, &consecutive_dic);
+            field.add_clue((Y(1), X(1)), clue_pattern_to_id(&[]).unwrap());
+            field.add_clue((Y(2), X(2)), clue_pattern_to_id(&[8]).unwrap());
+
+            assert_eq!(field.inconsistent(), true);
+        }
     }
 
     #[test]
