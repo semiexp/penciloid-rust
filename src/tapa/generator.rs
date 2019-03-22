@@ -102,7 +102,7 @@ pub fn generate<R: Rng>(
 
         rng.shuffle(&mut update_cand);
 
-        let mut applicable_cands = vec![];
+        let mut updated = false;
 
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
@@ -130,7 +130,7 @@ pub fn generate<R: Rng>(
             }
 
             problem[loc] = clue;
-            let field = if previous_clue == NO_CLUE {
+            let next_field = if previous_clue == NO_CLUE {
                 let mut f = field.clone();
                 f.add_clue(loc, clue);
                 f.solve();
@@ -147,13 +147,28 @@ pub fn generate<R: Rng>(
                     consecutive_dic,
                 )
             };
-            let energy = field.decided_cells() - 4 * n_clues2;
+            let energy = next_field.decided_cells() - 4 * n_clues2;
 
-            let update = !field.inconsistent()
+            let update = !next_field.inconsistent()
                 && (current_energy < energy
                     || rng.gen::<f64>() < ((energy - current_energy) as f64 / temperature).exp());
 
             if update {
+                current_energy = energy;
+                n_clues = n_clues2;
+                field = next_field;
+
+                let loc2 = (Y(height - 1 - y), X(width - 1 - x));
+                if clue == NO_CLUE {
+                    if problem[loc2] == NO_CLUE {
+                        has_clue[loc] = false;
+                        has_clue[loc2] = false;
+                    }
+                } else {
+                    has_clue[loc] = true;
+                    has_clue[loc2] = true;
+                }
+
                 let mut clue_filled = true;
                 for y in 0..height {
                     for x in 0..width {
@@ -165,44 +180,13 @@ pub fn generate<R: Rng>(
                 if field.fully_solved() && clue_filled {
                     return Some(problem);
                 }
-
-                applicable_cands.push((loc, clue, energy, n_clues2, field));
-            }
-            problem[loc] = previous_clue;
-
-            if applicable_cands.len() >= 1 {
+                updated = true;
                 break;
             }
+            problem[loc] = previous_clue;
         }
 
-        if applicable_cands.len() >= 1 {
-            let mut best_cand = applicable_cands.swap_remove(0);
-            while applicable_cands.len() > 0 {
-                let cand2 = applicable_cands.swap_remove(0);
-                if best_cand.3 < cand2.3 {
-                    best_cand = cand2;
-                }
-            }
-
-            let (loc, clue, energy, n_clues2, field2) = best_cand;
-
-            current_energy = energy;
-            n_clues = n_clues2;
-            problem[loc] = clue;
-            field = field2;
-
-            let (Y(y), X(x)) = loc;
-            let loc2 = (Y(height - 1 - y), X(width - 1 - x));
-            if clue == NO_CLUE {
-                if problem[loc2] == NO_CLUE {
-                    has_clue[loc] = false;
-                    has_clue[loc2] = false;
-                }
-            } else {
-                has_clue[loc] = true;
-                has_clue[loc2] = true;
-            }
-        } else {
+        if !updated {
             break;
         }
 
