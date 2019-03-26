@@ -167,6 +167,7 @@ pub fn generate<R: Rng>(
             let previous_clue = problem[loc];
             let (Y(y), X(x)) = loc;
 
+            has_clue.add_checkpoint();
             if opts.symmetry {
                 let loc2 = (Y(height - 1 - y), X(width - 1 - x));
                 if clue == NO_CLUE {
@@ -183,6 +184,7 @@ pub fn generate<R: Rng>(
             }
             if let Some(max_clue) = opts.max_clue {
                 if max_clue < has_clue.n_clues {
+                    has_clue.rollback();
                     continue;
                 }
             }
