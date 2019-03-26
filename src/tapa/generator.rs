@@ -1,4 +1,4 @@
-use super::super::{Grid, X, Y};
+use super::super::{Coord, Grid, X, Y};
 use super::*;
 
 use rand::distributions::Distribution;
@@ -15,7 +15,68 @@ pub enum ClueConstraint {
 pub struct GeneratorOption {
     pub clue_constraint: Grid<ClueConstraint>,
     pub max_clue: Option<i32>,
+    pub symmetry: bool,
     pub use_trial_and_error: bool,
+}
+
+enum HasClueHistory {
+    Update(Coord, bool),
+    Checkpoint,
+}
+struct HasClue {
+    has_clue: Grid<bool>,
+    n_clues: i32,
+    history: Vec<HasClueHistory>,
+}
+
+impl HasClue {
+    fn new(height: i32, width: i32) -> HasClue {
+        HasClue {
+            has_clue: Grid::new(height, width, false),
+            n_clues: 0,
+            history: vec![],
+        }
+    }
+
+    fn update(&mut self, loc: Coord, val: bool) {
+        if self.has_clue[loc] == val {
+            return;
+        }
+        if val {
+            self.n_clues += 1;
+        } else {
+            self.n_clues -= 1;
+        }
+        self.history.push(HasClueHistory::Update(loc, !val));
+        self.has_clue[loc] = val;
+    }
+    fn get(&self, loc: Coord) -> bool {
+        self.has_clue[loc]
+    }
+    fn get_checked(&self, loc: Coord) -> bool {
+        self.has_clue.is_valid_coord(loc) && self.has_clue[loc]
+    }
+    fn add_checkpoint(&mut self) {
+        self.history.push(HasClueHistory::Checkpoint);
+    }
+    fn rollback(&mut self) {
+        loop {
+            match self.history.pop() {
+                Some(HasClueHistory::Update(cd, v)) => {
+                    self.has_clue[cd] = v;
+                    if v {
+                        self.n_clues += 1;
+                    } else {
+                        self.n_clues -= 1;
+                    }
+                }
+                _ => break,
+            }
+        }
+    }
+    fn forget_history(&mut self) {
+        self.history.clear();
+    }
 }
 
 pub fn generate<R: Rng>(
@@ -26,18 +87,16 @@ pub fn generate<R: Rng>(
 ) -> Option<Grid<Clue>> {
     let height = opts.clue_constraint.height();
     let width = opts.clue_constraint.width();
-    let mut has_clue = Grid::new(height, width, false);
+    let mut has_clue = HasClue::new(height, width);
 
     let mut problem = Grid::new(height, width, NO_CLUE);
     let mut field = Field::new(height, width, dic, consecutive_dic);
     let mut current_energy = 0i32;
-    let mut n_clues = 0;
 
     for y in 0..height {
         for x in 0..width {
             if opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
-                has_clue[(Y(y), X(x))] = true;
-                n_clues += 1;
+                has_clue.update((Y(y), X(x)), true);
             }
         }
     }
@@ -54,19 +113,19 @@ pub fn generate<R: Rng>(
                 {
                     continue;
                 }
-                let y2 = height - 1 - y;
-                let x2 = width - 1 - x;
-                if -1 <= y - y2 && y - y2 <= 1 && -1 <= x - x2 && x - x2 <= 1
-                    && (y != y2 || x != x2)
-                {
-                    continue;
+                if opts.symmetry {
+                    let y2 = height - 1 - y;
+                    let x2 = width - 1 - x;
+                    if -1 <= y - y2 && y - y2 <= 1 && -1 <= x - x2 && x - x2 <= 1
+                        && (y != y2 || x != x2)
+                    {
+                        continue;
+                    }
                 }
                 let mut isok = true;
                 for dy in -1..2 {
                     for dx in -1..2 {
-                        if (dy != 0 || dx != 0) && has_clue.is_valid_coord((Y(y + dy), X(x + dx)))
-                            && has_clue[(Y(y + dy), X(x + dx))]
-                        {
+                        if (dy != 0 || dx != 0) && has_clue.get_checked((Y(y + dy), X(x + dx))) {
                             isok = false;
                         }
                     }
@@ -80,7 +139,7 @@ pub fn generate<R: Rng>(
                         }
                     }
                 }
-                if (has_clue[(Y(y), X(x))] && problem[(Y(y), X(x))] == NO_CLUE)
+                if (has_clue.get((Y(y), X(x))) && problem[(Y(y), X(x))] == NO_CLUE)
                     || (isok && isok2
                         && (problem[(Y(y), X(x))] != NO_CLUE || rng.gen::<f64>() < 1.0))
                 {
@@ -106,25 +165,24 @@ pub fn generate<R: Rng>(
 
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
-            let mut n_clues2 = n_clues;
             let (Y(y), X(x)) = loc;
-            let loc2 = (Y(height - 1 - y), X(width - 1 - x));
-            if clue == NO_CLUE {
-                if loc == loc2 {
-                    n_clues2 -= 1;
-                } else if problem[loc2] == NO_CLUE {
-                    n_clues2 -= 2;
+
+            if opts.symmetry {
+                let loc2 = (Y(height - 1 - y), X(width - 1 - x));
+                if clue == NO_CLUE {
+                    if problem[loc2] == NO_CLUE {
+                        has_clue.update(loc, false);
+                        has_clue.update(loc2, false);
+                    }
+                } else {
+                    has_clue.update(loc, true);
+                    has_clue.update(loc2, true);
                 }
             } else {
-                if !has_clue[loc] {
-                    n_clues2 += 1;
-                }
-                if loc != loc2 && !has_clue[loc2] {
-                    n_clues2 += 1;
-                }
+                has_clue.update(loc, clue != NO_CLUE);
             }
             if let Some(max_clue) = opts.max_clue {
-                if max_clue < n_clues2 {
+                if max_clue < has_clue.n_clues {
                     continue;
                 }
             }
@@ -147,7 +205,7 @@ pub fn generate<R: Rng>(
                     consecutive_dic,
                 )
             };
-            let energy = next_field.decided_cells() - 4 * n_clues2;
+            let energy = next_field.decided_cells() - 4 * has_clue.n_clues;
 
             let update = !next_field.inconsistent()
                 && (current_energy < energy
@@ -155,24 +213,12 @@ pub fn generate<R: Rng>(
 
             if update {
                 current_energy = energy;
-                n_clues = n_clues2;
                 field = next_field;
-
-                let loc2 = (Y(height - 1 - y), X(width - 1 - x));
-                if clue == NO_CLUE {
-                    if problem[loc2] == NO_CLUE {
-                        has_clue[loc] = false;
-                        has_clue[loc2] = false;
-                    }
-                } else {
-                    has_clue[loc] = true;
-                    has_clue[loc2] = true;
-                }
 
                 let mut clue_filled = true;
                 for y in 0..height {
                     for x in 0..width {
-                        if has_clue[(Y(y), X(x))] && problem[(Y(y), X(x))] == NO_CLUE {
+                        if has_clue.get((Y(y), X(x))) && problem[(Y(y), X(x))] == NO_CLUE {
                             clue_filled = false;
                         }
                     }
@@ -181,9 +227,11 @@ pub fn generate<R: Rng>(
                     return Some(problem);
                 }
                 updated = true;
+                has_clue.forget_history();
                 break;
             }
             problem[loc] = previous_clue;
+            has_clue.rollback();
         }
 
         if !updated {
@@ -198,7 +246,7 @@ pub fn generate<R: Rng>(
 
 fn solve_test<'a, 'b>(
     problem: &Grid<Clue>,
-    has_clue: &Grid<bool>,
+    has_clue: &HasClue,
     use_trial_and_error: bool,
     dic: &'a Dictionary,
     consecutive_dic: &'b ConsecutiveRegionDictionary,
@@ -212,7 +260,7 @@ fn solve_test<'a, 'b>(
             let clue = problem[(Y(y), X(x))];
             if clue != NO_CLUE {
                 ret.add_clue((Y(y), X(x)), clue);
-            } else if has_clue[(Y(y), X(x))] {
+            } else if has_clue.get((Y(y), X(x))) {
                 ret.decide((Y(y), X(x)), Cell::White);
             }
 
