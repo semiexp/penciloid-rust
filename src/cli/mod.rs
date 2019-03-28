@@ -25,12 +25,14 @@ use std::fmt::{self, Debug, Display};
 use std::time::Instant;
 
 pub mod nl_generator;
+pub mod tapa_generator;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 enum Puzzle {
     Numberlink,
     Slitherlink,
     Kakuro,
+    Tapa,
 }
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 enum Mode {
@@ -95,6 +97,7 @@ fn parse_subcommand(subcommand: &str) -> Result<(Puzzle, Mode), CliError> {
         "nl" | "numberlink" => Some(Puzzle::Numberlink),
         "sl" | "slitherlink" => Some(Puzzle::Slitherlink),
         "kk" | "kakuro" => Some(Puzzle::Kakuro),
+        "tp" | "tapa" => Some(Puzzle::Tapa),
         _ => None,
     };
     let mode = match tokens[1].to_ascii_lowercase().as_str() {
@@ -144,7 +147,10 @@ pub fn run_cli() {
     let result = subcommand.and_then(|subcommand| match subcommand {
         (Puzzle::Numberlink, Mode::Generator) => {
             nl_generator::nl_generator_frontend(&args[2..], &program)
-        }
+        },
+        (Puzzle::Tapa, Mode::Generator) => {
+            tapa_generator::tapa_generator_frontend(&args[2..], &program)
+        },
         _ => unimplemented!(),
     });
     if result.is_err() {
