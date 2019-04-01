@@ -17,6 +17,7 @@ pub struct GeneratorOption {
     pub max_clue: Option<i32>,
     pub symmetry: bool,
     pub use_trial_and_error: bool,
+    pub allowed_clues: Option<u32>,
 }
 
 enum HasClueHistory {
@@ -101,6 +102,7 @@ pub fn generate<R: Rng>(
         }
     }
 
+    let allowed_clues = opts.allowed_clues.unwrap_or((1 << 23) - 1);
     let n_step = height * width * 10;
     let mut temperature = 20f64;
 
@@ -147,7 +149,7 @@ pub fn generate<R: Rng>(
                         if v == -1 && opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
                             continue;
                         }
-                        if v == 0 || v == 21 || v == 22 {
+                        if v >= 0 && ((allowed_clues >> v) & 1) == 0 {
                             continue;
                         }
                         let next_clue = Clue(v);

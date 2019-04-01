@@ -51,6 +51,10 @@ pub fn clue_pattern_to_id(pat: &[i32]) -> Option<Clue> {
     let mut sorted = Vec::from(pat);
     sorted.sort();
 
+    if sorted.len() == 1 && sorted[0] == 0 {
+        return Some(Clue(0));
+    }
+
     for i in 0..CLUE_TYPES {
         if (&sorted)
             .into_iter()

@@ -15,6 +15,23 @@ struct GeneratorOption {
     symmetry: bool,
     max_clue: Option<i32>,
     trial_and_error: bool,
+    allowed_clues: Option<u32>,
+}
+
+fn parse_clue_patterns(pat: &str) -> Option<u32> {
+    let mut ret = 0u32;
+
+    for token in pat.split(',') {
+        let clue_pattern = token
+            .chars()
+            .map(|c| c as u8 as i32 - '0' as u8 as i32)
+            .collect::<Vec<i32>>();
+        match tapa::clue_pattern_to_id(&clue_pattern) {
+            Some(tapa::Clue(n)) => ret |= 1u32 << n,
+            None => return None,
+        }
+    }
+    Some(ret)
 }
 
 fn parse_options(matches: &Matches) -> Result<GeneratorOption, CliError> {
@@ -38,6 +55,29 @@ fn parse_options(matches: &Matches) -> Result<GeneratorOption, CliError> {
                 })
         })
         .unwrap_or(Ok(None))?;
+
+    let allowed_clues = matches
+        .opt_str("allowed-clues")
+        .map(|s| match parse_clue_patterns(&s) {
+            Some(p) => Ok(Some(p)),
+            _ => Err(CliError::UnrecognizedArgument("allowed-clues")),
+        })
+        .unwrap_or(Ok(None))?;
+    let disallowed_clues = matches
+        .opt_str("disallowed-clues")
+        .map(|s| match parse_clue_patterns(&s) {
+            Some(p) => Ok(Some(p)),
+            _ => Err(CliError::UnrecognizedArgument("disallowed-clues")),
+        })
+        .unwrap_or(Ok(None))?;
+
+    let allowed_clues = match (allowed_clues, disallowed_clues) {
+        (Some(p), None) => Some(p),
+        (None, Some(q)) => Some(((1 << 23) - 1) ^ q),
+        (None, None) => None,
+        _ => panic!("at most one of allowed_clues and disallowed_clues can be present"), // TODO
+    };
+
     Ok(GeneratorOption {
         height,
         width,
@@ -45,6 +85,7 @@ fn parse_options(matches: &Matches) -> Result<GeneratorOption, CliError> {
         symmetry,
         max_clue,
         trial_and_error,
+        allowed_clues,
     })
 }
 
@@ -69,6 +110,7 @@ fn run_generator(opts: GeneratorOption) -> Result<(), CliError> {
                 symmetry: opts.symmetry,
                 max_clue: opts.max_clue,
                 use_trial_and_error: opts.trial_and_error,
+                allowed_clues: opts.allowed_clues,
             };
 
             let mut rng = rand::thread_rng();
@@ -132,6 +174,13 @@ pub fn tapa_generator_frontend(args: &[String], program: &str) -> Result<(), Cli
     options.optflag("s", "symmetry", "Force symmetry");
     options.optflag("t", "trial-and-error", "Use trial and error");
     options.optopt("x", "max-clue", "Maximum value of clues", "10");
+    options.optopt("c", "allowed-clues", "Allowed clue patterns", "113,22,4");
+    options.optopt(
+        "d",
+        "disallowed-clues",
+        "Disallowed clue patterns",
+        "113,22,4",
+    );
 
     let matches = options.parse(&args[..])?;
 
@@ -143,4 +192,27 @@ pub fn tapa_generator_frontend(args: &[String], program: &str) -> Result<(), Cli
 
     let opts = parse_options(&matches)?;
     run_generator(opts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_frontend_tapa_parse_clue_patterns() {
+        assert_eq!(
+            parse_clue_patterns("1,2,3"),
+            Some((1u32 << 1) | (1u32 << 12) | (1u32 << 16))
+        );
+        assert_eq!(
+            parse_clue_patterns("0,1111"),
+            Some((1u32 << 0) | (1u32 << 4))
+        );
+        assert_eq!(
+            parse_clue_patterns("211,31"),
+            Some((1u32 << 5) | (1u32 << 9))
+        );
+        assert_eq!(parse_clue_patterns("a"), None);
+        assert_eq!(parse_clue_patterns("16"), None);
+    }
 }
