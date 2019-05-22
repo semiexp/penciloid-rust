@@ -1,5 +1,6 @@
 use super::super::{Grid, X, Y};
 use super::*;
+use std::fmt;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Edge {
@@ -590,7 +591,56 @@ impl SolverField {
         false
     }
 }
+impl fmt::Debug for SolverField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let height = self.height();
+        let width = self.width();
 
+        // TODO: problems with more than 34 lines
+        let trans = [
+            '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+            'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
+        ];
+
+        for y in 0..(2 * height - 1) {
+            for x in 0..(2 * width - 1) {
+                match (y % 2, x % 2) {
+                    (0, 0) => write!(
+                        f,
+                        "{}",
+                        match self.another_end[(Y(y / 2), X(x / 2))] {
+                            n @ -100...-2 => trans[((-n) - 2) as usize],
+                            _ => '+',
+                        }
+                    )?,
+                    (0, 1) => write!(
+                        f,
+                        "{}",
+                        match self.get_edge((Y(y), X(x))) {
+                            Edge::Undecided => ' ',
+                            Edge::Line => '-',
+                            Edge::Blank => 'x',
+                        }
+                    )?,
+                    (1, 0) => write!(
+                        f,
+                        "{}",
+                        match self.get_edge((Y(y), X(x))) {
+                            Edge::Undecided => ' ',
+                            Edge::Line => '|',
+                            Edge::Blank => 'x',
+                        }
+                    )?,
+                    (1, 1) => write!(f, " ")?,
+                    _ => unreachable!(),
+                }
+            }
+            write!(f, "\n")?;
+        }
+
+        Ok(())
+    }
+}
 struct AnswerInfo {
     answers: Vec<LinePlacement>,
     limit: Option<usize>,
