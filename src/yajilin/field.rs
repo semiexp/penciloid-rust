@@ -170,14 +170,21 @@ impl Field {
             };
         }
         for i in 0..involving_cells {
-            let (_, left_hi) = dp_left[i as usize];
-            let (_, right_hi) = dp_right[(i + 1) as usize];
+            let (left_lo, left_hi) = dp_left[i as usize];
+            let (right_lo, right_hi) = dp_right[(i + 1) as usize];
 
             if left_hi + right_hi < n - 1 {
                 self.set_inconsistent();
                 return;
             } else if left_hi + right_hi == n - 1 {
                 self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Blocked);
+            }
+
+            if left_lo + right_lo > n {
+                self.set_inconsistent();
+                return;
+            } else if left_lo + right_lo == n {
+                self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Line);
             }
         }
     }
@@ -237,19 +244,48 @@ mod tests {
 
     #[test]
     fn test_yajilin_clue() {
-        let mut problem = Grid::new(5, 5, Clue::NoClue);
-        problem[(Y(2), X(1))] = Clue::Right(2);
+        {
+            // Loop must not pass through clue cells
+            let mut problem = Grid::new(5, 5, Clue::NoClue);
+            problem[(Y(0), X(0))] = Clue::Right(1);
 
-        let mut field = Field::new(problem);
-        field.check_all_cell();
+            let mut field = Field::new(problem);
+            field.check_all_cell();
 
-        assert_eq!(field.inconsistent(), false);
-        assert_eq!(field.fully_solved(), true);
-        assert_eq!(field.get_cell((Y(2), X(2))), Cell::Blocked);
-        assert_eq!(field.get_cell((Y(2), X(4))), Cell::Blocked);
-        assert_eq!(field.get_edge((Y(3), X(6))), Edge::Line);
-        assert_eq!(field.get_edge((Y(5), X(6))), Edge::Line);
-        assert_eq!(field.get_edge((Y(2), X(3))), Edge::Line);
-        assert_eq!(field.get_edge((Y(3), X(0))), Edge::Line);
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_edge((Y(0), X(1))), Edge::Blank);
+            assert_eq!(field.get_edge((Y(1), X(0))), Edge::Blank);
+        }
+        {
+            // 0 block cells
+            let mut problem = Grid::new(5, 7, Clue::NoClue);
+            problem[(Y(0), X(3))] = Clue::Right(0);
+
+            let mut field = Field::new(problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(0), X(4))), Cell::Line);
+            assert_eq!(field.get_cell((Y(0), X(5))), Cell::Line);
+            assert_eq!(field.get_cell((Y(0), X(6))), Cell::Line);
+            assert_eq!(field.get_edge((Y(1), X(8))), Edge::Line);
+        }
+        {
+            // 2 block cells in 3 consecutive cells
+            let mut problem = Grid::new(5, 5, Clue::NoClue);
+            problem[(Y(2), X(1))] = Clue::Right(2);
+
+            let mut field = Field::new(problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.fully_solved(), true);
+            assert_eq!(field.get_cell((Y(2), X(2))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(2), X(4))), Cell::Blocked);
+            assert_eq!(field.get_edge((Y(3), X(6))), Edge::Line);
+            assert_eq!(field.get_edge((Y(5), X(6))), Edge::Line);
+            assert_eq!(field.get_edge((Y(2), X(3))), Edge::Line);
+            assert_eq!(field.get_edge((Y(3), X(0))), Edge::Line);
+        }
     }
 }
