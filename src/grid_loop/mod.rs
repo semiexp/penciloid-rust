@@ -156,6 +156,24 @@ impl GridLoop {
     pub fn num_decided_lines(&self) -> i32 {
         self.decided_line
     }
+    pub fn neighbor_summary(&self, cd: Coord) -> (i32, i32) {
+        let (Y(y), X(x)) = cd;
+        let mut n_line = 0;
+        let mut n_undecided = 0;
+        for &e in &[
+            self.get_edge_safe((Y(y - 1), X(x))),
+            self.get_edge_safe((Y(y + 1), X(x))),
+            self.get_edge_safe((Y(y), X(x - 1))),
+            self.get_edge_safe((Y(y), X(x + 1))),
+        ] {
+            if e == Edge::Line {
+                n_line += 1;
+            } else if e == Edge::Undecided {
+                n_undecided += 1;
+            }
+        }
+        (n_line, n_undecided)
+    }
 
     // public modifier
     pub fn set_inconsistent(&mut self) {
