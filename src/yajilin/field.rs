@@ -13,7 +13,7 @@ pub struct Field {
 const FOUR_NEIGHBORS: [(i32, i32); 4] = [(-1, 0), (0, -1), (1, 0), (0, 1)];
 
 impl Field {
-    pub fn new(clue: Grid<Clue>) -> Field {
+    pub fn new(clue: &Grid<Clue>) -> Field {
         let height = clue.height();
         let width = clue.width();
 
@@ -37,7 +37,7 @@ impl Field {
         }
         Field {
             grid_loop,
-            clue,
+            clue: clue.clone(),
             cell,
         }
     }
@@ -232,6 +232,15 @@ impl GridLoopField for Field {
                     }
                 }
             }
+
+            if cell == Cell::Undecided {
+                if n_line >= 1 {
+                    self.set_cell_internal((Y(y / 2), X(x / 2)), Cell::Line);
+                }
+                if n_line == 0 && n_undecided <= 1 {
+                    self.set_cell_internal((Y(y / 2), X(x / 2)), Cell::Blocked);
+                }
+            }
         } else if cell == Cell::Clue {
             self.inspect_clue((Y(y / 2), X(x / 2)));
         }
@@ -249,7 +258,7 @@ mod tests {
             let mut problem = Grid::new(5, 5, Clue::NoClue);
             problem[(Y(0), X(0))] = Clue::Right(1);
 
-            let mut field = Field::new(problem);
+            let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
@@ -261,7 +270,7 @@ mod tests {
             let mut problem = Grid::new(5, 7, Clue::NoClue);
             problem[(Y(0), X(3))] = Clue::Right(0);
 
-            let mut field = Field::new(problem);
+            let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
@@ -275,17 +284,43 @@ mod tests {
             let mut problem = Grid::new(5, 5, Clue::NoClue);
             problem[(Y(2), X(1))] = Clue::Right(2);
 
-            let mut field = Field::new(problem);
+            let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.fully_solved(), true);
             assert_eq!(field.get_cell((Y(2), X(2))), Cell::Blocked);
             assert_eq!(field.get_cell((Y(2), X(4))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(2), X(0))), Cell::Line);
             assert_eq!(field.get_edge((Y(3), X(6))), Edge::Line);
             assert_eq!(field.get_edge((Y(5), X(6))), Edge::Line);
             assert_eq!(field.get_edge((Y(2), X(3))), Edge::Line);
             assert_eq!(field.get_edge((Y(3), X(0))), Edge::Line);
+        }
+        {
+            // Cells which the loop does not pass through must be blocked (or have a clue)
+            let mut problem = Grid::new(6, 6, Clue::NoClue);
+            problem[(Y(2), X(4))] = Clue::Up(1);
+            problem[(Y(4), X(4))] = Clue::Left(1);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(1), X(4))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(3), X(4))), Cell::Blocked);
+        }
+        {
+            // Clues to the same direction
+            let mut problem = Grid::new(6, 6, Clue::NoClue);
+            problem[(Y(2), X(0))] = Clue::Right(2);
+            problem[(Y(2), X(2))] = Clue::Right(1);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(2), X(1))), Cell::Blocked);
         }
     }
 }
