@@ -2,6 +2,7 @@ use super::super::{Coord, Grid, X, Y};
 use super::*;
 use grid_loop::{Edge, GridLoop, GridLoopField};
 use std::cmp;
+use std::fmt;
 
 #[derive(Clone)]
 pub struct Field {
@@ -184,7 +185,9 @@ impl Field {
                 self.set_inconsistent();
                 return;
             } else if left_lo + right_lo == n {
-                self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Line);
+                if self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1)))) != Cell::Clue {
+                    self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Line);
+                }
             }
         }
     }
@@ -244,6 +247,58 @@ impl GridLoopField for Field {
         } else if cell == Cell::Clue {
             self.inspect_clue((Y(y / 2), X(x / 2)));
         }
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let height = self.height();
+        let width = self.width();
+        for y in 0..(2 * height - 1) {
+            for x in 0..(2 * width - 1) {
+                match (y % 2, x % 2) {
+                    (0, 0) => match self.get_cell((Y(y / 2), X(x / 2))) {
+                        Cell::Undecided => write!(f, "+")?,
+                        Cell::Line => write!(f, "*")?,
+                        Cell::Blocked => write!(f, "#")?,
+                        Cell::Clue => match self.clue[(Y(y / 2), X(x / 2))] {
+                            Clue::NoClue => panic!(),
+                            Clue::Empty => write!(f, "? ")?,
+                            Clue::Up(n) => write!(f, "^{}", n)?,
+                            Clue::Left(n) => write!(f, "<{}", n)?,
+                            Clue::Right(n) => write!(f, ">{}", n)?,
+                            Clue::Down(n) => write!(f, "v{}", n)?,
+                        },
+                    },
+                    (0, 1) => if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue {
+                        write!(f, "  ")?;
+                    } else if self.get_cell((Y(y / 2), X(x / 2 + 1))) == Cell::Clue {
+                        write!(f, "   ")?;
+                    } else {
+                        match self.get_edge((Y(y), X(x))) {
+                            Edge::Line => write!(f, "---")?,
+                            Edge::Blank => write!(f, " x ")?,
+                            Edge::Undecided => write!(f, "   ")?,
+                        }
+                    },
+                    (1, 0) => if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue
+                        || self.get_cell((Y(y / 2 + 1), X(x / 2))) == Cell::Clue
+                    {
+                        write!(f, " ")?;
+                    } else {
+                        match self.get_edge((Y(y), X(x))) {
+                            Edge::Line => write!(f, "|")?,
+                            Edge::Blank => write!(f, "x")?,
+                            Edge::Undecided => write!(f, " ")?,
+                        }
+                    },
+                    (1, 1) => write!(f, "   ")?,
+                    _ => unreachable!(),
+                }
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }
 
