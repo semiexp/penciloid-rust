@@ -89,6 +89,15 @@ impl Field {
             }
         }
     }
+    pub fn solve(&mut self) {
+        loop {
+            let current_decided_lines = self.grid_loop.num_decided_lines();
+            self.check_all_cell();
+            if current_decided_lines == self.grid_loop.num_decided_lines() {
+                break;
+            }
+        }
+    }
 
     fn set_cell_internal(&mut self, cd: Coord, v: Cell) {
         let current = self.cell[cd];
@@ -137,6 +146,10 @@ impl Field {
                 x += dx;
                 involving_cells += 1;
             }
+        }
+        if involving_cells == 0 && n != 0 {
+            self.set_inconsistent();
+            return;
         }
         let mut dp_left = vec![(0, 0); (involving_cells + 1) as usize];
         let mut dp_right = vec![(0, 0); (involving_cells + 1) as usize];
