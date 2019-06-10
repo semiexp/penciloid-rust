@@ -158,8 +158,20 @@ impl Field {
             let c = self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1))));
             dp_left[(i + 1) as usize] = match c {
                 Cell::Undecided => {
-                    let (lo, hi) = dp_left[cmp::max(0, i - 1) as usize];
-                    (lo, hi + 1)
+                    if i >= 2
+                        && (self.get_cell_safe((Y(y + dy * (i - 1) + dx), X(x + dx * (i - 1) + dy)))
+                            .is_blocking()
+                            || self.get_cell_safe((
+                                Y(y + dy * (i - 1) - dx),
+                                X(x + dx * (i - 1) - dy),
+                            )).is_blocking())
+                    {
+                        let (lo, hi) = dp_left[cmp::max(0, i - 2) as usize];
+                        (lo, hi + 1)
+                    } else {
+                        let (lo, hi) = dp_left[cmp::max(0, i - 1) as usize];
+                        (lo, hi + 1)
+                    }
                 }
                 Cell::Clue | Cell::Line => dp_left[i as usize],
                 Cell::Blocked => {
@@ -173,8 +185,20 @@ impl Field {
             let c = self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1))));
             dp_right[i as usize] = match c {
                 Cell::Undecided => {
-                    let (lo, hi) = dp_right[cmp::min(involving_cells, i + 2) as usize];
-                    (lo, hi + 1)
+                    if i <= involving_cells - 3
+                        && (self.get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
+                            .is_blocking()
+                            || self.get_cell_safe((
+                                Y(y + dy * (i + 2) - dx),
+                                X(x + dx * (i + 2) - dy),
+                            )).is_blocking())
+                    {
+                        let (lo, hi) = dp_right[cmp::min(involving_cells, i + 3) as usize];
+                        (lo, hi + 1)
+                    } else {
+                        let (lo, hi) = dp_right[cmp::min(involving_cells, i + 2) as usize];
+                        (lo, hi + 1)
+                    }
                 }
                 Cell::Clue | Cell::Line => dp_right[(i + 1) as usize],
                 Cell::Blocked => {
@@ -389,6 +413,19 @@ mod tests {
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.get_cell((Y(2), X(1))), Cell::Blocked);
+        }
+        {
+            // 3 block cells in 7 consecutive cells on the edge
+            let mut problem = Grid::new(5, 8, Clue::NoClue);
+            problem[(Y(0), X(0))] = Clue::Right(3);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(0), X(1))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(0), X(4))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(0), X(7))), Cell::Blocked);
         }
     }
 }
