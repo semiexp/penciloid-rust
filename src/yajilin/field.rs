@@ -9,6 +9,9 @@ pub struct Field {
     grid_loop: GridLoop,
     clue: Grid<Clue>,
     cell: Grid<Cell>,
+    blocked_either_down: Grid<bool>,
+    blocked_either_right: Grid<bool>,
+    use_two_by_two: bool,
 }
 
 const FOUR_NEIGHBORS: [(i32, i32); 4] = [(-1, 0), (0, -1), (1, 0), (0, 1)];
@@ -40,7 +43,13 @@ impl Field {
             grid_loop,
             clue: clue.clone(),
             cell,
+            blocked_either_down: Grid::new(height - 1, width, false),
+            blocked_either_right: Grid::new(height, width - 1, false),
+            use_two_by_two: true,
         }
+    }
+    pub fn set_use_two_by_two(&mut self, v: bool) {
+        self.use_two_by_two = v;
     }
     pub fn height(&self) -> i32 {
         self.clue.height()
@@ -120,6 +129,55 @@ impl Field {
                 }
                 GridLoop::decide_edge(self, (Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank);
             },
+        }
+    }
+    fn set_blocked_either(&mut self, cd1: Coord, cd2: Coord) {
+        if self.get_cell(cd1) == Cell::Clue || self.get_cell(cd2) == Cell::Clue {
+            return;
+        }
+
+        let (Y(y1), X(x1)) = cd1;
+        let (Y(y2), X(x2)) = cd2;
+
+        if y1 == y2 {
+            if x2 == x1 + 1 {
+                self.blocked_either_right[(Y(y1), X(x1))] = true;
+            } else if x1 == x2 + 1 {
+                self.blocked_either_right[(Y(y1), X(x2))] = true;
+            } else {
+                panic!();
+            }
+        } else if x1 == x2 {
+            if y2 == y1 + 1 {
+                self.blocked_either_down[(Y(y1), X(x1))] = true;
+            } else if y1 == y2 + 1 {
+                self.blocked_either_down[(Y(y2), X(x1))] = true;
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
+        }
+    }
+    fn two_by_two(&mut self, top: Coord) {
+        if !self.use_two_by_two {
+            return;
+        }
+        // 2x2 square (y, x) -- (y+1, x+1) has 2 blocked cells
+        let (Y(y), X(x)) = top;
+        for &(y2, x2) in &[
+            (y - 1, x),
+            (y - 1, x + 1),
+            (y, x - 1),
+            (y, x + 2),
+            (y + 1, x - 1),
+            (y + 1, x + 2),
+            (y + 2, x),
+            (y + 2, x + 1),
+        ] {
+            if self.get_cell_safe((Y(y2), X(x2))) != Cell::Clue {
+                self.set_cell_internal((Y(y2), X(x2)), Cell::Line);
+            }
         }
     }
     fn inspect_clue(&mut self, cell_cd: Coord) {
@@ -224,6 +282,14 @@ impl Field {
                     self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Line);
                 }
             }
+
+            if i != involving_cells - 1 && left_hi + dp_right[(i + 2) as usize].1 == n - 1 {
+                let cell1 = (Y(y + dy * (i + 1)), X(x + dx * (i + 1)));
+                let cell2 = (Y(y + dy * (i + 2)), X(x + dx * (i + 2)));
+                if self.get_cell(cell1) != Cell::Clue && self.get_cell(cell2) != Cell::Clue {
+                    self.set_blocked_either(cell1, cell2);
+                }
+            }
         }
     }
 }
@@ -246,7 +312,9 @@ impl GridLoopField for Field {
         if !(y % 2 == 0 && x % 2 == 0) {
             return;
         }
-        let cell = self.get_cell((Y(y / 2), X(x / 2)));
+        let cy = y / 2;
+        let cx = x / 2;
+        let cell = self.get_cell((Y(cy), X(cx)));
         if cell == Cell::Line || cell == Cell::Undecided {
             let (n_line, n_undecided) = self.grid_loop.neighbor_summary(cd);
 
@@ -281,6 +349,23 @@ impl GridLoopField for Field {
             }
         } else if cell == Cell::Clue {
             self.inspect_clue((Y(y / 2), X(x / 2)));
+        }
+
+        if cy != self.height() - 1 && self.blocked_either_down[(Y(cy), X(cx))] {
+            if cx != 0 && self.blocked_either_down[(Y(cy), X(cx - 1))] {
+                self.two_by_two((Y(cy), X(cx - 1)));
+            }
+            if cx != self.width() - 1 && self.blocked_either_down[(Y(cy), X(cx + 1))] {
+                self.two_by_two((Y(cy), X(cx)));
+            }
+        }
+        if cx != self.width() - 1 && self.blocked_either_right[(Y(cy), X(cx))] {
+            if cy != 0 && self.blocked_either_right[(Y(cy - 1), X(cx))] {
+                self.two_by_two((Y(cy - 1), X(cx)));
+            }
+            if cy != self.height() - 1 && self.blocked_either_right[(Y(cy + 1), X(cx))] {
+                self.two_by_two((Y(cy), X(cx)));
+            }
         }
     }
 }
