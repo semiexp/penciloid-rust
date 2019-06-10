@@ -159,12 +159,10 @@ impl Field {
             dp_left[(i + 1) as usize] = match c {
                 Cell::Undecided => {
                     if i >= 2
-                        && (self.get_cell_safe((Y(y + dy * (i - 1) + dx), X(x + dx * (i - 1) + dy)))
+                        && (self.get_cell_safe((Y(y + dy * i + dx), X(x + dx * i + dy)))
                             .is_blocking()
-                            || self.get_cell_safe((
-                                Y(y + dy * (i - 1) - dx),
-                                X(x + dx * (i - 1) - dy),
-                            )).is_blocking())
+                            || self.get_cell_safe((Y(y + dy * i - dx), X(x + dx * i - dy)))
+                                .is_blocking())
                     {
                         let (lo, hi) = dp_left[cmp::max(0, i - 2) as usize];
                         (lo, hi + 1)
