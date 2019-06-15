@@ -37,3 +37,12 @@ pub enum Cell {
     Line,
     Blocked,
 }
+
+impl Cell {
+    pub fn is_blocking(self) -> bool {
+        match self {
+            Cell::Clue | Cell::Blocked => true,
+            _ => false,
+        }
+    }
+}
