@@ -250,6 +250,32 @@ impl GridLoop {
                 GridLoop::apply_inout_rule_dfs(y, width - 1, 1, &mut *handle, &mut side);
             }
         }
+        for x in 0..width {
+            if side[(Y(0), X(x))] == 0 {
+                GridLoop::decide_edge(&mut *handle, (Y(0), X(2 * x + 1)), Edge::Blank);
+            } else if side[(Y(0), X(x))] == 1 {
+                GridLoop::decide_edge(&mut *handle, (Y(0), X(2 * x + 1)), Edge::Line);
+            }
+
+            if side[(Y(height - 1), X(x))] == 0 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * height), X(2 * x + 1)), Edge::Blank);
+            } else if side[(Y(height - 1), X(x))] == 1 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * height), X(2 * x + 1)), Edge::Line);
+            }
+        }
+        for y in 0..height {
+            if side[(Y(y), X(0))] == 0 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(0)), Edge::Blank);
+            } else if side[(Y(y), X(0))] == 1 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(0)), Edge::Line);
+            }
+
+            if side[(Y(y), X(width - 1))] == 0 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(2 * width)), Edge::Blank);
+            } else if side[(Y(y), X(width - 1))] == 1 {
+                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(2 * width)), Edge::Line);
+            }
+        }
 
         let mut id = 2;
         for y in 0..height {
@@ -966,5 +992,20 @@ mod tests {
         GridLoop::apply_inout_rule(&mut field);
 
         assert_eq!(field.inconsistent(), true);
+    }
+
+    #[test]
+    fn test_inout_rule3() {
+        let mut field = GridLoop::new(5, 5);
+        GridLoop::decide_edge(&mut field, (Y(5), X(0)), Edge::Line);
+        GridLoop::decide_edge(&mut field, (Y(5), X(2)), Edge::Blank);
+        GridLoop::decide_edge(&mut field, (Y(5), X(4)), Edge::Blank);
+        GridLoop::decide_edge(&mut field, (Y(4), X(5)), Edge::Line);
+        GridLoop::decide_edge(&mut field, (Y(2), X(5)), Edge::Line);
+
+        GridLoop::apply_inout_rule(&mut field);
+
+        assert_eq!(field.get_edge((Y(0), X(5))), Edge::Line);
+        assert_eq!(field.inconsistent(), false);
     }
 }
