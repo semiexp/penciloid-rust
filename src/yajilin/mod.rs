@@ -53,7 +53,8 @@ impl Cell {
 pub struct Technique {
     two_by_two: bool,
     two_by_three: bool,
-    skip_three_from_blocked_either: bool,
+    one_in_three_orthogonal_either: bool,
+    one_in_three_remote: bool,
     inout_advanced: bool,
     local_parity: bool,
 }
@@ -63,7 +64,8 @@ impl Technique {
         Technique {
             two_by_two: true,
             two_by_three: true,
-            skip_three_from_blocked_either: true,
+            one_in_three_orthogonal_either: true,
+            one_in_three_remote: true,
             inout_advanced: true,
             local_parity: true,
         }

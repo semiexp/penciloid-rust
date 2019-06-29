@@ -654,41 +654,74 @@ impl Field {
         }
 
         let mut stride_three_hi = vec![2; cmp::max(0, involving_cells - 2) as usize];
-
-        for i in 0..(involving_cells - 1) {
-            if i != involving_cells - 2 {
-                if self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) != Cell::Clue {
+        for i in 0..(involving_cells - 2) {
+            if self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) == Cell::Clue {
+                continue;
+            }
+            if self
+                .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
+                .is_blocking()
+            {
+                stride_three_hi[i as usize] = 1;
+            }
+            if self
+                .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
+                .is_blocking()
+            {
+                stride_three_hi[i as usize] = 1;
+            }
+            if dx == 0
+                && self.technique.one_in_three_orthogonal_either
+                && (self
+                    .blocked_either_right
+                    .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)), false)
+                    || self
+                        .blocked_either_right
+                        .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+            {
+                stride_three_hi[i as usize] = 1;
+            }
+            if dy == 0
+                && self.technique.one_in_three_orthogonal_either
+                && (self
+                    .blocked_either_down
+                    .get_or_default((Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))), false)
+                    || self
+                        .blocked_either_down
+                        .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+            {
+                stride_three_hi[i as usize] = 1;
+            }
+            if self.technique.one_in_three_remote {
+                for d in &[-1, 1] {
                     if self
-                        .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
-                        .is_blocking()
-                    {
-                        stride_three_hi[i as usize] = 1;
-                    }
-                    if self
-                        .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
-                        .is_blocking()
-                    {
-                        stride_three_hi[i as usize] = 1;
-                    }
-                    if dx == 0
-                        && self.technique.skip_three_from_blocked_either
+                        .get_cell_safe((Y(y + dy * (i + 1) + dx * d), X(x + dx * (i + 1) + dy * d)))
+                        != Cell::Clue
+                        && self.get_cell_safe((
+                            Y(y + dy * (i + 3) + dx * d),
+                            X(x + dx * (i + 3) + dy * d),
+                        )) != Cell::Clue
                         && (self
-                            .blocked_either_right
-                            .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)), false)
+                            .get_cell_safe((Y(y + dy * i + dx * d), X(x + dx * i + dy * d)))
+                            .is_blocking()
                             || self
-                                .blocked_either_right
-                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
-                    {
-                        stride_three_hi[i as usize] = 1;
-                    }
-                    if dy == 0
-                        && self.technique.skip_three_from_blocked_either
+                                .get_cell_safe((
+                                    Y(y + dy * (i + 1) + dx * d * 2),
+                                    X(x + dx * (i + 1) + dy * d * 2),
+                                ))
+                                .is_blocking())
                         && (self
-                            .blocked_either_down
-                            .get_or_default((Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))), false)
+                            .get_cell_safe((
+                                Y(y + dy * (i + 4) + dx * d),
+                                X(x + dx * (i + 4) + dy * d),
+                            ))
+                            .is_blocking()
                             || self
-                                .blocked_either_down
-                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                                .get_cell_safe((
+                                    Y(y + dy * (i + 3) + dx * d * 2),
+                                    X(x + dx * (i + 3) + dy * d * 2),
+                                ))
+                                .is_blocking())
                     {
                         stride_three_hi[i as usize] = 1;
                     }
@@ -1042,6 +1075,32 @@ mod tests {
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.get_cell((Y(4), X(7))), Cell::Blocked);
+        }
+    }
+    #[test]
+    fn test_one_in_three_remote() {
+        {
+            let mut problem = Grid::new(4, 8, Clue::NoClue);
+            problem[(Y(2), X(2))] = Clue::Right(2);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(2), X(3))), Cell::Blocked);
+            assert_eq!(field.get_cell((Y(2), X(6))), Cell::Blocked);
+        }
+        {
+            let mut problem = Grid::new(6, 6, Clue::NoClue);
+            problem[(Y(1), X(2))] = Clue::Right(1);
+            problem[(Y(3), X(4))] = Clue::Left(2);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(3), X(3))), Cell::Blocked);
         }
     }
 }
