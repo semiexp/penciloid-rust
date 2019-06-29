@@ -383,6 +383,12 @@ impl GridLoop {
         }
     }
 
+    pub fn is_root(&self, edge: Coord) -> bool {
+        let id = EdgeId(self.grid.index(edge));
+        let id2 = self[id].chain_another_end_edge;
+        self[id2].chain_another_end_edge == id && id.0 <= id2.0
+    }
+
     // private accessor
     fn another_end_id(&self, origin: VtxId, edge: EdgeId) -> VtxId {
         let edge_data = self[edge];
