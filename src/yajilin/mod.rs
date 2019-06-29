@@ -51,12 +51,12 @@ impl Cell {
 
 #[derive(Clone, Copy)]
 pub struct Technique {
-    two_by_two: bool,
-    two_by_three: bool,
-    one_in_three_orthogonal_either: bool,
-    one_in_three_remote: bool,
-    inout_advanced: bool,
-    local_parity: bool,
+    pub two_by_two: bool,
+    pub two_by_three: bool,
+    pub one_in_three_orthogonal_either: bool,
+    pub one_in_three_remote: bool,
+    pub inout_advanced: bool,
+    pub local_parity: bool,
 }
 
 impl Technique {
