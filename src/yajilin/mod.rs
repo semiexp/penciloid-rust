@@ -1,6 +1,8 @@
 mod field;
+mod generator;
 
 pub use self::field::*;
+pub use self::generator::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Clue {
