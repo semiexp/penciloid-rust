@@ -48,3 +48,24 @@ impl Cell {
         }
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct Technique {
+    two_by_two: bool,
+    two_by_three: bool,
+    skip_three_from_blocked_either: bool,
+    inout_advanced: bool,
+    local_parity: bool,
+}
+
+impl Technique {
+    pub fn new() -> Technique {
+        Technique {
+            two_by_two: true,
+            two_by_three: true,
+            skip_three_from_blocked_either: true,
+            inout_advanced: true,
+            local_parity: true,
+        }
+    }
+}

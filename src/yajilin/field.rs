@@ -11,11 +11,7 @@ pub struct Field {
     cell: Grid<Cell>,
     blocked_either_down: Grid<bool>,
     blocked_either_right: Grid<bool>,
-    use_two_by_two: bool,
-    use_two_by_three: bool,
-    use_skip_three_from_blocked_either: bool,
-    use_inout_advanced: bool,
-    use_local_parity: bool,
+    technique: Technique,
 }
 
 const FOUR_NEIGHBORS: [(i32, i32); 4] = [(-1, 0), (0, -1), (1, 0), (0, 1)];
@@ -49,27 +45,14 @@ impl Field {
             cell,
             blocked_either_down: Grid::new(height - 1, width, false),
             blocked_either_right: Grid::new(height, width - 1, false),
-            use_two_by_two: true,
-            use_two_by_three: true,
-            use_skip_three_from_blocked_either: true,
-            use_inout_advanced: true,
-            use_local_parity: true,
+            technique: Technique::new(),
         }
     }
-    pub fn set_use_two_by_two(&mut self, v: bool) {
-        self.use_two_by_two = v;
+    pub fn get_technique(&self) -> Technique {
+        self.technique
     }
-    pub fn set_use_two_by_three(&mut self, v: bool) {
-        self.use_two_by_three = v;
-    }
-    pub fn set_use_skip_three_from_blocked_either(&mut self, v: bool) {
-        self.use_skip_three_from_blocked_either = v;
-    }
-    pub fn set_use_inout_advanced(&mut self, v: bool) {
-        self.use_inout_advanced = v;
-    }
-    pub fn set_use_local_parity(&mut self, v: bool) {
-        self.use_local_parity = v;
+    pub fn set_technique(&mut self, technique: Technique) {
+        self.technique = technique;
     }
     pub fn height(&self) -> i32 {
         self.clue.height()
@@ -132,7 +115,7 @@ impl Field {
         }
     }
     pub fn apply_inout_rule_advanced(&mut self) {
-        if !self.use_inout_advanced {
+        if !self.technique.inout_advanced {
             return;
         }
         let height = self.height() - 1;
@@ -242,7 +225,7 @@ impl Field {
         }
     }
     pub fn check_local_parity(&mut self) {
-        if !self.use_local_parity {
+        if !self.technique.local_parity {
             return;
         }
         let height = self.height();
@@ -402,12 +385,14 @@ impl Field {
             Cell::Undecided => (),
             Cell::Clue => (), // don't do this!
             Cell::Line => GridLoop::check(self, (Y(y * 2), X(x * 2))),
-            Cell::Blocked => for &(dy, dx) in &FOUR_NEIGHBORS {
-                if self.get_cell_safe((Y(y + dy), X(x + dx))) != Cell::Clue {
-                    self.set_cell_internal((Y(y + dy), X(x + dx)), Cell::Line);
+            Cell::Blocked => {
+                for &(dy, dx) in &FOUR_NEIGHBORS {
+                    if self.get_cell_safe((Y(y + dy), X(x + dx))) != Cell::Clue {
+                        self.set_cell_internal((Y(y + dy), X(x + dx)), Cell::Line);
+                    }
+                    GridLoop::decide_edge(self, (Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank);
                 }
-                GridLoop::decide_edge(self, (Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank);
-            },
+            }
         }
     }
     fn set_cell_internal_unless_clue(&mut self, cd: Coord, v: Cell) {
@@ -445,7 +430,7 @@ impl Field {
         }
     }
     fn two_by_two(&mut self, top: Coord) {
-        if !self.use_two_by_two {
+        if !self.technique.two_by_two {
             return;
         }
         // 2x2 square (y, x) -- (y+1, x+1) has 2 blocked cells
@@ -524,7 +509,7 @@ impl Field {
         }
     }
     fn check_two_by_three(&mut self, top: Coord) {
-        if !self.use_two_by_three {
+        if !self.technique.two_by_three {
             return;
         }
         let (Y(y), X(x)) = top;
@@ -676,25 +661,32 @@ impl Field {
                 Cell::Undecided => {
                     let mut skip_three = false;
                     if i >= 2 && self.get_cell((Y(y + dy * i), X(x + dx * i))) != Cell::Clue {
-                        if self.get_cell_safe((Y(y + dy * i + dx), X(x + dx * i + dy)))
+                        if self
+                            .get_cell_safe((Y(y + dy * i + dx), X(x + dx * i + dy)))
                             .is_blocking()
-                            || self.get_cell_safe((Y(y + dy * i - dx), X(x + dx * i - dy)))
+                            || self
+                                .get_cell_safe((Y(y + dy * i - dx), X(x + dx * i - dy)))
                                 .is_blocking()
                         {
                             skip_three = true;
                         }
-                        if dx == 0 && self.use_skip_three_from_blocked_either
-                            && (self.blocked_either_right
+                        if dx == 0
+                            && self.technique.skip_three_from_blocked_either
+                            && (self
+                                .blocked_either_right
                                 .get_or_default((Y(y + dy * i), X(x + dx * i - 1)), false)
-                                || self.blocked_either_right
+                                || self
+                                    .blocked_either_right
                                     .get_or_default((Y(y + dy * i), X(x + dx * i)), false))
                         {
                             skip_three = true;
                         }
                         if dy == 0
-                            && (self.blocked_either_down
+                            && (self
+                                .blocked_either_down
                                 .get_or_default((Y(y + dy * i - 1), X(x + dx * i)), false)
-                                || self.blocked_either_down
+                                || self
+                                    .blocked_either_down
                                     .get_or_default((Y(y + dy * i), X(x + dx * i)), false))
                         {
                             skip_three = true;
@@ -720,35 +712,34 @@ impl Field {
                     if i <= involving_cells - 3
                         && self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) != Cell::Clue
                     {
-                        if self.get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
+                        if self
+                            .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
                             .is_blocking()
-                            || self.get_cell_safe((
-                                Y(y + dy * (i + 2) - dx),
-                                X(x + dx * (i + 2) - dy),
-                            )).is_blocking()
+                            || self
+                                .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
+                                .is_blocking()
                         {
                             skip_three = true;
                         }
-                        if dx == 0 && self.use_skip_three_from_blocked_either
+                        if dx == 0
+                            && self.technique.skip_three_from_blocked_either
                             && (self.blocked_either_right.get_or_default(
                                 (Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)),
                                 false,
-                            )
-                                || self.blocked_either_right.get_or_default(
-                                    (Y(y + dy * (i + 2)), X(x + dx * (i + 2))),
-                                    false,
-                                )) {
+                            ) || self
+                                .blocked_either_right
+                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                        {
                             skip_three = true;
                         }
                         if dy == 0
                             && (self.blocked_either_down.get_or_default(
                                 (Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))),
                                 false,
-                            )
-                                || self.blocked_either_down.get_or_default(
-                                    (Y(y + dy * (i + 2)), X(x + dx * (i + 2))),
-                                    false,
-                                )) {
+                            ) || self
+                                .blocked_either_down
+                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                        {
                             skip_three = true;
                         }
                     }
@@ -923,28 +914,32 @@ impl fmt::Display for Field {
                             Clue::Down(n) => write!(f, "v{}", n)?,
                         },
                     },
-                    (0, 1) => if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue {
-                        write!(f, "  ")?;
-                    } else if self.get_cell((Y(y / 2), X(x / 2 + 1))) == Cell::Clue {
-                        write!(f, "   ")?;
-                    } else {
-                        match self.get_edge((Y(y), X(x))) {
-                            Edge::Line => write!(f, "---")?,
-                            Edge::Blank => write!(f, " x ")?,
-                            Edge::Undecided => write!(f, "   ")?,
+                    (0, 1) => {
+                        if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue {
+                            write!(f, "  ")?;
+                        } else if self.get_cell((Y(y / 2), X(x / 2 + 1))) == Cell::Clue {
+                            write!(f, "   ")?;
+                        } else {
+                            match self.get_edge((Y(y), X(x))) {
+                                Edge::Line => write!(f, "---")?,
+                                Edge::Blank => write!(f, " x ")?,
+                                Edge::Undecided => write!(f, "   ")?,
+                            }
                         }
-                    },
-                    (1, 0) => if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue
-                        || self.get_cell((Y(y / 2 + 1), X(x / 2))) == Cell::Clue
-                    {
-                        write!(f, " ")?;
-                    } else {
-                        match self.get_edge((Y(y), X(x))) {
-                            Edge::Line => write!(f, "|")?,
-                            Edge::Blank => write!(f, "x")?,
-                            Edge::Undecided => write!(f, " ")?,
+                    }
+                    (1, 0) => {
+                        if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue
+                            || self.get_cell((Y(y / 2 + 1), X(x / 2))) == Cell::Clue
+                        {
+                            write!(f, " ")?;
+                        } else {
+                            match self.get_edge((Y(y), X(x))) {
+                                Edge::Line => write!(f, "|")?,
+                                Edge::Blank => write!(f, "x")?,
+                                Edge::Undecided => write!(f, " ")?,
+                            }
                         }
-                    },
+                    }
                     (1, 1) => write!(f, "   ")?,
                     _ => unreachable!(),
                 }
