@@ -652,108 +652,97 @@ impl Field {
             self.set_inconsistent();
             return;
         }
-        let mut dp_left = vec![(0, 0); (involving_cells + 1) as usize];
-        let mut dp_right = vec![(0, 0); (involving_cells + 1) as usize];
+
+        let mut stride_three_hi = vec![2; cmp::max(0, involving_cells - 2) as usize];
+
+        for i in 0..(involving_cells - 1) {
+            if i != involving_cells - 2 {
+                if self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) != Cell::Clue {
+                    if self
+                        .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
+                        .is_blocking()
+                    {
+                        stride_three_hi[i as usize] = 1;
+                    }
+                    if self
+                        .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
+                        .is_blocking()
+                    {
+                        stride_three_hi[i as usize] = 1;
+                    }
+                    if dx == 0
+                        && self.technique.skip_three_from_blocked_either
+                        && (self
+                            .blocked_either_right
+                            .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)), false)
+                            || self
+                                .blocked_either_right
+                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                    {
+                        stride_three_hi[i as usize] = 1;
+                    }
+                    if dy == 0
+                        && self.technique.skip_three_from_blocked_either
+                        && (self
+                            .blocked_either_down
+                            .get_or_default((Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))), false)
+                            || self
+                                .blocked_either_down
+                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                    {
+                        stride_three_hi[i as usize] = 1;
+                    }
+                }
+            }
+        }
+        let dummy_max = cmp::max(self.height(), self.width());
+        let mut dp_left = vec![(0, dummy_max); (involving_cells + 1) as usize];
+        let mut dp_right = vec![(0, dummy_max); (involving_cells + 1) as usize];
+        dp_left[0] = (0, 0);
+        dp_right[involving_cells as usize] = (0, 0);
 
         for i in 0..involving_cells {
-            let c = self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1))));
-            dp_left[(i + 1) as usize] = match c {
-                Cell::Undecided => {
-                    let mut skip_three = false;
-                    if i >= 2 && self.get_cell((Y(y + dy * i), X(x + dx * i))) != Cell::Clue {
-                        if self
-                            .get_cell_safe((Y(y + dy * i + dx), X(x + dx * i + dy)))
-                            .is_blocking()
-                            || self
-                                .get_cell_safe((Y(y + dy * i - dx), X(x + dx * i - dy)))
-                                .is_blocking()
-                        {
-                            skip_three = true;
-                        }
-                        if dx == 0
-                            && self.technique.skip_three_from_blocked_either
-                            && (self
-                                .blocked_either_right
-                                .get_or_default((Y(y + dy * i), X(x + dx * i - 1)), false)
-                                || self
-                                    .blocked_either_right
-                                    .get_or_default((Y(y + dy * i), X(x + dx * i)), false))
-                        {
-                            skip_three = true;
-                        }
-                        if dy == 0
-                            && (self
-                                .blocked_either_down
-                                .get_or_default((Y(y + dy * i - 1), X(x + dx * i)), false)
-                                || self
-                                    .blocked_either_down
-                                    .get_or_default((Y(y + dy * i), X(x + dx * i)), false))
-                        {
-                            skip_three = true;
-                        }
-                    }
-                    let (lo, hi) =
-                        dp_left[cmp::max(0, i - if skip_three { 2 } else { 1 }) as usize];
-                    (lo, hi + 1)
-                }
-                Cell::Clue | Cell::Line => dp_left[i as usize],
-                Cell::Blocked => {
-                    let (lo, hi) = dp_left[cmp::max(0, i - 1) as usize];
-                    (lo + 1, hi + 1)
-                }
+            let (lo, hi) = dp_left[i as usize];
+            let (nlo, nhi) = match self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1)))) {
+                Cell::Blocked => (lo + 1, hi + 1),
+                Cell::Undecided => (lo, hi + 1),
+                Cell::Line | Cell::Clue => (lo, hi),
             };
+            dp_left[(i + 1) as usize].0 = cmp::max(dp_left[(i + 1) as usize].0, nlo);
+            dp_left[(i + 1) as usize].1 = cmp::min(dp_left[(i + 1) as usize].1, nhi);
+
+            if i < involving_cells - 1 {
+                dp_left[(i + 2) as usize].1 = cmp::min(dp_left[(i + 2) as usize].1, hi + 1);
+            }
+            if i < involving_cells - 2 {
+                dp_left[(i + 3) as usize].1 = cmp::min(
+                    dp_left[(i + 3) as usize].1,
+                    hi + stride_three_hi[i as usize],
+                );
+            }
         }
         for i in 0..involving_cells {
-            let i = involving_cells - 1 - i;
-            let c = self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1))));
-            dp_right[i as usize] = match c {
-                Cell::Undecided => {
-                    let mut skip_three = false;
-                    if i <= involving_cells - 3
-                        && self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) != Cell::Clue
-                    {
-                        if self
-                            .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
-                            .is_blocking()
-                            || self
-                                .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
-                                .is_blocking()
-                        {
-                            skip_three = true;
-                        }
-                        if dx == 0
-                            && self.technique.skip_three_from_blocked_either
-                            && (self.blocked_either_right.get_or_default(
-                                (Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)),
-                                false,
-                            ) || self
-                                .blocked_either_right
-                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
-                        {
-                            skip_three = true;
-                        }
-                        if dy == 0
-                            && (self.blocked_either_down.get_or_default(
-                                (Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))),
-                                false,
-                            ) || self
-                                .blocked_either_down
-                                .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
-                        {
-                            skip_three = true;
-                        }
-                    }
-                    let (lo, hi) = dp_right
-                        [cmp::min(involving_cells, i + if skip_three { 3 } else { 2 }) as usize];
-                    (lo, hi + 1)
-                }
-                Cell::Clue | Cell::Line => dp_right[(i + 1) as usize],
-                Cell::Blocked => {
-                    let (lo, hi) = dp_right[cmp::min(involving_cells, i + 2) as usize];
-                    (lo + 1, hi + 1)
-                }
+            let i = involving_cells - i;
+            let (lo, hi) = dp_right[i as usize];
+            let (nlo, nhi) = match self.get_cell((Y(y + dy * i), X(x + dx * i))) {
+                Cell::Blocked => (lo + 1, hi + 1),
+                Cell::Undecided => (lo, hi + 1),
+                Cell::Line | Cell::Clue => (lo, hi),
             };
+            dp_right[(i - 1) as usize].0 = cmp::max(dp_right[(i - 1) as usize].0, nlo);
+            dp_right[(i - 1) as usize].1 = cmp::min(dp_right[(i - 1) as usize].1, nhi);
+
+            if i >= 2 {
+                dp_right[(i - 2) as usize].1 = cmp::min(dp_right[(i - 2) as usize].1, hi + 1);
+            }
+            if i >= 3 {
+                dp_right[(i - 3) as usize].1 = cmp::min(
+                    dp_right[(i - 3) as usize].1,
+                    hi + stride_three_hi[(i - 3) as usize],
+                );
+            }
         }
+
         for i in 0..involving_cells {
             let (left_lo, left_hi) = dp_left[i as usize];
             let (right_lo, right_hi) = dp_right[(i + 1) as usize];
@@ -1037,6 +1026,22 @@ mod tests {
             assert_eq!(field.get_cell((Y(0), X(1))), Cell::Blocked);
             assert_eq!(field.get_cell((Y(0), X(4))), Cell::Blocked);
             assert_eq!(field.get_cell((Y(0), X(7))), Cell::Blocked);
+        }
+        {
+            // crossing (2 blocks in 4) and (2 blocks in 5)
+            let mut problem = Grid::new(10, 10, Clue::NoClue);
+            problem[(Y(2), X(4))] = Clue::Down(2);
+            problem[(Y(7), X(4))] = Clue::Down(0);
+            problem[(Y(4), X(2))] = Clue::Right(2);
+            problem[(Y(4), X(8))] = Clue::Right(0);
+            problem[(Y(5), X(6))] = Clue::Up(0);
+
+            let mut field = Field::new(&problem);
+            field.check_all_cell();
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell((Y(4), X(7))), Cell::Blocked);
         }
     }
 }
