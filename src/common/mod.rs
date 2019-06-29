@@ -50,6 +50,15 @@ impl<T: Clone> Grid<T> {
         (Y(idx / self.width), X(idx % self.width))
     }
 }
+impl<T: Copy> Grid<T> {
+    pub fn get_or_default(&self, cd: Coord, default: T) -> T {
+        if self.is_valid_coord(cd) {
+            self[cd]
+        } else {
+            default
+        }
+    }
+}
 impl<T: Clone> Index<Coord> for Grid<T> {
     type Output = T;
     fn index<'a>(&'a self, idx: Coord) -> &'a T {
