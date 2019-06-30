@@ -373,6 +373,38 @@ impl Field {
                     }
                 }
             }
+            for y in 0..height {
+                for x in 0..width {
+                    if self.get_cell((Y(y), X(x))) != Cell::Undecided {
+                        continue;
+                    }
+                    {
+                        let mut field_blocked = self.clone();
+                        self.set_cell((Y(y), X(x)), Cell::Blocked);
+                        field_blocked.trial_and_error(depth - 1);
+
+                        if field_blocked.inconsistent() {
+                            updated = true;
+                            self.set_cell((Y(y), X(x)), Cell::Line);
+                            self.trial_and_error(depth - 1);
+                        }
+                    }
+                    {
+                        let mut field_line = self.clone();
+                        self.set_cell((Y(y), X(x)), Cell::Line);
+                        field_line.trial_and_error(depth - 1);
+
+                        if field_line.inconsistent() {
+                            updated = true;
+                            self.set_cell((Y(y), X(x)), Cell::Blocked);
+                            self.trial_and_error(depth - 1);
+                        }
+                    }
+                    if self.inconsistent() {
+                        return;
+                    }
+                }
+            }
             if !updated {
                 break;
             }
