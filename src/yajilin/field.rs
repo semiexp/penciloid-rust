@@ -11,6 +11,7 @@ pub struct Field {
     cell: Grid<Cell>,
     blocked_either_down: Grid<bool>,
     blocked_either_right: Grid<bool>,
+    decided_cells: i32,
     technique: Technique,
 }
 
@@ -23,7 +24,7 @@ impl Field {
 
         let mut cell = Grid::new(height, width, Cell::Undecided);
         let mut grid_loop = GridLoop::new(height - 1, width - 1);
-
+        let mut decided_cells = 0;
         {
             let mut handle = GridLoop::get_handle(&mut grid_loop);
             for y in 0..height {
@@ -35,6 +36,7 @@ impl Field {
                         GridLoop::decide_edge(&mut *handle, (Y(y * 2 + 1), X(x * 2)), Edge::Blank);
                         GridLoop::decide_edge(&mut *handle, (Y(y * 2), X(x * 2 - 1)), Edge::Blank);
                         GridLoop::decide_edge(&mut *handle, (Y(y * 2), X(x * 2 + 1)), Edge::Blank);
+                        decided_cells += 1;
                     }
                 }
             }
@@ -45,6 +47,7 @@ impl Field {
             cell,
             blocked_either_down: Grid::new(height - 1, width, false),
             blocked_either_right: Grid::new(height, width - 1, false),
+            decided_cells,
             technique: Technique::new(),
         }
     }
@@ -86,6 +89,9 @@ impl Field {
     pub fn get_edge_safe(&self, cd: Coord) -> Edge {
         self.grid_loop.get_edge_safe(cd)
     }
+    pub fn num_decided_cells(&self) -> i32 {
+        self.decided_cells
+    }
 
     pub fn set_cell(&mut self, cd: Coord, v: Cell) {
         let mut handle = GridLoop::get_handle(self);
@@ -104,12 +110,15 @@ impl Field {
     pub fn solve(&mut self) {
         loop {
             let current_decided_lines = self.grid_loop.num_decided_lines();
+            let current_decided_cells = self.num_decided_cells();
             self.check_all_cell();
             GridLoop::apply_inout_rule(self);
             GridLoop::check_connectability(self);
             self.apply_inout_rule_advanced();
             self.check_local_parity();
-            if current_decided_lines == self.grid_loop.num_decided_lines() {
+            if current_decided_lines == self.grid_loop.num_decided_lines()
+                && current_decided_cells == self.num_decided_cells()
+            {
                 break;
             }
         }
@@ -379,6 +388,7 @@ impl Field {
             return;
         }
 
+        self.decided_cells += 1;
         self.cell[cd] = v;
         let (Y(y), X(x)) = cd;
         match v {
