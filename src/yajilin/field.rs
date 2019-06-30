@@ -380,7 +380,7 @@ impl Field {
                     }
                     {
                         let mut field_blocked = self.clone();
-                        self.set_cell((Y(y), X(x)), Cell::Blocked);
+                        field_blocked.set_cell((Y(y), X(x)), Cell::Blocked);
                         field_blocked.trial_and_error(depth - 1);
 
                         if field_blocked.inconsistent() {
@@ -391,7 +391,7 @@ impl Field {
                     }
                     {
                         let mut field_line = self.clone();
-                        self.set_cell((Y(y), X(x)), Cell::Line);
+                        field_line.set_cell((Y(y), X(x)), Cell::Line);
                         field_line.trial_and_error(depth - 1);
 
                         if field_line.inconsistent() {
