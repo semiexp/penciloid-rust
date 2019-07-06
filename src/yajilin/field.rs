@@ -327,11 +327,13 @@ impl Field {
     pub fn trial_and_error(&mut self, depth: i32) {
         let height = self.height();
         let width = self.width();
-        self.solve();
 
         if depth == 0 {
+            self.solve();
             return;
         }
+        self.trial_and_error(depth - 1);
+
         loop {
             let mut updated = false;
             for y in 0..(height * 2 - 1) {
