@@ -1,10 +1,12 @@
 mod field;
 mod dictionary;
 mod generator;
+mod io;
 
 pub use self::field::*;
 pub use self::dictionary::*;
 pub use self::generator::*;
+pub use self::io::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cell {
