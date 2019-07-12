@@ -90,7 +90,7 @@ where
 
     for y in 0..height {
         next_valid_line(reader, &mut buffer)?;
-        let mut row = buffer.split(' ');
+        let mut row = buffer.trim_end().split(' ');
 
         for x in 0..width {
             let elem = row.next().ok_or(ReadError::InvalidFormat)?;
