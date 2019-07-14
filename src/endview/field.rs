@@ -1,4 +1,4 @@
-use super::super::{Coord, Grid, X, Y};
+use super::super::{Grid, P};
 use super::*;
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ impl Field {
         }
         ret
     }
-    pub fn get_value(&self, cell: Coord) -> Value {
+    pub fn get_value(&self, cell: P) -> Value {
         self.value[cell]
     }
     pub fn inconsistent(&self) -> bool {
@@ -81,7 +81,7 @@ impl Field {
             self.inspect_row(idx + size);
         }
     }
-    pub fn decide(&mut self, cell: Coord, val: Value) {
+    pub fn decide(&mut self, cell: P, val: Value) {
         let current = self.value[cell];
         if current.0 >= 0 && val == SOME {
             return;
@@ -108,16 +108,16 @@ impl Field {
         } else if val != UNDECIDED {
             self.limit_cand(cell, Cand::singleton(val.0));
 
-            let (Y(y), X(x)) = cell;
+            let P(y, x) = cell;
             let limit = !Cand::singleton(val.0);
             for y2 in 0..self.size {
                 if y != y2 {
-                    self.limit_cand((Y(y2), X(x)), limit);
+                    self.limit_cand(P(y2, x), limit);
                 }
             }
             for x2 in 0..self.size {
                 if x != x2 {
-                    self.limit_cand((Y(y), X(x2)), limit);
+                    self.limit_cand(P(y, x2), limit);
                 }
             }
         }
@@ -158,12 +158,13 @@ impl Field {
         let mut is_update = false;
         for y in 0..size {
             for x in 0..size {
-                let val = self.get_value((Y(y), X(x)));
+                let pos = P(y, x);
+                let val = self.get_value(pos);
                 if !(val == UNDECIDED || val == SOME) {
                     continue;
                 }
 
-                let cand = self.cand[(Y(y), X(x))];
+                let cand = self.cand[pos];
                 let mut valid_cands = vec![];
 
                 for i in 0..n_alpha {
@@ -172,7 +173,7 @@ impl Field {
                     }
 
                     let mut field_cloned = self.clone();
-                    field_cloned.decide((Y(y), X(x)), Value(i));
+                    field_cloned.decide(pos, Value(i));
 
                     if !field_cloned.inconsistent() {
                         valid_cands.push((Value(i), field_cloned));
@@ -180,7 +181,7 @@ impl Field {
                 }
                 if val != SOME {
                     let mut field_cloned = self.clone();
-                    field_cloned.decide((Y(y), X(x)), EMPTY);
+                    field_cloned.decide(pos, EMPTY);
                     if !field_cloned.inconsistent() {
                         valid_cands.push((EMPTY, field_cloned));
                     }
@@ -200,18 +201,18 @@ impl Field {
         is_update
     }
     /// Returns `pos`-th cell of group `gid`.
-    fn group(&self, gid: i32, pos: i32) -> Coord {
+    fn group(&self, gid: i32, pos: i32) -> P {
         if gid < self.size {
-            (Y(gid), X(pos))
+            P(gid, pos)
         } else {
-            (Y(pos), X(gid - self.size))
+            P(pos, gid - self.size)
         }
     }
     /// Returns `pos`-th cell of group `gid` with reversed indexing of cells when `dir` is `true`.
-    fn directed_group(&self, gid: i32, pos: i32, dir: bool) -> Coord {
+    fn directed_group(&self, gid: i32, pos: i32, dir: bool) -> P {
         self.group(gid, if dir { self.size - pos - 1 } else { pos })
     }
-    fn limit_cand(&mut self, cell: Coord, lim: Cand) {
+    fn limit_cand(&mut self, cell: P, lim: Cand) {
         let current_cand = self.cand[cell];
 
         if (current_cand & lim) == current_cand {
@@ -227,13 +228,13 @@ impl Field {
         }
         self.inspect_cell(cell);
     }
-    fn inspect_cell(&mut self, cell: Coord) {
+    fn inspect_cell(&mut self, cell: P) {
         if self.value[cell] == SOME && self.cand[cell].count_set_cands() == 1 {
             let val = Value(self.cand[cell].smallest_set_cand());
             self.decide(cell, val);
         }
         let size = self.size;
-        let (Y(y), X(x)) = cell;
+        let P(y, x) = cell;
         self.inspect_row(y);
         self.inspect_row(x + size);
     }
@@ -391,7 +392,8 @@ impl Field {
             for y in 0..size {
                 let mut mask = 0u32;
                 for x in 0..size {
-                    if self.cand[(Y(y), X(x))].is_set(i) {
+                    let pos = P(y, x);
+                    if self.cand[pos].is_set(i) {
                         mask |= 1u32 << x;
                     }
                 }
@@ -418,7 +420,7 @@ impl Field {
             for y in 0..size {
                 for x in 0..size {
                     if (masks[y as usize] & (1u32 << x)) == 0 {
-                        self.limit_cand((Y(y), X(x)), !Cand::singleton(i));
+                        self.limit_cand(P(y, x), !Cand::singleton(i));
                     }
                 }
             }
@@ -436,50 +438,50 @@ mod tests {
             // a symbol shouldn't occur more than once in a row / a column
             let mut field = Field::new(5, 3);
 
-            assert_eq!(field.cand[(Y(0), X(0))], Cand(7));
-            assert_eq!(field.cand[(Y(0), X(1))], Cand(7));
-            assert_eq!(field.cand[(Y(1), X(1))], Cand(7));
+            assert_eq!(field.cand[P(0, 0)], Cand(7));
+            assert_eq!(field.cand[P(0, 1)], Cand(7));
+            assert_eq!(field.cand[P(1, 1)], Cand(7));
 
-            field.decide((Y(0), X(0)), Value(0));
+            field.decide(P(0, 0), Value(0));
 
             assert_eq!(field.inconsistent, false);
-            assert_eq!(field.cand[(Y(0), X(0))], Cand(1));
-            assert_eq!(field.cand[(Y(0), X(1))], Cand(6));
-            assert_eq!(field.cand[(Y(1), X(0))], Cand(6));
-            assert_eq!(field.cand[(Y(1), X(1))], Cand(7));
+            assert_eq!(field.cand[P(0, 0)], Cand(1));
+            assert_eq!(field.cand[P(0, 1)], Cand(6));
+            assert_eq!(field.cand[P(1, 0)], Cand(6));
+            assert_eq!(field.cand[P(1, 1)], Cand(7));
         }
         {
             // there must be exactly `n_alpha` symbols in a row / a column
             let mut field = Field::new(5, 3);
 
-            field.decide((Y(1), X(0)), SOME);
-            field.decide((Y(1), X(1)), SOME);
-            field.decide((Y(1), X(2)), SOME);
+            field.decide(P(1, 0), SOME);
+            field.decide(P(1, 1), SOME);
+            field.decide(P(1, 2), SOME);
 
             assert_eq!(field.inconsistent, false);
-            assert_eq!(field.value[(Y(1), X(3))], EMPTY);
+            assert_eq!(field.value[P(1, 3)], EMPTY);
         }
         {
             // there must be exactly `n_alpha` symbols in a row / a column
             let mut field = Field::new(5, 3);
 
-            field.decide((Y(3), X(2)), EMPTY);
-            field.decide((Y(4), X(2)), EMPTY);
+            field.decide(P(3, 2), EMPTY);
+            field.decide(P(4, 2), EMPTY);
 
             assert_eq!(field.inconsistent, false);
-            assert_eq!(field.value[(Y(1), X(2))], SOME);
+            assert_eq!(field.value[P(1, 2)], SOME);
         }
         {
             let mut field = Field::new(5, 3);
 
-            field.limit_cand((Y(0), X(2)), Cand(5));
-            field.limit_cand((Y(2), X(2)), Cand(5));
-            field.limit_cand((Y(3), X(2)), Cand(5));
-            field.limit_cand((Y(4), X(2)), Cand(5));
+            field.limit_cand(P(0, 2), Cand(5));
+            field.limit_cand(P(2, 2), Cand(5));
+            field.limit_cand(P(3, 2), Cand(5));
+            field.limit_cand(P(4, 2), Cand(5));
 
             assert_eq!(field.inconsistent, false);
-            assert_eq!(field.value[(Y(1), X(2))], Value(1));
-            assert_eq!(field.cand[(Y(1), X(3))], Cand(5));
+            assert_eq!(field.value[P(1, 2)], Value(1));
+            assert_eq!(field.cand[P(1, 3)], Cand(5));
         }
     }
 
@@ -490,9 +492,9 @@ mod tests {
 
             field.set_clue(ClueLoc::Left, 0, Clue(0));
 
-            assert_eq!(field.cand[(Y(0), X(0))], Cand(1));
-            assert_eq!(field.cand[(Y(0), X(3))], Cand(6));
-            assert_eq!(field.cand[(Y(0), X(4))], Cand(6));
+            assert_eq!(field.cand[P(0, 0)], Cand(1));
+            assert_eq!(field.cand[P(0, 3)], Cand(6));
+            assert_eq!(field.cand[P(0, 4)], Cand(6));
         }
     }
 
@@ -504,8 +506,8 @@ mod tests {
 
             let field = Field::from_problem(&problem);
 
-            assert_eq!(field.cand[(Y(0), X(1))], Cand(2));
-            assert_eq!(field.cand[(Y(4), X(1))], Cand(5));
+            assert_eq!(field.cand[P(0, 1)], Cand(2));
+            assert_eq!(field.cand[P(4, 1)], Cand(5));
         }
     }
 }

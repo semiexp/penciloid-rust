@@ -1,4 +1,4 @@
-use super::super::{X, Y};
+use super::super::P;
 use super::*;
 
 use rand::Rng;
@@ -49,7 +49,7 @@ pub fn generate<R: Rng>(size: i32, n_alpha: i32, rng: &mut R) -> Option<Problem>
                     field.apply_methods();
                     for y in 0..size {
                         for x in 0..size {
-                            if field.get_value((Y(y), X(x))).0 >= 0 {
+                            if field.get_value(P(y, x)).0 >= 0 {
                                 isok = false;
                             }
                         }
