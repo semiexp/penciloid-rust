@@ -9,6 +9,8 @@ pub struct LP(pub i32, pub i32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct D(pub i32, pub i32);
 
+const FOUR_NEIGHBOURS: [D; 4] = [D(-1, 0), D(0, -1), D(1, 0), D(0, 1)];
+
 impl LP {
     pub fn of_cell(pos: P) -> LP {
         LP(pos.0 * 2 + 1, pos.1 * 2 + 1)
