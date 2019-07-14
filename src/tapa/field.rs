@@ -1,9 +1,11 @@
-use super::super::{Coord, GraphSeparation, Grid, X, Y};
-use super::{Cell, Clue, ConsecutiveRegionDictionary, Dictionary, CLUE_MAX, CLUE_VALUES,
-            CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET, CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE,
-            DICTIONARY_INCONSISTENT, DICTIONARY_NEIGHBOR_OFFSET, DICTIONARY_NEIGHBOR_SIZE, NO_CLUE};
-use std::fmt;
+use super::super::{GraphSeparation, Grid, D, P};
+use super::{
+    Cell, Clue, ConsecutiveRegionDictionary, Dictionary, CLUE_MAX, CLUE_VALUES,
+    CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET, CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE,
+    DICTIONARY_INCONSISTENT, DICTIONARY_NEIGHBOR_OFFSET, DICTIONARY_NEIGHBOR_SIZE, NO_CLUE,
+};
 use std::cmp;
+use std::fmt;
 
 #[derive(Clone)]
 pub struct Field<'a, 'b> {
@@ -13,7 +15,7 @@ pub struct Field<'a, 'b> {
     decided_cells: i32,
     dic: &'a Dictionary,
     consecutive_dic: &'b ConsecutiveRegionDictionary,
-    checking_region: Option<(Coord, Coord)>,
+    checking_region: Option<(P, P)>,
 }
 
 impl<'a, 'b> Field<'a, 'b> {
@@ -51,10 +53,10 @@ impl<'a, 'b> Field<'a, 'b> {
     pub fn fully_solved(&self) -> bool {
         self.decided_cells == self.height() * self.width()
     }
-    pub fn clue(&self, loc: Coord) -> Clue {
+    pub fn clue(&self, loc: P) -> Clue {
         self.clue[loc]
     }
-    pub fn add_clue(&mut self, loc: Coord, clue: Clue) {
+    pub fn add_clue(&mut self, loc: P, clue: Clue) {
         let current_clue = self.clue[loc];
         if current_clue != NO_CLUE {
             if current_clue != clue {
@@ -67,19 +69,19 @@ impl<'a, 'b> Field<'a, 'b> {
         self.decide(loc, Cell::White);
         self.inspect(loc);
     }
-    pub fn cell(&self, loc: Coord) -> Cell {
+    pub fn cell(&self, loc: P) -> Cell {
         self.cell[loc]
     }
-    pub fn cell_checked(&self, loc: Coord) -> Cell {
-        if self.cell.is_valid_coord(loc) {
+    pub fn cell_checked(&self, loc: P) -> Cell {
+        if self.cell.is_valid_p(loc) {
             self.cell[loc]
         } else {
             Cell::White
         }
     }
-    pub fn decide(&mut self, loc: Coord, v: Cell) {
-        if let Some(((Y(y1), X(x1)), (Y(y2), X(x2)))) = self.checking_region {
-            let (Y(y), X(x)) = loc;
+    pub fn decide(&mut self, loc: P, v: Cell) {
+        if let Some((P(y1, x1), P(y2, x2))) = self.checking_region {
+            let P(y, x) = loc;
             if !(y1 <= y && y < y2 && x1 <= x && x < x2) {
                 return;
             }
@@ -95,22 +97,20 @@ impl<'a, 'b> Field<'a, 'b> {
         self.cell[loc] = v;
         self.decided_cells += 1;
 
-        let (Y(y), X(x)) = loc;
-
         if v == Cell::Black {
-            self.avoid_cluster((Y(y - 1), X(x - 1)), (Y(y - 1), X(x)), (Y(y), X(x - 1)));
-            self.avoid_cluster((Y(y - 1), X(x + 1)), (Y(y - 1), X(x)), (Y(y), X(x + 1)));
-            self.avoid_cluster((Y(y + 1), X(x - 1)), (Y(y + 1), X(x)), (Y(y), X(x - 1)));
-            self.avoid_cluster((Y(y + 1), X(x + 1)), (Y(y + 1), X(x)), (Y(y), X(x + 1)));
+            self.avoid_cluster(loc + D(-1, -1), loc + D(-1, 0), loc + D(0, -1));
+            self.avoid_cluster(loc + D(-1, 1), loc + D(-1, 0), loc + D(0, 1));
+            self.avoid_cluster(loc + D(1, -1), loc + D(1, 0), loc + D(0, -1));
+            self.avoid_cluster(loc + D(1, 1), loc + D(1, 0), loc + D(0, 1));
         }
 
         for dy in -1..2 {
             for dx in -1..2 {
-                self.inspect((Y(y + dy), X(x + dx)));
+                self.inspect(loc + D(dy, dx));
             }
         }
     }
-    fn avoid_cluster(&mut self, loc1: Coord, loc2: Coord, loc3: Coord) {
+    fn avoid_cluster(&mut self, loc1: P, loc2: P, loc3: P) {
         if self.cell_checked(loc1) == Cell::Black {
             if self.cell_checked(loc2) == Cell::Black {
                 self.decide(loc3, Cell::White);
@@ -132,16 +132,17 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                let c = self.cell((Y(y), X(x)));
+                let pos = P(y, x);
+                let c = self.cell(pos);
                 graph.set_weight(
                     (y * width + x) as usize,
                     if c == Cell::Black { 1 } else { 0 },
                 );
                 if c != Cell::White {
-                    if self.cell_checked((Y(y + 1), X(x))) != Cell::White {
+                    if self.cell_checked(pos + D(1, 0)) != Cell::White {
                         graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
                     }
-                    if self.cell_checked((Y(y), X(x + 1))) != Cell::White {
+                    if self.cell_checked(pos + D(0, 1)) != Cell::White {
                         graph.add_edge((y * width + x) as usize, (y * width + (x + 1)) as usize);
                     }
                 }
@@ -152,7 +153,8 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::Undecided {
+                let pos = P(y, x);
+                if self.cell(pos) == Cell::Undecided {
                     let sep = graph.separate((y * width + x) as usize);
                     let mut nonzero = 0;
                     for v in sep {
@@ -161,7 +163,7 @@ impl<'a, 'b> Field<'a, 'b> {
                         }
                     }
                     if nonzero >= 2 {
-                        self.decide((Y(y), X(x)), Cell::Black);
+                        self.decide(pos, Cell::Black);
                     }
                 }
             }
@@ -176,8 +178,9 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::White {
-                    activated_cell[(Y(y), X(x))] = false;
+                let pos = P(y, x);
+                if self.cell(pos) == Cell::White {
+                    activated_cell[pos] = false;
                 }
             }
         }
@@ -187,7 +190,8 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                let clue = self.clue((Y(y), X(x)));
+                let pos = P(y, x);
+                let clue = self.clue(pos);
                 if clue != NO_CLUE {
                     let Clue(c) = clue;
                     if CLUE_MAX[c as usize] <= 1 {
@@ -195,8 +199,8 @@ impl<'a, 'b> Field<'a, 'b> {
 
                         for dy in -1..2 {
                             for dx in -1..2 {
-                                let cd2 = (Y(y + dy), X(x + dx));
-                                if edge_down.is_valid_coord(cd2) {
+                                let cd2 = pos + D(dy, dx);
+                                if edge_down.is_valid_p(cd2) {
                                     if dy != 1 {
                                         edge_down[cd2] = false;
                                     }
@@ -211,30 +215,32 @@ impl<'a, 'b> Field<'a, 'b> {
                     let mut virtual_disconnection_pattern = 0u32;
                     let mut pow3 = 1;
                     for i in 0..8 {
-                        let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                        let v = self.cell_checked((Y(y + dy), X(x + dx)));
-                        virtual_disconnection_pattern += pow3 * match v {
-                            Cell::Undecided => 0,
-                            Cell::Black => 1,
-                            Cell::White => 2,
-                        };
+                        let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                        let v = self.cell_checked(pos + d);
+                        virtual_disconnection_pattern += pow3
+                            * match v {
+                                Cell::Undecided => 0,
+                                Cell::Black => 1,
+                                Cell::White => 2,
+                            };
                         pow3 *= 3;
                     }
 
-                    let res = self.dic
+                    let res = self
+                        .dic
                         .virtual_disconnection(clue, virtual_disconnection_pattern);
                     if res != 0 {
                         for i in 0..8 {
                             if ((res >> i) & 1) != 0 {
-                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
                                 if i < 2 {
-                                    edge_down[(Y(y + dy), X(x + dx))] = false;
+                                    edge_down[pos + d] = false;
                                 } else if i < 4 {
-                                    edge_right[(Y(y + dy), X(x + dx))] = false;
+                                    edge_right[pos + d] = false;
                                 } else if i < 6 {
-                                    edge_down[(Y(y + dy - 1), X(x + dx))] = false;
+                                    edge_down[pos + d + D(-1, 0)] = false;
                                 } else {
-                                    edge_right[(Y(y + dy), X(x + dx - 1))] = false;
+                                    edge_right[pos + d + D(0, -1)] = false;
                                 }
                             }
                         }
@@ -242,28 +248,27 @@ impl<'a, 'b> Field<'a, 'b> {
 
                     let mut virtually_ignored_cell_pattern = 0u32;
                     for i in 0..8 {
-                        let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                        let v = self.cell_checked((Y(y + dy), X(x + dx)));
+                        let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                        let v = self.cell_checked(pos + d);
 
                         if v == Cell::White {
                             virtually_ignored_cell_pattern |= (3 << (i * 2));
                         } else {
                             let mut is_degree_2;
-                            if dy == 0 || dx == 0 {
-                                is_degree_2 = self.cell_checked((Y(y + dy * 2), X(x + dx * 2)))
-                                    == Cell::White;
+                            if d.0 == 0 || d.1 == 0 {
+                                is_degree_2 = self.cell_checked(pos + d * 2) == Cell::White;
                             } else {
-                                is_degree_2 = self.cell_checked((Y(y + dy), X(x + dx * 2)))
+                                is_degree_2 = self.cell_checked(P(y + d.0, x + d.1 * 2))
                                     == Cell::White
-                                    && self.cell_checked((Y(y + dy * 2), X(x + dx))) == Cell::White;
+                                    && self.cell_checked(P(y + d.0 * 2, x + d.1)) == Cell::White;
                             }
                             {
-                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 1) % 8];
-                                if self.cell_checked((Y(y + dy), X(x + dx))) == Cell::White {
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[(i + 1) % 8];
+                                if self.cell_checked(pos + d) == Cell::White {
                                     is_degree_2 = false;
                                 }
-                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 7) % 8];
-                                if self.cell_checked((Y(y + dy), X(x + dx))) == Cell::White {
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[(i + 7) % 8];
+                                if self.cell_checked(pos + d) == Cell::White {
                                     is_degree_2 = false;
                                 }
                             }
@@ -278,13 +283,14 @@ impl<'a, 'b> Field<'a, 'b> {
                         }
                     }
 
-                    let res = self.dic
+                    let res = self
+                        .dic
                         .virtually_ignored_cell(clue, virtually_ignored_cell_pattern);
                     if res != 0 {
                         for i in 0..8 {
                             if ((res >> i) & 1) != 0 {
-                                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                                activated_cell[(Y(y + dy), X(x + dx))] = false;
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                activated_cell[pos + d] = false;
                             }
                         }
                     }
@@ -294,22 +300,21 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                let c = self.cell((Y(y), X(x)));
+                let pos = P(y, x);
+                let c = self.cell(pos);
                 graph.set_weight(
                     (y * width + x) as usize,
-                    if c == Cell::Black && activated_cell[(Y(y), X(x))] {
+                    if c == Cell::Black && activated_cell[pos] {
                         1
                     } else {
                         0
                     },
                 );
                 if c != Cell::White {
-                    if edge_down[(Y(y), X(x))] && y < height - 1 && activated_cell[(Y(y + 1), X(x))]
-                    {
+                    if edge_down[pos] && y < height - 1 && activated_cell[pos + D(1, 0)] {
                         graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
                     }
-                    if edge_right[(Y(y), X(x))] && x < width - 1 && activated_cell[(Y(y), X(x + 1))]
-                    {
+                    if edge_right[pos] && x < width - 1 && activated_cell[pos + D(0, 1)] {
                         graph.add_edge((y * width + x) as usize, (y * width + (x + 1)) as usize);
                     }
                 }
@@ -321,13 +326,16 @@ impl<'a, 'b> Field<'a, 'b> {
         let mut black_root = None;
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::Black && activated_cell[(Y(y), X(x))] {
+                let pos = P(y, x);
+                if self.cell(pos) == Cell::Black && activated_cell[pos] {
                     let root = graph.union_root((y * width + x) as usize);
                     match black_root {
-                        Some(b) => if b != root {
-                            self.inconsistent = true;
-                            return;
-                        },
+                        Some(b) => {
+                            if b != root {
+                                self.inconsistent = true;
+                                return;
+                            }
+                        }
                         None => black_root = Some(root),
                     }
                 }
@@ -336,11 +344,12 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) == Cell::Undecided && activated_cell[(Y(y), X(x))] {
+                let pos = P(y, x);
+                if self.cell(pos) == Cell::Undecided && activated_cell[pos] {
                     let root = graph.union_root((y * width + x) as usize);
                     if let Some(b) = black_root {
                         if b != root {
-                            self.decide((Y(y), X(x)), Cell::White);
+                            self.decide(pos, Cell::White);
                             continue;
                         }
                     }
@@ -352,7 +361,7 @@ impl<'a, 'b> Field<'a, 'b> {
                         }
                     }
                     if nonzero >= 2 {
-                        self.decide((Y(y), X(x)), Cell::Black);
+                        self.decide(pos, Cell::Black);
                     }
                 }
             }
@@ -371,41 +380,44 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                let cd = (Y(y), X(x));
-                match self.cell(cd) {
-                    Cell::Black => weight[cd] += 1,
-                    Cell::White => if self.clue(cd) != NO_CLUE {
-                        let mut neighbor_pattern = 0u32;
-                        for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-                            let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                            if self.cell_checked((Y(y + dy), X(x + dx))) != Cell::White {
-                                neighbor_pattern |= 1u32 << i;
+                let pos = P(y, x);
+                match self.cell(pos) {
+                    Cell::Black => weight[pos] += 1,
+                    Cell::White => {
+                        if self.clue(pos) != NO_CLUE {
+                            let mut neighbor_pattern = 0u32;
+                            for i in 0..DICTIONARY_NEIGHBOR_SIZE {
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                if self.cell_checked(pos + d) != Cell::White {
+                                    neighbor_pattern |= 1u32 << i;
+                                }
                             }
-                        }
-                        let clue = self.clue(cd);
-                        let affected_neighbors =
-                            self.consecutive_dic.consult(clue, neighbor_pattern);
+                            let clue = self.clue(pos);
+                            let affected_neighbors =
+                                self.consecutive_dic.consult(clue, neighbor_pattern);
 
-                        for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-                            let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                            let cd2 = (Y(y + dy), X(x + dx));
-                            if id.is_valid_coord(cd2) {
-                                weight[cd2] += 1;
-                                for j in 0..CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE {
-                                    correction_value[cd2][j] += self.consecutive_dic
-                                        .consult_removal(affected_neighbors, i, j);
+                            for i in 0..DICTIONARY_NEIGHBOR_SIZE {
+                                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                                let pos2 = pos + d;
+                                if id.is_valid_p(pos2) {
+                                    weight[pos2] += 1;
+                                    for j in 0..CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE {
+                                        correction_value[pos2][j] += self
+                                            .consecutive_dic
+                                            .consult_removal(affected_neighbors, i, j);
+                                    }
                                 }
                             }
                         }
-                    },
+                    }
                     Cell::Undecided => (),
                 }
             }
         }
 
         fn visit(
-            cd: Coord,
-            cd_parent: Coord,
+            cd: P,
+            cd_parent: P,
             cell: &Grid<Cell>,
             id: &mut Grid<i32>,
             parent_id: &mut Grid<i32>,
@@ -420,17 +432,16 @@ impl<'a, 'b> Field<'a, 'b> {
             lowlink[cd] = *id_last;
             *id_last += 1;
 
-            if cd_parent != (Y(-1), X(-1)) {
+            if cd_parent != P(-1, -1) {
                 parent_id[cd] = id[cd_parent];
             }
 
-            let (Y(y), X(x)) = cd;
+            // TODO: rewrite more clearly
+            let P(y, x) = cd;
 
-            for &(Y(dy), X(dx)) in &CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET {
-                let y2 = y + dy;
-                let x2 = x + dx;
-                if 0 <= y2 && y2 < cell.height() && 0 <= x2 && x2 < cell.width() {
-                    let cd2 = (Y(y2), X(x2));
+            for &d in &CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET {
+                let cd2 = cd + d;
+                if cell.is_valid_p(cd2) {
                     if cd_parent == cd2 || cell[cd2] == Cell::White {
                         continue;
                     }
@@ -449,11 +460,12 @@ impl<'a, 'b> Field<'a, 'b> {
 
         'outer: for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) != Cell::White {
+                let pos = P(y, x);
+                if self.cell(pos) != Cell::White {
                     let mut id_last = 0;
                     visit(
-                        (Y(y), X(x)),
-                        (Y(-1), X(-1)),
+                        pos,
+                        P(-1, -1),
                         &self.cell,
                         &mut id,
                         &mut parent_id,
@@ -461,7 +473,7 @@ impl<'a, 'b> Field<'a, 'b> {
                         &mut weight,
                         &mut id_last,
                     );
-                    total_weight = weight[(Y(y), X(x))];
+                    total_weight = weight[pos];
                     break 'outer;
                 }
             }
@@ -469,7 +481,8 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                if self.cell((Y(y), X(x))) != Cell::White && id[(Y(y), X(x))] == -1 {
+                let pos = P(y, x);
+                if self.cell(pos) != Cell::White && id[pos] == -1 {
                     self.inconsistent = true;
                     return;
                 }
@@ -478,7 +491,8 @@ impl<'a, 'b> Field<'a, 'b> {
 
         for y in 0..height {
             for x in 0..width {
-                let cd = (Y(y), X(x));
+                // TODO: use `pos` instead of `cd`
+                let cd = P(y, x);
                 let cell = self.cell(cd);
                 if id[cd] == -1 {
                     continue;
@@ -488,9 +502,9 @@ impl<'a, 'b> Field<'a, 'b> {
                     let mut parent_dir = 4;
                     let mut parent_weight = 0;
                     for i in 0..4 {
-                        let (Y(dy), X(dx)) = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[i];
-                        let cd2 = (Y(y + dy), X(x + dx));
-                        if !id.is_valid_coord(cd2) || id[cd2] == -1 {
+                        let d = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[i];
+                        let cd2 = cd + d;
+                        if !id.is_valid_p(cd2) || id[cd2] == -1 {
                             continue;
                         }
                         if parent_id[cd] == id[cd2] {
@@ -510,9 +524,9 @@ impl<'a, 'b> Field<'a, 'b> {
                             if id[cd] < id[cd2] {
                                 let mut closest = (0, 0);
                                 for j in 0..4 {
-                                    let (Y(dy), X(dx)) = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[j];
-                                    let cd3 = (Y(y + dy), X(x + dx));
-                                    if !id.is_valid_coord(cd3) || id[cd3] == -1 {
+                                    let d = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[j];
+                                    let cd3 = cd + d;
+                                    if !id.is_valid_p(cd3) || id[cd3] == -1 {
                                         continue;
                                     }
                                     if parent_id[cd3] == id[cd] && id[cd3] <= id[cd2] {
@@ -541,24 +555,24 @@ impl<'a, 'b> Field<'a, 'b> {
             }
         }
     }
-    fn inspect(&mut self, loc: Coord) {
-        if !self.cell.is_valid_coord(loc) {
+    fn inspect(&mut self, loc: P) {
+        if !self.cell.is_valid_p(loc) {
             return;
         }
 
-        let (Y(y), X(x)) = loc;
         let cell = self.cell(loc);
         let clue = self.clue[loc];
         if clue != NO_CLUE {
             let mut neighbor = 0;
             let mut pow = 1;
             for i in 0..8 {
-                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-                neighbor += pow * match self.cell_checked((Y(y + dy), X(x + dx))) {
-                    Cell::Undecided => 0,
-                    Cell::Black => 1,
-                    Cell::White => 2,
-                };
+                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
+                neighbor += pow
+                    * match self.cell_checked(loc + d) {
+                        Cell::Undecided => 0,
+                        Cell::Black => 1,
+                        Cell::White => 2,
+                    };
                 pow *= 3;
             }
             let neighbor = self.dic.neighbor_pattern_raw(clue, neighbor);
@@ -570,11 +584,11 @@ impl<'a, 'b> Field<'a, 'b> {
 
             for i in 0..8 {
                 let v = (neighbor >> (2 * i)) & 3;
-                let (Y(dy), X(dx)) = DICTIONARY_NEIGHBOR_OFFSET[i];
+                let d = DICTIONARY_NEIGHBOR_OFFSET[i];
                 if v == 1 {
-                    self.decide((Y(y + dy), X(x + dx)), Cell::Black);
+                    self.decide(loc + d, Cell::Black);
                 } else if v == 2 {
-                    self.decide((Y(y + dy), X(x + dx)), Cell::White);
+                    self.decide(loc + d, Cell::White);
                 }
             }
         }
@@ -601,26 +615,27 @@ impl<'a, 'b> Field<'a, 'b> {
             updated = false;
             for y in 0..height {
                 for x in 0..width {
-                    if self.cell((Y(y), X(x))) == Cell::Undecided {
-                        let checking_region = ((Y(y - 2), X(x - 2)), (Y(y + 3), X(x + 3)));
+                    let pos = P(y, x);
+                    if self.cell(pos) == Cell::Undecided {
+                        let checking_region = (pos + D(-2, -2), pos + D(3, 3));
                         let mut trial_black = self.clone();
                         trial_black.checking_region = Some(checking_region);
-                        trial_black.decide((Y(y), X(x)), Cell::Black);
+                        trial_black.decide(pos, Cell::Black);
                         trial_black.solve();
 
                         if trial_black.inconsistent() {
-                            self.decide((Y(y), X(x)), Cell::White);
+                            self.decide(pos, Cell::White);
                             self.solve();
                             updated = true;
                         }
 
                         let mut trial_white = self.clone();
                         trial_white.checking_region = Some(checking_region);
-                        trial_white.decide((Y(y), X(x)), Cell::White);
+                        trial_white.decide(pos, Cell::White);
                         trial_white.solve();
 
                         if trial_white.inconsistent() {
-                            self.decide((Y(y), X(x)), Cell::Black);
+                            self.decide(pos, Cell::Black);
                             self.solve();
                             updated = true;
                         }
@@ -640,11 +655,12 @@ impl<'a, 'b> fmt::Display for Field<'a, 'b> {
         let width = self.width();
         for y in 0..height {
             for x in 0..width {
-                match self.cell((Y(y), X(x))) {
+                let pos = P(y, x);
+                match self.cell(pos) {
                     Cell::Undecided => write!(f, ".... ")?,
                     Cell::Black => write!(f, "#### ")?,
                     Cell::White => {
-                        let clue = self.clue((Y(y), X(x)));
+                        let clue = self.clue(pos);
                         if clue == NO_CLUE {
                             write!(f, "____ ")?;
                         } else {
@@ -674,8 +690,8 @@ impl<'a, 'b> fmt::Display for Field<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::clue_pattern_to_id;
+    use super::*;
 
     #[test]
     fn test_tapa_field_clues() {
@@ -684,19 +700,19 @@ mod tests {
 
         {
             let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-            field.add_clue((Y(2), X(1)), clue_pattern_to_id(&[]).unwrap());
-            field.add_clue((Y(2), X(3)), clue_pattern_to_id(&[4]).unwrap());
+            field.add_clue(P(2, 1), clue_pattern_to_id(&[]).unwrap());
+            field.add_clue(P(2, 3), clue_pattern_to_id(&[4]).unwrap());
 
-            assert_eq!(field.cell((Y(2), X(0))), Cell::White);
-            assert_eq!(field.cell((Y(1), X(4))), Cell::Black);
-            assert_eq!(field.cell((Y(2), X(4))), Cell::Black);
-            assert_eq!(field.cell((Y(3), X(4))), Cell::Black);
+            assert_eq!(field.cell(P(2, 0)), Cell::White);
+            assert_eq!(field.cell(P(1, 4)), Cell::Black);
+            assert_eq!(field.cell(P(2, 4)), Cell::Black);
+            assert_eq!(field.cell(P(3, 4)), Cell::Black);
             assert_eq!(field.inconsistent(), false);
         }
         {
             let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-            field.add_clue((Y(1), X(1)), clue_pattern_to_id(&[]).unwrap());
-            field.add_clue((Y(2), X(2)), clue_pattern_to_id(&[8]).unwrap());
+            field.add_clue(P(1, 1), clue_pattern_to_id(&[]).unwrap());
+            field.add_clue(P(2, 2), clue_pattern_to_id(&[8]).unwrap());
 
             assert_eq!(field.inconsistent(), true);
         }
@@ -708,11 +724,11 @@ mod tests {
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-        field.decide(((Y(1), X(1))), Cell::Black);
-        field.decide(((Y(1), X(2))), Cell::Black);
-        field.decide(((Y(2), X(2))), Cell::Black);
+        field.decide((P(1, 1)), Cell::Black);
+        field.decide((P(1, 2)), Cell::Black);
+        field.decide((P(2, 2)), Cell::Black);
 
-        assert_eq!(field.cell((Y(2), X(1))), Cell::White);
+        assert_eq!(field.cell(P(2, 1)), Cell::White);
         assert_eq!(field.inconsistent(), false);
     }
 
@@ -722,18 +738,18 @@ mod tests {
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-        field.decide((Y(0), X(0)), Cell::Black);
-        field.decide((Y(4), X(5)), Cell::Black);
-        field.decide((Y(1), X(0)), Cell::White);
-        field.decide((Y(2), X(1)), Cell::White);
-        field.decide((Y(0), X(3)), Cell::White);
-        field.decide((Y(0), X(2)), Cell::Undecided);
-        field.decide((Y(1), X(1)), Cell::Undecided);
+        field.decide(P(0, 0), Cell::Black);
+        field.decide(P(4, 5), Cell::Black);
+        field.decide(P(1, 0), Cell::White);
+        field.decide(P(2, 1), Cell::White);
+        field.decide(P(0, 3), Cell::White);
+        field.decide(P(0, 2), Cell::Undecided);
+        field.decide(P(1, 1), Cell::Undecided);
 
         field.inspect_connectivity();
 
-        assert_eq!(field.cell((Y(0), X(1))), Cell::Black);
-        assert_eq!(field.cell((Y(1), X(2))), Cell::Black);
+        assert_eq!(field.cell(P(0, 1)), Cell::Black);
+        assert_eq!(field.cell(P(1, 2)), Cell::Black);
         assert_eq!(field.inconsistent(), false);
     }
 
@@ -743,16 +759,16 @@ mod tests {
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 7, &dic, &consecutive_dic);
-        field.add_clue((Y(1), X(3)), clue_pattern_to_id(&[1, 2]).unwrap());
-        field.add_clue((Y(3), X(3)), clue_pattern_to_id(&[1, 3]).unwrap());
-        field.decide((Y(0), X(0)), Cell::Black);
-        field.decide((Y(0), X(6)), Cell::Black);
+        field.add_clue(P(1, 3), clue_pattern_to_id(&[1, 2]).unwrap());
+        field.add_clue(P(3, 3), clue_pattern_to_id(&[1, 3]).unwrap());
+        field.decide(P(0, 0), Cell::Black);
+        field.decide(P(0, 6), Cell::Black);
 
         field.inspect_connectivity_advanced();
 
-        assert_eq!(field.cell((Y(4), X(2))), Cell::Black);
-        assert_eq!(field.cell((Y(4), X(3))), Cell::Black);
-        assert_eq!(field.cell((Y(4), X(4))), Cell::Black);
+        assert_eq!(field.cell(P(4, 2)), Cell::Black);
+        assert_eq!(field.cell(P(4, 3)), Cell::Black);
+        assert_eq!(field.cell(P(4, 4)), Cell::Black);
     }
 
     #[test]
@@ -761,17 +777,17 @@ mod tests {
         let consecutive_dic = ConsecutiveRegionDictionary::new(&dic);
 
         let mut field = Field::new(5, 5, &dic, &consecutive_dic);
-        field.add_clue((Y(1), X(2)), clue_pattern_to_id(&[1, 2]).unwrap());
-        field.decide((Y(0), X(1)), Cell::Black);
-        field.decide((Y(0), X(2)), Cell::Black);
-        field.decide((Y(3), X(2)), Cell::White);
-        field.decide((Y(4), X(4)), Cell::Black);
+        field.add_clue(P(1, 2), clue_pattern_to_id(&[1, 2]).unwrap());
+        field.decide(P(0, 1), Cell::Black);
+        field.decide(P(0, 2), Cell::Black);
+        field.decide(P(3, 2), Cell::White);
+        field.decide(P(4, 4), Cell::Black);
 
         field.inspect_connectivity_advanced();
 
-        assert_eq!(field.cell((Y(4), X(1))), Cell::Black);
-        assert_eq!(field.cell((Y(4), X(2))), Cell::Black);
-        assert_eq!(field.cell((Y(4), X(3))), Cell::Black);
+        assert_eq!(field.cell(P(4, 1)), Cell::Black);
+        assert_eq!(field.cell(P(4, 2)), Cell::Black);
+        assert_eq!(field.cell(P(4, 3)), Cell::Black);
         assert_eq!(field.inconsistent(), false);
     }
 
@@ -782,10 +798,10 @@ mod tests {
 
         {
             let mut field = Field::new(6, 5, &dic, &consecutive_dic);
-            field.add_clue((Y(1), X(0)), clue_pattern_to_id(&[1, 3]).unwrap());
-            field.add_clue((Y(1), X(2)), clue_pattern_to_id(&[2, 4]).unwrap());
-            field.add_clue((Y(3), X(1)), clue_pattern_to_id(&[3, 3]).unwrap());
-            field.add_clue((Y(4), X(3)), clue_pattern_to_id(&[4]).unwrap());
+            field.add_clue(P(1, 0), clue_pattern_to_id(&[1, 3]).unwrap());
+            field.add_clue(P(1, 2), clue_pattern_to_id(&[2, 4]).unwrap());
+            field.add_clue(P(3, 1), clue_pattern_to_id(&[3, 3]).unwrap());
+            field.add_clue(P(4, 3), clue_pattern_to_id(&[4]).unwrap());
 
             field.inspect_connectivity();
             field.inspect_connectivity();
@@ -802,7 +818,7 @@ mod tests {
             for y in 0..6 {
                 for x in 0..5 {
                     assert_eq!(
-                        field.cell((Y(y), X(x))),
+                        field.cell(P(y, x)),
                         if expected[y as usize][x as usize] == 1 {
                             Cell::Black
                         } else {
@@ -817,9 +833,9 @@ mod tests {
         }
         {
             let mut field = Field::new(2, 7, &dic, &consecutive_dic);
-            field.add_clue((Y(0), X(0)), clue_pattern_to_id(&[1]).unwrap());
-            field.add_clue((Y(1), X(2)), clue_pattern_to_id(&[3]).unwrap());
-            field.add_clue((Y(0), X(5)), clue_pattern_to_id(&[2]).unwrap());
+            field.add_clue(P(0, 0), clue_pattern_to_id(&[1]).unwrap());
+            field.add_clue(P(1, 2), clue_pattern_to_id(&[3]).unwrap());
+            field.add_clue(P(0, 5), clue_pattern_to_id(&[2]).unwrap());
 
             field.inspect_connectivity_clue_aware();
             field.inspect_connectivity_clue_aware();
@@ -828,7 +844,7 @@ mod tests {
             for y in 0..2 {
                 for x in 0..7 {
                     assert_eq!(
-                        field.cell((Y(y), X(x))),
+                        field.cell(P(y, x)),
                         if expected[y as usize][x as usize] == 1 {
                             Cell::Black
                         } else {
@@ -848,25 +864,25 @@ mod tests {
 
         {
             let mut field = Field::new(5, 6, &dic, &consecutive_dic);
-            field.add_clue((Y(1), X(3)), clue_pattern_to_id(&[]).unwrap());
-            field.add_clue((Y(4), X(0)), clue_pattern_to_id(&[1]).unwrap());
-            field.add_clue((Y(0), X(0)), clue_pattern_to_id(&[1]).unwrap());
-            field.add_clue((Y(4), X(5)), clue_pattern_to_id(&[1]).unwrap());
+            field.add_clue(P(1, 3), clue_pattern_to_id(&[]).unwrap());
+            field.add_clue(P(4, 0), clue_pattern_to_id(&[1]).unwrap());
+            field.add_clue(P(0, 0), clue_pattern_to_id(&[1]).unwrap());
+            field.add_clue(P(4, 5), clue_pattern_to_id(&[1]).unwrap());
 
             field.inspect_connectivity_clue_aware();
 
-            assert_eq!(field.cell((Y(3), X(1))), Cell::Black);
+            assert_eq!(field.cell(P(3, 1)), Cell::Black);
             assert_eq!(field.inconsistent(), false);
         }
         {
             let mut field = Field::new(2, 2, &dic, &consecutive_dic);
-            field.add_clue((Y(0), X(0)), clue_pattern_to_id(&[1]).unwrap());
+            field.add_clue(P(0, 0), clue_pattern_to_id(&[1]).unwrap());
 
             field.inspect_connectivity_clue_aware();
 
-            assert_eq!(field.cell((Y(0), X(1))), Cell::Undecided);
-            assert_eq!(field.cell((Y(1), X(0))), Cell::Undecided);
-            assert_eq!(field.cell((Y(1), X(1))), Cell::Undecided);
+            assert_eq!(field.cell(P(0, 1)), Cell::Undecided);
+            assert_eq!(field.cell(P(1, 0)), Cell::Undecided);
+            assert_eq!(field.cell(P(1, 1)), Cell::Undecided);
             assert_eq!(field.inconsistent(), false);
         }
     }

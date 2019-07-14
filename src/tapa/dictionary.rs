@@ -1,16 +1,16 @@
-use super::super::{Coord, X, Y};
+use super::super::{D, P};
 use super::{Cell, Clue, CLUE_TYPES, CLUE_VALUES};
 
 pub const DICTIONARY_NEIGHBOR_SIZE: usize = 8;
-pub const DICTIONARY_NEIGHBOR_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
-    (Y(-1), X(-1)),
-    (Y(0), X(-1)),
-    (Y(1), X(-1)),
-    (Y(1), X(0)),
-    (Y(1), X(1)),
-    (Y(0), X(1)),
-    (Y(-1), X(1)),
-    (Y(-1), X(0)),
+pub const DICTIONARY_NEIGHBOR_OFFSET: [D; DICTIONARY_NEIGHBOR_SIZE] = [
+    D(-1, -1),
+    D(0, -1),
+    D(1, -1),
+    D(1, 0),
+    D(1, 1),
+    D(0, 1),
+    D(-1, 1),
+    D(-1, 0),
 ];
 pub const DICTIONARY_INCONSISTENT: u32 = 0xffffffff;
 
@@ -221,10 +221,12 @@ impl Dictionary {
                     let i = (i + top) % DICTIONARY_NEIGHBOR_SIZE;
                     match pattern[i] {
                         Cell::Black => len += 1,
-                        _ => if len > 0 {
-                            ret.push(len);
-                            len = 0;
-                        },
+                        _ => {
+                            if len > 0 {
+                                ret.push(len);
+                                len = 0;
+                            }
+                        }
                     }
                 }
                 if len > 0 {
@@ -254,11 +256,12 @@ impl Dictionary {
         let mut ret = 0usize;
         let mut pow = 1usize;
         for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-            ret += pow * match pat[i] {
-                Cell::Undecided => 0,
-                Cell::Black => 1,
-                Cell::White => 2,
-            };
+            ret += pow
+                * match pat[i] {
+                    Cell::Undecided => 0,
+                    Cell::Black => 1,
+                    Cell::White => 2,
+                };
             pow *= 3;
         }
         ret
@@ -269,8 +272,8 @@ const CONSECUTIVE_DICTIONARY_NEIGHBOR_PATTERN_COUNT: usize = 256; // 2^8
 const CONSECUTIVE_DICTIONARY_SIZE: usize =
     CONSECUTIVE_DICTIONARY_NEIGHBOR_PATTERN_COUNT * CLUE_TYPES;
 pub const CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE: usize = 4;
-pub const CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET: [Coord; CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE] =
-    [(Y(-1), X(0)), (Y(0), X(-1)), (Y(1), X(0)), (Y(0), X(1))];
+pub const CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET: [D; CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE] =
+    [D(-1, 0), D(0, -1), D(1, 0), D(0, 1)];
 const CONSECUTIVE_DICTIONARY_REMOVAL_SIZE: usize = CONSECUTIVE_DICTIONARY_NEIGHBOR_PATTERN_COUNT
     * DICTIONARY_NEIGHBOR_SIZE
     * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE;
@@ -343,15 +346,15 @@ impl ConsecutiveRegionDictionary {
         let mut prev_direction = [0usize; DICTIONARY_NEIGHBOR_SIZE];
         let mut next_direction = [0usize; DICTIONARY_NEIGHBOR_SIZE];
         for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-            let (Y(y), X(x)) = DICTIONARY_NEIGHBOR_OFFSET[i];
-            let (Y(yp), X(xp)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 7) % 8];
-            let (Y(yn), X(xn)) = DICTIONARY_NEIGHBOR_OFFSET[(i + 1) % 8];
+            let ofs = DICTIONARY_NEIGHBOR_OFFSET[i];
+            let ofs_prev = DICTIONARY_NEIGHBOR_OFFSET[(i + 7) % 8];
+            let ofs_next = DICTIONARY_NEIGHBOR_OFFSET[(i + 1) % 8];
             for j in 0..4 {
-                let (Y(dy), X(dx)) = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[j];
-                if yp == y + dy && xp == x + dx {
+                let d = CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET[j];
+                if ofs_prev == ofs + d {
                     prev_direction[i] = j;
                 }
-                if yn == y + dy && xn == x + dx {
+                if ofs_next == ofs + d {
                     next_direction[i] = j;
                 }
             }
@@ -390,11 +393,11 @@ impl ConsecutiveRegionDictionary {
 
                 if prev_count > 0 && next_count > 0 {
                     removal_dic[(pat_id * DICTIONARY_NEIGHBOR_SIZE + nb)
-                                    * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
-                                    + prev_direction[nb]] = prev_count;
+                        * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
+                        + prev_direction[nb]] = prev_count;
                     removal_dic[(pat_id * DICTIONARY_NEIGHBOR_SIZE + nb)
-                                    * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
-                                    + next_direction[nb]] = next_count;
+                        * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
+                        + next_direction[nb]] = next_count;
                 }
             }
         }
@@ -412,8 +415,8 @@ impl ConsecutiveRegionDictionary {
     }
     pub fn consult_removal(&self, code: u32, neighbor_id: usize, adjacency_id: usize) -> i32 {
         self.removal_dic[(code as usize * DICTIONARY_NEIGHBOR_SIZE + neighbor_id)
-                             * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
-                             + adjacency_id]
+            * CONSECUTIVE_DICTIONARY_ADJACENCY_SIZE
+            + adjacency_id]
     }
     pub fn chain_size(&self, code: u32, neighbor_id: usize) -> i32 {
         self.chain_size_dic[code as usize * DICTIONARY_NEIGHBOR_SIZE + neighbor_id]
@@ -422,8 +425,8 @@ impl ConsecutiveRegionDictionary {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::clue_pattern_to_id;
+    use super::*;
 
     fn str_to_pattern(s: &str) -> [Cell; 8] {
         let mut ret = [Cell::Undecided; 8];

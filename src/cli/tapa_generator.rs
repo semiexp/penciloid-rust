@@ -1,11 +1,11 @@
 use super::*;
-use {tapa, Grid, X, Y};
 use rand;
+use {tapa, Grid, P};
 
-use std::sync::{Arc, Mutex};
-use std::io::{stdout, Write};
-use std::thread;
 use super::getopts::{Matches, Options};
+use std::io::{stdout, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 #[derive(Clone, Copy, Debug)]
 struct GeneratorOption {
@@ -136,7 +136,7 @@ fn run_generator(opts: GeneratorOption) -> Result<(), CliError> {
                     writeln!(handle, "{} {}", height, width).unwrap();
                     for y in 0..height {
                         for x in 0..width {
-                            let tapa::Clue(c) = problem[(Y(y), X(x))];
+                            let tapa::Clue(c) = problem[P(y, x)];
                             if c == 0 {
                                 write!(handle, "0...").unwrap();
                             } else if c > 0 {

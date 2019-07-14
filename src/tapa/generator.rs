@@ -1,4 +1,4 @@
-use super::super::{Coord, Grid, X, Y};
+use super::super::{Grid, D, P};
 use super::*;
 
 use rand::distributions::Distribution;
@@ -21,7 +21,7 @@ pub struct GeneratorOption {
 }
 
 enum HasClueHistory {
-    Update(Coord, bool),
+    Update(P, bool),
     Checkpoint,
 }
 struct HasClue {
@@ -39,7 +39,7 @@ impl HasClue {
         }
     }
 
-    fn update(&mut self, loc: Coord, val: bool) {
+    fn update(&mut self, loc: P, val: bool) {
         if self.has_clue[loc] == val {
             return;
         }
@@ -51,11 +51,11 @@ impl HasClue {
         self.history.push(HasClueHistory::Update(loc, !val));
         self.has_clue[loc] = val;
     }
-    fn get(&self, loc: Coord) -> bool {
+    fn get(&self, loc: P) -> bool {
         self.has_clue[loc]
     }
-    fn get_checked(&self, loc: Coord) -> bool {
-        self.has_clue.is_valid_coord(loc) && self.has_clue[loc]
+    fn get_checked(&self, loc: P) -> bool {
+        self.has_clue.is_valid_p(loc) && self.has_clue[loc]
     }
     fn add_checkpoint(&mut self) {
         self.history.push(HasClueHistory::Checkpoint);
@@ -96,8 +96,9 @@ pub fn generate<R: Rng>(
 
     for y in 0..height {
         for x in 0..width {
-            if opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
-                has_clue.update((Y(y), X(x)), true);
+            let pos = P(y, x);
+            if opts.clue_constraint[pos] == ClueConstraint::Forced {
+                has_clue.update(pos, true);
             }
         }
     }
@@ -110,15 +111,19 @@ pub fn generate<R: Rng>(
         let mut update_cand = vec![];
         for y in 0..height {
             for x in 0..width {
-                if field.cell((Y(y), X(x))) == Cell::Black
-                    || opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Prohibited
+                let pos = P(y, x);
+                if field.cell(pos) == Cell::Black
+                    || opts.clue_constraint[pos] == ClueConstraint::Prohibited
                 {
                     continue;
                 }
                 if opts.symmetry {
                     let y2 = height - 1 - y;
                     let x2 = width - 1 - x;
-                    if -1 <= y - y2 && y - y2 <= 1 && -1 <= x - x2 && x - x2 <= 1
+                    if -1 <= y - y2
+                        && y - y2 <= 1
+                        && -1 <= x - x2
+                        && x - x2 <= 1
                         && (y != y2 || x != x2)
                     {
                         continue;
@@ -127,7 +132,7 @@ pub fn generate<R: Rng>(
                 let mut isok = true;
                 for dy in -1..2 {
                     for dx in -1..2 {
-                        if (dy != 0 || dx != 0) && has_clue.get_checked((Y(y + dy), X(x + dx))) {
+                        if (dy != 0 || dx != 0) && has_clue.get_checked(pos + D(dy, dx)) {
                             isok = false;
                         }
                     }
@@ -135,26 +140,25 @@ pub fn generate<R: Rng>(
                 let mut isok2 = false;
                 for dy in -2..3 {
                     for dx in -2..3 {
-                        let loc = (Y(y + dy), X(x + dx));
+                        let loc = pos + D(dy, dx);
                         if field.cell_checked(loc) == Cell::Undecided {
                             isok2 = true;
                         }
                     }
                 }
-                if (has_clue.get((Y(y), X(x))) && problem[(Y(y), X(x))] == NO_CLUE)
-                    || (isok && isok2
-                        && (problem[(Y(y), X(x))] != NO_CLUE || rng.gen::<f64>() < 1.0))
+                if (has_clue.get(pos) && problem[pos] == NO_CLUE)
+                    || (isok && isok2 && (problem[pos] != NO_CLUE || rng.gen::<f64>() < 1.0))
                 {
                     for v in (-1)..(CLUE_TYPES as i32) {
-                        if v == -1 && opts.clue_constraint[(Y(y), X(x))] == ClueConstraint::Forced {
+                        if v == -1 && opts.clue_constraint[pos] == ClueConstraint::Forced {
                             continue;
                         }
                         if v >= 0 && ((allowed_clues >> v) & 1) == 0 {
                             continue;
                         }
                         let next_clue = Clue(v);
-                        if problem[(Y(y), X(x))] != next_clue {
-                            update_cand.push(((Y(y), X(x)), next_clue));
+                        if problem[pos] != next_clue {
+                            update_cand.push((pos, next_clue));
                         }
                     }
                 }
@@ -167,11 +171,11 @@ pub fn generate<R: Rng>(
 
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
-            let (Y(y), X(x)) = loc;
+            let P(y, x) = loc;
 
             has_clue.add_checkpoint();
             if opts.symmetry {
-                let loc2 = (Y(height - 1 - y), X(width - 1 - x));
+                let loc2 = P(height - 1 - y, width - 1 - x);
                 if clue == NO_CLUE {
                     if problem[loc2] == NO_CLUE {
                         has_clue.update(loc, false);
@@ -222,7 +226,7 @@ pub fn generate<R: Rng>(
                 let mut clue_filled = true;
                 for y in 0..height {
                     for x in 0..width {
-                        if has_clue.get((Y(y), X(x))) && problem[(Y(y), X(x))] == NO_CLUE {
+                        if has_clue.get(loc) && problem[loc] == NO_CLUE {
                             clue_filled = false;
                         }
                     }
@@ -261,11 +265,12 @@ fn solve_test<'a, 'b>(
 
     for y in 0..height {
         for x in 0..width {
-            let clue = problem[(Y(y), X(x))];
+            let pos = P(y, x);
+            let clue = problem[pos];
             if clue != NO_CLUE {
-                ret.add_clue((Y(y), X(x)), clue);
-            } else if has_clue.get((Y(y), X(x))) {
-                ret.decide((Y(y), X(x)), Cell::White);
+                ret.add_clue(pos, clue);
+            } else if has_clue.get(pos) {
+                ret.decide(pos, Cell::White);
             }
 
             if ret.inconsistent() {
