@@ -1,7 +1,9 @@
 use std::ops::{Index, IndexMut};
 
 mod graph_separation;
+mod pos;
 pub use self::graph_separation::*;
+pub use self::pos::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Y(pub i32);
@@ -45,6 +47,12 @@ impl<T: Clone> Grid<T> {
     pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
         (y * self.width + x) as usize
     }
+    pub fn index_p(&self, pos: P) -> usize {
+        (pos.0 * self.width + pos.1) as usize
+    }
+    pub fn index_lp(&self, pos: LP) -> usize {
+        (pos.0 * self.width + pos.1) as usize
+    }
     pub fn coord(&self, idx: usize) -> Coord {
         let idx = idx as i32;
         (Y(idx / self.width), X(idx % self.width))
@@ -69,6 +77,32 @@ impl<T: Clone> Index<Coord> for Grid<T> {
 impl<T: Clone> IndexMut<Coord> for Grid<T> {
     fn index_mut<'a>(&'a mut self, idx: Coord) -> &'a mut T {
         let idx = self.index(idx);
+        &mut self.data[idx]
+    }
+}
+impl<T: Clone> Index<P> for Grid<T> {
+    type Output = T;
+    fn index<'a>(&'a self, idx: P) -> &'a T {
+        let idx = self.index_p(idx);
+        &self.data[idx]
+    }
+}
+impl<T: Clone> IndexMut<P> for Grid<T> {
+    fn index_mut<'a>(&'a mut self, idx: P) -> &'a mut T {
+        let idx = self.index_p(idx);
+        &mut self.data[idx]
+    }
+}
+impl<T: Clone> Index<LP> for Grid<T> {
+    type Output = T;
+    fn index<'a>(&'a self, idx: LP) -> &'a T {
+        let idx = self.index_lp(idx);
+        &self.data[idx]
+    }
+}
+impl<T: Clone> IndexMut<LP> for Grid<T> {
+    fn index_mut<'a>(&'a mut self, idx: LP) -> &'a mut T {
+        let idx = self.index_lp(idx);
         &mut self.data[idx]
     }
 }
