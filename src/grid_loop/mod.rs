@@ -1,8 +1,9 @@
-use super::{Coord, FiniteSearchQueue, Grid, X, Y};
+use super::{FiniteSearchQueue, Grid, D, LP, P};
 use std::iter::IntoIterator;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use std::mem;
+use FOUR_NEIGHBOURS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
@@ -64,8 +65,9 @@ impl GridLoop {
                 if y % 2 == x % 2 {
                     continue;
                 }
-                let id = grid.index((Y(y), X(x)));
-                grid[(Y(y), X(x))] = GridLoopItem {
+                let pos = LP(y, x);
+                let id = grid.index_lp(pos);
+                grid[pos] = GridLoopItem {
                     edge_status: Edge::Undecided,
                     chain_end_points: if y % 2 == 0 {
                         (VtxId(id - 1), VtxId(id + 1))
@@ -93,23 +95,23 @@ impl GridLoop {
 
         ret.queue.start();
         {
-            let edge1 = ret.grid.index((Y(0), X(1)));
-            let edge2 = ret.grid.index((Y(1), X(0)));
+            let edge1 = ret.grid.index_lp(LP(0, 1));
+            let edge2 = ret.grid.index_lp(LP(1, 0));
             GridLoop::join(&mut ret, EdgeId(edge1), EdgeId(edge2));
         }
         {
-            let edge1 = ret.grid.index((Y(0), X(width * 2 - 1)));
-            let edge2 = ret.grid.index((Y(1), X(width * 2)));
+            let edge1 = ret.grid.index_lp(LP(0, width * 2 - 1));
+            let edge2 = ret.grid.index_lp(LP(1, width * 2));
             GridLoop::join(&mut ret, EdgeId(edge1), EdgeId(edge2));
         }
         {
-            let edge1 = ret.grid.index((Y(height * 2 - 1), X(0)));
-            let edge2 = ret.grid.index((Y(height * 2), X(1)));
+            let edge1 = ret.grid.index_lp(LP(height * 2 - 1, 0));
+            let edge2 = ret.grid.index_lp(LP(height * 2, 1));
             GridLoop::join(&mut ret, EdgeId(edge1), EdgeId(edge2));
         }
         {
-            let edge1 = ret.grid.index((Y(height * 2 - 1), X(width * 2)));
-            let edge2 = ret.grid.index((Y(height * 2), X(width * 2 - 1)));
+            let edge1 = ret.grid.index_lp(LP(height * 2 - 1, width * 2));
+            let edge2 = ret.grid.index_lp(LP(height * 2, width * 2 - 1));
             GridLoop::join(&mut ret, EdgeId(edge1), EdgeId(edge2));
         }
         GridLoop::queue_pop_all(&mut ret);
@@ -131,24 +133,24 @@ impl GridLoop {
     pub fn fully_solved(&self) -> bool {
         self.fully_solved
     }
-    pub fn get_edge(&self, cd: Coord) -> Edge {
-        self.grid[cd].edge_status
+    pub fn get_edge(&self, pos: LP) -> Edge {
+        self.grid[pos].edge_status
     }
-    pub fn get_edge_safe(&self, cd: Coord) -> Edge {
-        if self.is_valid_coord(cd) {
-            self.get_edge(cd)
+    pub fn get_edge_safe(&self, pos: LP) -> Edge {
+        if self.is_valid_lp(pos) {
+            self.get_edge(pos)
         } else {
             Edge::Blank
         }
     }
-    pub fn is_valid_coord(&self, (Y(y), X(x)): Coord) -> bool {
-        0 <= y && y < self.grid.height() && 0 <= x && x < self.grid.width()
+    pub fn is_valid_lp(&self, pos: LP) -> bool {
+        0 <= pos.0 && pos.0 < self.grid.height() && 0 <= pos.1 && pos.1 < self.grid.width()
     }
-    pub fn is_vertex(&self, (Y(y), X(x)): Coord) -> bool {
-        y % 2 == 0 && x % 2 == 0
+    pub fn is_vertex(&self, pos: LP) -> bool {
+        pos.is_vertex()
     }
-    pub fn is_edge(&self, (Y(y), X(x)): Coord) -> bool {
-        y % 2 != x % 2
+    pub fn is_edge(&self, pos: LP) -> bool {
+        pos.is_edge()
     }
     pub fn num_decided_edges(&self) -> i32 {
         self.decided_edge
@@ -156,16 +158,11 @@ impl GridLoop {
     pub fn num_decided_lines(&self) -> i32 {
         self.decided_line
     }
-    pub fn neighbor_summary(&self, cd: Coord) -> (i32, i32) {
-        let (Y(y), X(x)) = cd;
+    pub fn neighbor_summary(&self, pos: LP) -> (i32, i32) {
         let mut n_line = 0;
         let mut n_undecided = 0;
-        for &e in &[
-            self.get_edge_safe((Y(y - 1), X(x))),
-            self.get_edge_safe((Y(y + 1), X(x))),
-            self.get_edge_safe((Y(y), X(x - 1))),
-            self.get_edge_safe((Y(y), X(x + 1))),
-        ] {
+        for &d in &FOUR_NEIGHBOURS {
+            let e = self.get_edge_safe(pos + d);
             if e == Edge::Line {
                 n_line += 1;
             } else if e == Edge::Undecided {
@@ -179,15 +176,15 @@ impl GridLoop {
     pub fn set_inconsistent(&mut self) {
         self.inconsistent = true;
     }
-    pub fn decide_edge<T: GridLoopField>(field: &mut T, loc: Coord, status: Edge) {
-        if !field.grid_loop().is_valid_coord(loc) {
+    pub fn decide_edge<T: GridLoopField>(field: &mut T, pos: LP, status: Edge) {
+        if !field.grid_loop().is_valid_lp(pos) {
             if status != Edge::Blank {
                 field.grid_loop().inconsistent = true;
             }
             return;
         }
 
-        let id = field.grid_loop().grid.index(loc);
+        let id = field.grid_loop().grid.index_lp(pos);
         let current_status = field.grid_loop().grid[id].edge_status;
 
         if current_status == status {
@@ -201,12 +198,12 @@ impl GridLoop {
         let mut handle = GridLoop::get_handle(field);
         GridLoop::decide_edge_internal(&mut *handle, EdgeId(id), status);
     }
-    pub fn check<T: GridLoopField>(field: &mut T, cd: Coord) {
-        if !field.grid_loop().is_valid_coord(cd) {
+    pub fn check<T: GridLoopField>(field: &mut T, pos: LP) {
+        if !field.grid_loop().is_valid_lp(pos) {
             return;
         }
 
-        let id = field.grid_loop().grid.index(cd);
+        let id = field.grid_loop().grid.index_lp(pos);
         let mut handle = GridLoop::get_handle(field);
         handle.grid_loop().queue.push(id);
     }
@@ -221,67 +218,68 @@ impl GridLoop {
 
         // outside the field
         for x in 0..width {
-            let edge = handle.grid_loop().get_edge((Y(0), X(2 * x + 1)));
+            let edge = handle.grid_loop().get_edge(LP(0, 2 * x + 1));
             if edge == Edge::Blank {
-                GridLoop::apply_inout_rule_dfs(0, x, 0, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(0, x), 0, &mut *handle, &mut side);
             } else if edge == Edge::Line {
-                GridLoop::apply_inout_rule_dfs(0, x, 1, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(0, x), 1, &mut *handle, &mut side);
             }
 
-            let edge = handle.grid_loop().get_edge((Y(2 * height), X(2 * x + 1)));
+            let edge = handle.grid_loop().get_edge(LP(2 * height, 2 * x + 1));
             if edge == Edge::Blank {
-                GridLoop::apply_inout_rule_dfs(height - 1, x, 0, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(height - 1, x), 0, &mut *handle, &mut side);
             } else if edge == Edge::Line {
-                GridLoop::apply_inout_rule_dfs(height - 1, x, 1, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(height - 1, x), 1, &mut *handle, &mut side);
             }
         }
         for y in 0..height {
-            let edge = handle.grid_loop().get_edge((Y(2 * y + 1), X(0)));
+            let edge = handle.grid_loop().get_edge(LP(2 * y + 1, 0));
             if edge == Edge::Blank {
-                GridLoop::apply_inout_rule_dfs(y, 0, 0, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(y, 0), 0, &mut *handle, &mut side);
             } else if edge == Edge::Line {
-                GridLoop::apply_inout_rule_dfs(y, 0, 1, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(y, 0), 1, &mut *handle, &mut side);
             }
 
-            let edge = handle.grid_loop().get_edge((Y(2 * y + 1), X(2 * width)));
+            let edge = handle.grid_loop().get_edge(LP(2 * y + 1, 2 * width));
             if edge == Edge::Blank {
-                GridLoop::apply_inout_rule_dfs(y, width - 1, 0, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(y, width - 1), 0, &mut *handle, &mut side);
             } else if edge == Edge::Line {
-                GridLoop::apply_inout_rule_dfs(y, width - 1, 1, &mut *handle, &mut side);
+                GridLoop::apply_inout_rule_dfs(P(y, width - 1), 1, &mut *handle, &mut side);
             }
         }
         for x in 0..width {
-            if side[(Y(0), X(x))] == 0 {
-                GridLoop::decide_edge(&mut *handle, (Y(0), X(2 * x + 1)), Edge::Blank);
-            } else if side[(Y(0), X(x))] == 1 {
-                GridLoop::decide_edge(&mut *handle, (Y(0), X(2 * x + 1)), Edge::Line);
+            if side[P(0, x)] == 0 {
+                GridLoop::decide_edge(&mut *handle, LP(0, 2 * x + 1), Edge::Blank);
+            } else if side[P(0, x)] == 1 {
+                GridLoop::decide_edge(&mut *handle, LP(0, 2 * x + 1), Edge::Line);
             }
 
-            if side[(Y(height - 1), X(x))] == 0 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * height), X(2 * x + 1)), Edge::Blank);
-            } else if side[(Y(height - 1), X(x))] == 1 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * height), X(2 * x + 1)), Edge::Line);
+            if side[P(height - 1, x)] == 0 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * height, 2 * x + 1), Edge::Blank);
+            } else if side[P(height - 1, x)] == 1 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * height, 2 * x + 1), Edge::Line);
             }
         }
         for y in 0..height {
-            if side[(Y(y), X(0))] == 0 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(0)), Edge::Blank);
-            } else if side[(Y(y), X(0))] == 1 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(0)), Edge::Line);
+            if side[P(y, 0)] == 0 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * y + 1, 0), Edge::Blank);
+            } else if side[P(y, 0)] == 1 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * y + 1, 0), Edge::Line);
             }
 
-            if side[(Y(y), X(width - 1))] == 0 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(2 * width)), Edge::Blank);
-            } else if side[(Y(y), X(width - 1))] == 1 {
-                GridLoop::decide_edge(&mut *handle, (Y(2 * y + 1), X(2 * width)), Edge::Line);
+            if side[P(y, width - 1)] == 0 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * y + 1, 2 * width), Edge::Blank);
+            } else if side[P(y, width - 1)] == 1 {
+                GridLoop::decide_edge(&mut *handle, LP(2 * y + 1, 2 * width), Edge::Line);
             }
         }
 
         let mut id = 2;
         for y in 0..height {
             for x in 0..width {
-                if side[(Y(y), X(x))] == -1 {
-                    GridLoop::apply_inout_rule_dfs(y, x, id, &mut *handle, &mut side);
+                let pos = P(y, x);
+                if side[pos] == -1 {
+                    GridLoop::apply_inout_rule_dfs(pos, id, &mut *handle, &mut side);
                     id += 2;
                 }
             }
@@ -295,9 +293,9 @@ impl GridLoop {
 
         for y in 0..(2 * height + 1) {
             for x in 0..(2 * width + 1) {
-                if y % 2 != x % 2 && grid.get_edge((Y(y), X(x))) == Edge::Line {
+                if y % 2 != x % 2 && grid.get_edge(LP(y, x)) == Edge::Line {
                     let mut n_lines_dbl = 0;
-                    grid.check_connectability_dfs(y / 2, x / 2, &mut visited, &mut n_lines_dbl);
+                    grid.check_connectability_dfs(P(y / 2, x / 2), &mut visited, &mut n_lines_dbl);
 
                     if n_lines_dbl > 0 {
                         if n_lines_dbl != grid.num_decided_lines() * 2 {
@@ -309,35 +307,21 @@ impl GridLoop {
             }
         }
     }
-    fn apply_inout_rule_dfs<T: GridLoopField>(
-        y: i32,
-        x: i32,
-        v: i32,
-        field: &mut T,
-        side: &mut Grid<i32>,
-    ) {
-        if side[(Y(y), X(x))] != -1 {
+    fn apply_inout_rule_dfs<T: GridLoopField>(pos: P, v: i32, field: &mut T, side: &mut Grid<i32>) {
+        if side[pos] != -1 {
             return;
         }
-        side[(Y(y), X(x))] = v;
+        side[pos] = v;
 
-        let dy = [1, 0, -1, 0];
-        let dx = [0, 1, 0, -1];
-        for d in 0..4 {
-            let y2 = y + dy[d];
-            let x2 = x + dx[d];
-            if 0 <= y2 && y2 < field.grid_loop().height() && 0 <= x2
-                && x2 < field.grid_loop().width()
-            {
-                let v2 = side[(Y(y2), X(x2))];
+        for &d in &FOUR_NEIGHBOURS {
+            let pos2 = pos + d;
+            if side.is_valid_p(pos2) {
+                let v2 = side[pos2];
                 if v2 == -1 {
-                    let edge = field
-                        .grid_loop()
-                        .get_edge((Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])));
+                    let edge = field.grid_loop().get_edge(LP::of_cell(pos) + d);
                     if edge != Edge::Undecided {
                         GridLoop::apply_inout_rule_dfs(
-                            y2,
-                            x2,
+                            pos2,
                             if edge == Edge::Line { v ^ 1 } else { v },
                             field,
                             side,
@@ -346,45 +330,38 @@ impl GridLoop {
                 } else if (v & !1) == (v2 & !1) {
                     GridLoop::decide_edge(
                         field,
-                        (Y(y * 2 + 1 + dy[d]), X(x * 2 + 1 + dx[d])),
+                        LP::of_cell(pos) + d,
                         if v2 == v { Edge::Blank } else { Edge::Line },
                     );
                 }
             }
         }
     }
-    fn check_connectability_dfs(
-        &self,
-        y: i32,
-        x: i32,
-        visited: &mut Grid<bool>,
-        n_lines_dbl: &mut i32,
-    ) {
-        if visited[(Y(y), X(x))] {
+    fn check_connectability_dfs(&self, pos: P, visited: &mut Grid<bool>, n_lines_dbl: &mut i32) {
+        if visited[pos] {
             return;
         }
-        visited[(Y(y), X(x))] = true;
+        visited[pos] = true;
 
         let dy = [1, 0, -1, 0];
         let dx = [0, 1, 0, -1];
-        for d in 0..4 {
-            let y2 = y + dy[d];
-            let x2 = x + dx[d];
-            if 0 <= y2 && y2 <= self.height() && 0 <= x2 && x2 <= self.width() {
-                let edge = self.get_edge((Y(y * 2 + dy[d]), X(x * 2 + dx[d])));
+        for &d in &FOUR_NEIGHBOURS {
+            let pos2 = pos + d;
+            if visited.is_valid_p(pos2) {
+                let edge = self.get_edge(LP::of_vertex(pos) + d);
                 if edge == Edge::Blank {
                     continue;
                 }
                 if edge == Edge::Line {
                     *n_lines_dbl += 1;
                 }
-                self.check_connectability_dfs(y2, x2, visited, n_lines_dbl);
+                self.check_connectability_dfs(pos2, visited, n_lines_dbl);
             }
         }
     }
 
-    pub fn is_root(&self, edge: Coord) -> bool {
-        let id = EdgeId(self.grid.index(edge));
+    pub fn is_root(&self, edge: LP) -> bool {
+        let id = EdgeId(self.grid.index_lp(edge));
         let id2 = self[id].chain_another_end_edge;
         self[id2].chain_another_end_edge == id && id.0 <= id2.0
     }
@@ -410,10 +387,10 @@ impl GridLoop {
             if field.grid_loop().inconsistent() {
                 continue;
             }
-            let cd = field.grid_loop().grid.coord(id);
-            field.inspect(cd);
-            if field.grid_loop().is_vertex(cd) {
-                GridLoop::inspect_vertex(field, cd);
+            let pos = field.grid_loop().grid.lp(id);
+            field.inspect(pos);
+            if field.grid_loop().is_vertex(pos) {
+                GridLoop::inspect_vertex(field, pos);
             }
         }
     }
@@ -451,8 +428,8 @@ impl GridLoop {
     fn check_chain_neighborhood<T: GridLoopField>(field: &mut T, edge: EdgeId) {
         let mut pt = edge;
         loop {
-            let cd = field.grid_loop().grid.coord(pt.0);
-            field.check_neighborhood(cd);
+            let pos = field.grid_loop().grid.lp(pt.0);
+            field.check_neighborhood(pos);
             pt = field.grid_loop()[pt].chain_next;
             if pt == edge {
                 break;
@@ -464,8 +441,8 @@ impl GridLoop {
         let width = field.grid_loop().width();
         for y in 0..(2 * height + 1) {
             for x in 0..(2 * width + 1) {
-                if y % 2 != x % 2 && field.grid_loop().get_edge((Y(y), X(x))) == Edge::Undecided {
-                    GridLoop::decide_edge(field, (Y(y), X(x)), Edge::Blank);
+                if y % 2 != x % 2 && field.grid_loop().get_edge(LP(y, x)) == Edge::Undecided {
+                    GridLoop::decide_edge(field, LP(y, x), Edge::Blank);
                 }
             }
         }
@@ -574,14 +551,15 @@ impl GridLoop {
         grid_loop.queue.push(end1_vertex.0);
         grid_loop.queue.push(end2_vertex.0);
     }
-    fn inspect_vertex<T: GridLoopField>(field: &mut T, (Y(y), X(x)): Coord) {
+    fn inspect_vertex<T: GridLoopField>(field: &mut T, pos: LP) {
         let mut line = FixVec::new();
         let mut undecided = FixVec::new();
 
-        for &(dy, dx) in [(1, 0), (0, 1), (-1, 0), (0, -1)].iter() {
-            let cd = (Y(y + dy), X(x + dx));
-            if field.grid_loop().is_valid_coord(cd) {
-                let id = field.grid_loop().grid.index(cd);
+        //for &(dy, dx) in [(1, 0), (0, 1), (-1, 0), (0, -1)].iter() {
+        for &d in &FOUR_NEIGHBOURS {
+            let pos_edge = pos + d;
+            if field.grid_loop().is_valid_lp(pos_edge) {
+                let id = field.grid_loop().grid.index_lp(pos_edge);
                 let status = field.grid_loop().grid[id].edge_status;
                 if status == Edge::Line {
                     line.push(EdgeId(id));
@@ -606,7 +584,7 @@ impl GridLoop {
 
         if line.len() == 1 {
             let eid = line[0];
-            let vid = VtxId(field.grid_loop().grid.index((Y(y), X(x))));
+            let vid = VtxId(field.grid_loop().grid.index_lp(pos));
             let line_size = field.grid_loop()[eid].chain_size;
             let another_end = field.grid_loop().another_end_id(vid, eid);
 
@@ -649,23 +627,23 @@ impl GridLoop {
 }
 pub trait GridLoopField {
     fn grid_loop(&mut self) -> &mut GridLoop;
-    fn check_neighborhood(&mut self, Coord);
-    fn inspect(&mut self, Coord);
+    fn check_neighborhood(&mut self, pos: LP);
+    fn inspect(&mut self, pos: LP);
 }
 impl GridLoopField for GridLoop {
     fn grid_loop(&mut self) -> &mut GridLoop {
         self
     }
-    fn check_neighborhood(&mut self, (Y(y), X(x)): Coord) {
-        if y % 2 == 1 {
-            GridLoop::check(self, (Y(y - 1), X(x)));
-            GridLoop::check(self, (Y(y + 1), X(x)));
+    fn check_neighborhood(&mut self, pos: LP) {
+        if pos.0 % 2 == 1 {
+            GridLoop::check(self, pos + D(-1, 0));
+            GridLoop::check(self, pos + D(1, 0));
         } else {
-            GridLoop::check(self, (Y(y), X(x - 1)));
-            GridLoop::check(self, (Y(y), X(x + 1)));
+            GridLoop::check(self, pos + D(0, -1));
+            GridLoop::check(self, pos + D(0, 1));
         }
     }
-    fn inspect(&mut self, _: Coord) {}
+    fn inspect(&mut self, _: LP) {}
 }
 pub struct QueueActiveGridLoopField<'a, T: GridLoopField + 'a> {
     field: &'a mut T,
@@ -756,12 +734,12 @@ mod tests {
             for x in 0..(input[0].len() as i32) {
                 let ch = row_iter.next().unwrap();
 
-                if !grid_loop.is_edge((Y(y), X(x))) {
+                if !grid_loop.is_edge(LP(y, x)) {
                     continue;
                 }
                 match ch {
-                    '|' | '-' => GridLoop::decide_edge(&mut grid_loop, (Y(y), X(x)), Edge::Line),
-                    'x' => GridLoop::decide_edge(&mut grid_loop, (Y(y), X(x)), Edge::Blank),
+                    '|' | '-' => GridLoop::decide_edge(&mut grid_loop, LP(y, x), Edge::Line),
+                    'x' => GridLoop::decide_edge(&mut grid_loop, LP(y, x), Edge::Blank),
                     _ => (),
                 }
             }
@@ -776,7 +754,7 @@ mod tests {
             for x in 0..(input[0].len() as i32) {
                 let ch = row_iter.next().unwrap();
 
-                if !grid_loop.is_edge((Y(y), X(x))) {
+                if !grid_loop.is_edge(LP(y, x)) {
                     continue;
                 }
 
@@ -796,7 +774,7 @@ mod tests {
                     }
                 }
                 assert_eq!(
-                    grid_loop.get_edge((Y(y), X(x))),
+                    grid_loop.get_edge(LP(y, x)),
                     expected_edge,
                     "Comparing at y={}, x={}",
                     y,
@@ -969,31 +947,31 @@ mod tests {
     #[test]
     fn test_inout_rule1() {
         let mut field = GridLoop::new(5, 5);
-        GridLoop::decide_edge(&mut field, (Y(3), X(4)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(3), X(6)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(4), X(3)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(4), X(7)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(6), X(3)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(6), X(7)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(7), X(6)), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(3, 4), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(3, 6), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(4, 3), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(4, 7), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(6, 3), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(6, 7), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(7, 6), Edge::Line);
 
         GridLoop::apply_inout_rule(&mut field);
 
-        assert_eq!(field.get_edge((Y(7), X(4))), Edge::Line);
+        assert_eq!(field.get_edge(LP(7, 4)), Edge::Line);
         assert_eq!(field.inconsistent(), false);
     }
 
     #[test]
     fn test_inout_rule2() {
         let mut field = GridLoop::new(5, 5);
-        GridLoop::decide_edge(&mut field, (Y(3), X(4)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(3), X(6)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(4), X(3)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(4), X(7)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(6), X(3)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(6), X(7)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(7), X(4)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(7), X(6)), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(3, 4), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(3, 6), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(4, 3), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(4, 7), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(6, 3), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(6, 7), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(7, 4), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(7, 6), Edge::Line);
 
         GridLoop::apply_inout_rule(&mut field);
 
@@ -1003,15 +981,15 @@ mod tests {
     #[test]
     fn test_inout_rule3() {
         let mut field = GridLoop::new(5, 5);
-        GridLoop::decide_edge(&mut field, (Y(5), X(0)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(5), X(2)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(5), X(4)), Edge::Blank);
-        GridLoop::decide_edge(&mut field, (Y(4), X(5)), Edge::Line);
-        GridLoop::decide_edge(&mut field, (Y(2), X(5)), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(5, 0), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(5, 2), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(5, 4), Edge::Blank);
+        GridLoop::decide_edge(&mut field, LP(4, 5), Edge::Line);
+        GridLoop::decide_edge(&mut field, LP(2, 5), Edge::Line);
 
         GridLoop::apply_inout_rule(&mut field);
 
-        assert_eq!(field.get_edge((Y(0), X(5))), Edge::Line);
+        assert_eq!(field.get_edge(LP(0, 5)), Edge::Line);
         assert_eq!(field.inconsistent(), false);
     }
 }

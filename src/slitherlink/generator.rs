@@ -1,8 +1,9 @@
-use super::super::{Coord, Grid, Symmetry, X, Y};
+use super::super::{Grid, Symmetry, D, LP, P};
 use super::*;
 use grid_loop::{Edge, GridLoop, GridLoopField};
 
 use rand::Rng;
+use FOUR_NEIGHBOURS;
 
 pub fn generate<R: Rng>(
     has_clue: &Grid<bool>,
@@ -20,7 +21,7 @@ pub fn generate<R: Rng>(
     let mut unplaced_clues = 0;
     for y in 0..height {
         for x in 0..width {
-            if has_clue[(Y(y), X(x))] {
+            if has_clue[P(y, x)] {
                 unplaced_clues += 1;
             }
         }
@@ -32,11 +33,11 @@ pub fn generate<R: Rng>(
         let mut pos_cand = vec![];
         for y in 0..height {
             for x in 0..width {
-                let cd = (Y(y), X(x));
-                if has_clue[cd]
-                    && (current_problem[cd] == NO_CLUE || has_undecided_nearby(&last_field, cd))
+                let pos = P(y, x);
+                if has_clue[pos]
+                    && (current_problem[pos] == NO_CLUE || has_undecided_nearby(&last_field, pos))
                 {
-                    pos_cand.push(cd);
+                    pos_cand.push(pos);
                 }
             }
         }
@@ -155,21 +156,15 @@ pub fn generate<R: Rng>(
     None
 }
 
-fn has_undecided_nearby(field: &Field, clue_pos: Coord) -> bool {
-    let (Y(y), X(x)) = clue_pos;
-    let y = y * 2 + 1;
-    let x = x * 2 + 1;
+fn has_undecided_nearby(field: &Field, pos: P) -> bool {
+    let lp = LP::of_cell(pos);
 
     let neighbor_size: i32 = 7;
     for dy in -neighbor_size..(neighbor_size + 1) {
         let dx_max = neighbor_size - dy.abs();
         for dx in -dx_max..(dx_max + 1) {
-            let y2 = y + dy;
-            let x2 = x + dx;
-
-            let cd = (Y(y2), X(x2));
             if (dy & 1) != (dx & 1) {
-                if field.get_edge_safe(cd) == Edge::Undecided {
+                if field.get_edge_safe(lp + D(dy, dx)) == Edge::Undecided {
                     return true;
                 }
             }
@@ -178,11 +173,11 @@ fn has_undecided_nearby(field: &Field, clue_pos: Coord) -> bool {
     false
 }
 
-fn has_zero_nearby(problem: &Grid<Clue>, (Y(y), X(x)): Coord) -> bool {
+fn has_zero_nearby(problem: &Grid<Clue>, pos: P) -> bool {
     for dy in -1..2 {
         for dx in -1..2 {
-            let cd = (Y(y + dy), X(x + dx));
-            if problem.is_valid_coord(cd) && problem[cd] == Clue(0) {
+            let pos2 = pos + D(dy, dx);
+            if problem.is_valid_p(pos2) && problem[pos2] == Clue(0) {
                 return true;
             }
         }
@@ -190,75 +185,65 @@ fn has_zero_nearby(problem: &Grid<Clue>, (Y(y), X(x)): Coord) -> bool {
     false
 }
 fn count_prohibited_patterns(has_clue: &Grid<bool>, field: &Field, problem: &Grid<Clue>) -> i32 {
-    let neighbor = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
     let mut ret = 0;
     for y in 0..has_clue.height() {
         for x in 0..has_clue.width() {
-            if has_clue[(Y(y), X(x))] && field.get_clue((Y(y), X(x))) == NO_CLUE
-                && has_zero_nearby(problem, (Y(y), X(x)))
-            {
-                if field.get_edge((Y(2 * y + 0), X(2 * x + 1))) == Edge::Blank
-                    && field.get_edge((Y(2 * y + 1), X(2 * x + 0))) == Edge::Blank
-                    && field.get_edge((Y(2 * y + 2), X(2 * x + 1))) == Edge::Blank
-                    && field.get_edge((Y(2 * y + 1), X(2 * x + 2))) == Edge::Blank
+            let pos = P(y, x);
+            let pos_lp = LP::of_cell(pos);
+            if has_clue[pos] && field.get_clue(pos) == NO_CLUE && has_zero_nearby(problem, pos) {
+                if field.get_edge(pos_lp + D(-1, 0)) == Edge::Blank
+                    && field.get_edge(pos_lp + D(1, 0)) == Edge::Blank
+                    && field.get_edge(pos_lp + D(0, -1)) == Edge::Blank
+                    && field.get_edge(pos_lp + D(0, 1)) == Edge::Blank
                 {
                     ret += 1;
                     continue;
                 }
             }
-            if y > 0 && field.get_clue((Y(y - 1), X(x))) != NO_CLUE {
+            if y > 0 && field.get_clue(pos + D(-1, 0)) != NO_CLUE {
                 continue;
             }
-            if x > 0 && field.get_clue((Y(y), X(x - 1))) != NO_CLUE {
+            if x > 0 && field.get_clue(pos + D(0, -1)) != NO_CLUE {
                 continue;
             }
-            if y < has_clue.height() - 1 && field.get_clue((Y(y + 1), X(x))) != NO_CLUE {
+            if y < has_clue.height() - 1 && field.get_clue(pos + D(1, 0)) != NO_CLUE {
                 continue;
             }
-            if x < has_clue.width() - 1 && field.get_clue((Y(y), X(x + 1))) != NO_CLUE {
+            if x < has_clue.width() - 1 && field.get_clue(pos + D(0, 1)) != NO_CLUE {
                 continue;
             }
 
-            if field.get_clue((Y(y), X(x))) == Clue(2) {
-                if field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 + 1))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 + 2))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 - 1))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 - 2))) == Edge::Blank
+            if field.get_clue(pos) == Clue(2) {
+                if field.get_edge_safe(pos_lp + D(2, 1)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(1, 2)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(-2, -1)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(-1, -2)) == Edge::Blank
                 {
                     ret += 1;
                     continue;
                 }
-                if field.get_edge_safe((Y(2 * y + 1 - 2), X(2 * x + 1 + 1))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 - 1), X(2 * x + 1 + 2))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 + 2), X(2 * x + 1 - 1))) == Edge::Blank
-                    && field.get_edge_safe((Y(2 * y + 1 + 1), X(2 * x + 1 - 2))) == Edge::Blank
+                if field.get_edge_safe(pos_lp + D(-2, 1)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(-1, 2)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(2, -1)) == Edge::Blank
+                    && field.get_edge_safe(pos_lp + D(1, -2)) == Edge::Blank
                 {
                     ret += 1;
                     continue;
                 }
-            } else if field.get_clue((Y(y), X(x))) == NO_CLUE {
+            } else if field.get_clue(pos) == NO_CLUE {
                 let mut n_in = 0;
                 let mut n_blank = 0;
 
-                for d in 0..4 {
-                    let (Y(dy1), X(dx1)) = neighbor[d];
-                    let (Y(dy2), X(dx2)) = neighbor[(d + 1) % 4];
-                    let edge1 = field.get_edge_safe((
-                        Y(2 * y + 1 + dy1 * 2 + dy2),
-                        X(2 * x + 1 + dx1 * 2 + dx2),
-                    ));
-                    let edge2 = field.get_edge_safe((
-                        Y(2 * y + 1 + dy2 * 2 + dy1),
-                        X(2 * x + 1 + dx2 * 2 + dx1),
-                    ));
-
+                for &d in &FOUR_NEIGHBOURS {
+                    let dr = d.rotate_clockwise();
+                    let edge1 = field.get_edge_safe(pos_lp + d * 2 + dr);
+                    let edge2 = field.get_edge_safe(pos_lp + d + dr * 2);
                     match (edge1, edge2) {
                         (Edge::Blank, Edge::Blank) => n_blank += 1,
                         (Edge::Blank, Edge::Line) | (Edge::Line, Edge::Blank) => n_in += 1,
                         _ => (),
                     }
                 }
-
                 if n_in >= 1 && n_blank >= 2 {
                     ret += 1;
                 }
@@ -283,11 +268,11 @@ pub fn generate_placement<R: Rng>(
 
     let mut grp_ids = Grid::new(height, width, false);
 
-    let mut clue_positions: Vec<Vec<Coord>> = vec![];
+    let mut clue_positions: Vec<Vec<P>> = vec![];
 
     for y in 0..height {
         for x in 0..width {
-            if !grp_ids[(Y(y), X(x))] {
+            if !grp_ids[P(y, x)] {
                 let mut sto = vec![];
                 update_grp(y, x, symmetry, &mut grp_ids, &mut sto);
                 clue_positions.push(sto);
@@ -301,13 +286,13 @@ pub fn generate_placement<R: Rng>(
         let mut scores_total = 0.0f64;
 
         for pos in &clue_positions {
-            let (Y(y), X(x)) = pos[0];
+            let p = pos[0];
             let mut score_base = 0.0f64;
 
             for dy in -2..3 {
                 for dx in -2..3 {
-                    let cd2 = (Y(y + dy), X(x + dx));
-                    if ret.is_valid_coord(cd2) && ret[cd2] {
+                    let cd2 = p + D(dy, dx);
+                    if ret.is_valid_p(cd2) && ret[cd2] {
                         let dist = dy.abs() + dx.abs();
                         score_base += 5.0f64 - (dist as f64);
                         if dist == 1 {
@@ -340,12 +325,12 @@ pub fn generate_placement<R: Rng>(
     ret
 }
 
-fn update_grp(y: i32, x: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto: &mut Vec<Coord>) {
-    if grp_ids[(Y(y), X(x))] {
+fn update_grp(y: i32, x: i32, symmetry: Symmetry, grp_ids: &mut Grid<bool>, sto: &mut Vec<P>) {
+    if grp_ids[P(y, x)] {
         return;
     }
-    grp_ids[(Y(y), X(x))] = true;
-    sto.push((Y(y), X(x)));
+    grp_ids[P(y, x)] = true;
+    sto.push(P(y, x));
 
     if symmetry.tetrad {
         update_grp(grp_ids.height() - 1 - x, y, symmetry, grp_ids, sto);
@@ -386,8 +371,8 @@ mod tests {
 
                 for y in 0..placement.height() {
                     for x in 0..placement.width() {
-                        let clue = problem[(Y(y), X(x))];
-                        assert_eq!(placement[(Y(y), X(x))], clue != NO_CLUE);
+                        let clue = problem[P(y, x)];
+                        assert_eq!(placement[P(y, x)], clue != NO_CLUE);
 
                         if clue == Clue(0) {
                             for dy in -1..2 {
@@ -395,11 +380,13 @@ mod tests {
                                     let y2 = y + dy;
                                     let x2 = x + dx;
 
-                                    if 0 <= y2 && y2 < placement.height() && 0 <= x2
+                                    if 0 <= y2
+                                        && y2 < placement.height()
+                                        && 0 <= x2
                                         && x2 < placement.width()
                                         && (dy, dx) != (0, 0)
                                     {
-                                        assert!(problem[(Y(y2), X(x2))] != Clue(0));
+                                        assert!(problem[P(y2, x2)] != Clue(0));
                                     }
                                 }
                             }

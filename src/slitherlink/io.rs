@@ -1,6 +1,6 @@
 use std::io::BufRead;
 
-use common::{Grid, X, Y};
+use common::{Grid, P};
 use io::{next_valid_line, ReadError};
 
 use super::*;
@@ -37,7 +37,7 @@ pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, 
         for x in 0..width {
             let c = row_iter.next().ok_or(ReadError::InvalidFormat)?;
             match c {
-                '0' | '1' | '2' | '3' => ret[(Y(y), X(x))] = Clue((c as u8 - '0' as u8) as i32),
+                '0' | '1' | '2' | '3' => ret[P(y, x)] = Clue((c as u8 - '0' as u8) as i32),
                 _ => (),
             }
         }

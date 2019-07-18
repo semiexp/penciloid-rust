@@ -1,9 +1,10 @@
-use super::super::{Coord, Grid, X, Y};
-use super::*;
 use super::super::grid_loop::GridLoopField;
+use super::super::{Grid, D, LP, P};
+use super::*;
 
 use rand::distributions::Distribution;
 use rand::{distributions, Rng};
+use FOUR_NEIGHBOURS;
 
 pub fn generate<R: Rng>(
     height: i32,
@@ -23,20 +24,21 @@ pub fn generate<R: Rng>(
         let mut update_cand = vec![];
         for y in 0..height {
             for x in 0..width {
+                let pos = P(y, x);
                 for i in 1..((y + 3) / 2) {
-                    update_cand.push(((Y(y), X(x)), Clue::Up(i)));
+                    update_cand.push((pos, Clue::Up(i)));
                 }
                 for i in 1..((x + 3) / 2) {
-                    update_cand.push(((Y(y), X(x)), Clue::Left(i)));
+                    update_cand.push((pos, Clue::Left(i)));
                 }
                 for i in 1..((height - y) / 2) {
-                    update_cand.push(((Y(y), X(x)), Clue::Down(i)));
+                    update_cand.push((pos, Clue::Down(i)));
                 }
                 for i in 1..((width - x + 2) / 2) {
-                    update_cand.push(((Y(y), X(x)), Clue::Right(i)));
+                    update_cand.push((pos, Clue::Right(i)));
                 }
-                if problem[(Y(y), X(x))] != Clue::NoClue {
-                    update_cand.push(((Y(y), X(x)), Clue::NoClue));
+                if problem[pos] != Clue::NoClue {
+                    update_cand.push((pos, Clue::NoClue));
                 }
             }
         }
@@ -89,32 +91,22 @@ pub fn generate<R: Rng>(
     None
 }
 
-fn has_dead_end_nearby(loc: Coord, has_clue: &Grid<bool>) -> bool {
-    let (Y(y), X(x)) = loc;
-    return is_dead_end(y, x, has_clue) || is_dead_end(y - 1, x, has_clue)
-        || is_dead_end(y + 1, x, has_clue) || is_dead_end(y, x - 1, has_clue)
-        || is_dead_end(y, x + 1, has_clue);
+fn has_dead_end_nearby(loc: P, has_clue: &Grid<bool>) -> bool {
+    return is_dead_end(loc, has_clue)
+        || is_dead_end(loc + D(-1, 0), has_clue)
+        || is_dead_end(loc + D(1, 0), has_clue)
+        || is_dead_end(loc + D(0, -1), has_clue)
+        || is_dead_end(loc + D(0, 1), has_clue);
 }
-fn is_dead_end(y: i32, x: i32, has_clue: &Grid<bool>) -> bool {
-    if !has_clue.is_valid_coord((Y(y), X(x))) {
+fn is_dead_end(pos: P, has_clue: &Grid<bool>) -> bool {
+    if !has_clue.is_valid_p(pos) {
         return false;
     }
-    let neighbor_count = if has_clue.get_or_default((Y(y - 1), X(x)), true) {
-        0
-    } else {
-        1
-    } + if has_clue.get_or_default((Y(y + 1), X(x)), true) {
-        0
-    } else {
-        1
-    } + if has_clue.get_or_default((Y(y), X(x - 1)), true) {
-        0
-    } else {
-        1
-    } + if has_clue.get_or_default((Y(y), X(x + 1)), true) {
-        0
-    } else {
-        1
-    };
-    return neighbor_count <= 1;
+    let mut neighbour_count = 0;
+    for &d in &FOUR_NEIGHBOURS {
+        if !has_clue.get_or_default_p(pos + d, true) {
+            neighbour_count += 1;
+        }
+    }
+    return neighbour_count <= 1;
 }

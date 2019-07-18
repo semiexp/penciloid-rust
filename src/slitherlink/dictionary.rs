@@ -1,21 +1,21 @@
-use super::super::{Coord, X, Y};
+use super::super::D;
 use super::Clue;
 use grid_loop::Edge;
 
 pub const DICTIONARY_NEIGHBOR_SIZE: usize = 12;
-pub const DICTIONARY_EDGE_OFFSET: [Coord; DICTIONARY_NEIGHBOR_SIZE] = [
-    (Y(-2), X(-1)),
-    (Y(-2), X(1)),
-    (Y(-1), X(-2)),
-    (Y(-1), X(0)),
-    (Y(-1), X(2)),
-    (Y(0), X(-1)),
-    (Y(0), X(1)),
-    (Y(1), X(-2)),
-    (Y(1), X(0)),
-    (Y(1), X(2)),
-    (Y(2), X(-1)),
-    (Y(2), X(1)),
+pub const DICTIONARY_EDGE_OFFSET: [D; DICTIONARY_NEIGHBOR_SIZE] = [
+    D(-2, -1),
+    D(-2, 1),
+    D(-1, -2),
+    D(-1, 0),
+    D(-1, 2),
+    D(0, -1),
+    D(0, 1),
+    D(1, -2),
+    D(1, 0),
+    D(1, 2),
+    D(2, -1),
+    D(2, 1),
 ];
 
 const DICTIONARY_NEIGHBOR_PATTERN_COUNT: usize = 531441; // 3^12
@@ -118,12 +118,10 @@ impl Dictionary {
         p3: usize,
         p4: usize,
     ) -> usize {
-        (if pat[p1] == Edge::Line { 1 } else { 0 }) + (if pat[p2] == Edge::Line { 1 } else { 0 })
-            + (if pat[p3] == Edge::Line { 1 } else { 0 }) + (if pat[p4] == Edge::Line {
-            1
-        } else {
-            0
-        })
+        (if pat[p1] == Edge::Line { 1 } else { 0 })
+            + (if pat[p2] == Edge::Line { 1 } else { 0 })
+            + (if pat[p3] == Edge::Line { 1 } else { 0 })
+            + (if pat[p4] == Edge::Line { 1 } else { 0 })
     }
     fn is_valid_vertex(
         pat: [Edge; DICTIONARY_NEIGHBOR_SIZE],
@@ -155,11 +153,12 @@ impl Dictionary {
         let mut ret = 0;
         let mut coef = 1;
         for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-            ret += coef * match pat[i] {
-                Edge::Undecided => 0,
-                Edge::Line => 1,
-                Edge::Blank => 2,
-            };
+            ret += coef
+                * match pat[i] {
+                    Edge::Undecided => 0,
+                    Edge::Line => 1,
+                    Edge::Blank => 2,
+                };
             coef *= 3;
         }
         ret

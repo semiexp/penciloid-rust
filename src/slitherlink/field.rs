@@ -1,6 +1,7 @@
-use super::super::{Coord, Grid, X, Y};
+use super::super::{Grid, D, LP, P};
 use super::*;
 use grid_loop::{Edge, GridLoop, GridLoopField};
+use FOUR_NEIGHBOURS;
 
 #[derive(Clone)]
 pub struct Field<'a> {
@@ -39,90 +40,80 @@ impl<'a> Field<'a> {
         let mut handle = GridLoop::get_handle(self);
         for y in 0..height {
             for x in 0..width {
-                let clue = handle.get_clue((Y(y), X(x)));
+                let pos = P(y, x);
+                let clue = handle.get_clue(pos);
                 if clue != NO_CLUE {
-                    handle.inspect_technique((Y(y * 2 + 1), X(x * 2 + 1)));
-                    GridLoop::check(&mut *handle, (Y(y * 2 + 1), X(x * 2 + 1)));
+                    handle.inspect_technique(LP::of_cell(pos));
+                    GridLoop::check(&mut *handle, LP::of_cell(pos));
                 }
             }
         }
     }
-    pub fn get_clue(&self, cd: Coord) -> Clue {
-        self.clue[cd]
+    pub fn get_clue(&self, pos: P) -> Clue {
+        self.clue[pos]
     }
-    pub fn add_clue(&mut self, cd: Coord, clue: Clue) {
-        if self.clue[cd] != NO_CLUE {
-            if self.clue[cd] != clue {
+    pub fn add_clue(&mut self, pos: P, clue: Clue) {
+        if self.clue[pos] != NO_CLUE {
+            if self.clue[pos] != clue {
                 self.grid_loop.set_inconsistent();
             }
         } else {
-            self.clue[cd] = clue;
+            self.clue[pos] = clue;
 
             let mut handle = GridLoop::get_handle(self);
-            let (Y(y), X(x)) = cd;
-            handle.inspect_technique((Y(y * 2 + 1), X(x * 2 + 1)));
-            GridLoop::check(&mut *handle, (Y(y * 2 + 1), X(x * 2 + 1)));
+            handle.inspect_technique(LP::of_cell(pos));
+            GridLoop::check(&mut *handle, LP::of_cell(pos));
         }
     }
-    pub fn get_edge(&self, cd: Coord) -> Edge {
-        self.grid_loop.get_edge(cd)
+    pub fn get_edge(&self, pos: LP) -> Edge {
+        self.grid_loop.get_edge(pos)
     }
-    pub fn get_edge_safe(&self, cd: Coord) -> Edge {
-        self.grid_loop.get_edge_safe(cd)
+    pub fn get_edge_safe(&self, pos: LP) -> Edge {
+        self.grid_loop.get_edge_safe(pos)
     }
 
-    fn inspect_technique(&mut self, (Y(y), X(x)): Coord) {
-        let neighbor = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
-
-        if y % 2 == 1 && x % 2 == 1 {
-            let clue = self.clue[(Y(y / 2), X(x / 2))];
+    fn inspect_technique(&mut self, pos: LP) {
+        if pos.is_cell() {
+            let cell_pos = P(pos.0 / 2, pos.1 / 2);
+            let clue = self.clue[cell_pos];
             if clue == Clue(0) {
-                for d in 0..4 {
-                    let (Y(dy), X(dx)) = neighbor[d];
-                    GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Blank);
+                for &d in &FOUR_NEIGHBOURS {
+                    GridLoop::decide_edge(self, pos + d, Edge::Blank);
                 }
             }
             if clue == Clue(3) {
                 // adjacent 3
-                for d in 0..4 {
-                    let (Y(dy), X(dx)) = neighbor[d];
-                    let cell2 = (Y(y / 2 + dy), X(x / 2 + dx));
-                    if self.clue.is_valid_coord(cell2) && self.clue[cell2] == Clue(3) {
+                //for d in 0..4 {
+                //    let (Y(dy), X(dx)) = neighbor[d];
+                for &d in &FOUR_NEIGHBOURS {
+                    let cell2 = cell_pos + d;
+                    if self.clue.is_valid_p(cell2) && self.clue[cell2] == Clue(3) {
                         // Deriberately ignoring the possible small loop encircling the two 3's
-                        GridLoop::decide_edge(self, (Y(y - dy), X(x - dx)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y + 3 * dy), X(x + 3 * dx)), Edge::Line);
+                        GridLoop::decide_edge(self, pos - d, Edge::Line);
+                        GridLoop::decide_edge(self, pos + d, Edge::Line);
+                        GridLoop::decide_edge(self, pos + d * 3, Edge::Line);
                         GridLoop::decide_edge(
                             self,
-                            (Y(y + dy + 2 * dx), X(x + dx + 2 * dy)),
+                            pos + d + d.rotate_clockwise() * 2,
                             Edge::Blank,
                         );
                         GridLoop::decide_edge(
                             self,
-                            (Y(y + dy - 2 * dx), X(x + dx - 2 * dy)),
+                            pos + d - d.rotate_clockwise() * 2,
                             Edge::Blank,
                         );
                     }
                 }
 
                 // diagonal 3
-                for d in 0..4 {
-                    let (Y(dy1), X(dx1)) = neighbor[d];
-                    let (Y(dy2), X(dx2)) = neighbor[(d + 1) % 4];
-                    let cell2 = (Y(y / 2 + dy1 + dy2), X(x / 2 + dx1 + dx2));
-                    if self.clue.is_valid_coord(cell2) && self.clue[cell2] == Clue(3) {
-                        GridLoop::decide_edge(self, (Y(y - dy1), X(x - dx1)), Edge::Line);
-                        GridLoop::decide_edge(self, (Y(y - dy2), X(x - dx2)), Edge::Line);
-                        GridLoop::decide_edge(
-                            self,
-                            (Y(y + 2 * dy1 + 3 * dy2), X(x + 2 * dx1 + 3 * dx2)),
-                            Edge::Line,
-                        );
-                        GridLoop::decide_edge(
-                            self,
-                            (Y(y + 3 * dy1 + 2 * dy2), X(x + 3 * dx1 + 2 * dx2)),
-                            Edge::Line,
-                        );
+                for &d in &FOUR_NEIGHBOURS {
+                    let dr = d.rotate_clockwise();
+                    let cell2 = cell_pos + d + dr;
+                    if self.clue.is_valid_p(cell2) && self.clue[cell2] == Clue(3) {
+                        GridLoop::decide_edge(self, pos - d, Edge::Line);
+                        GridLoop::decide_edge(self, pos - dr, Edge::Line);
+                        GridLoop::decide_edge(self, pos + d * 2 + dr * 3, Edge::Line);
+                        GridLoop::decide_edge(self, pos + d * 3 + dr * 2, Edge::Line);
                     }
                 }
             }
@@ -133,32 +124,32 @@ impl<'a> GridLoopField for Field<'a> {
     fn grid_loop(&mut self) -> &mut GridLoop {
         &mut self.grid_loop
     }
-    fn check_neighborhood(&mut self, (Y(y), X(x)): Coord) {
-        if y % 2 == 1 {
-            GridLoop::check(self, (Y(y - 1), X(x)));
-            GridLoop::check(self, (Y(y + 1), X(x)));
+    fn check_neighborhood(&mut self, pos: LP) {
+        if pos.0 % 2 == 1 {
+            GridLoop::check(self, pos + D(-1, 0));
+            GridLoop::check(self, pos + D(1, 0));
 
-            GridLoop::check(self, (Y(y), X(x - 1)));
-            GridLoop::check(self, (Y(y), X(x + 1)));
-            GridLoop::check(self, (Y(y - 2), X(x - 1)));
-            GridLoop::check(self, (Y(y - 2), X(x + 1)));
-            GridLoop::check(self, (Y(y + 2), X(x - 1)));
-            GridLoop::check(self, (Y(y + 2), X(x + 1)));
+            GridLoop::check(self, pos + D(0, -1));
+            GridLoop::check(self, pos + D(0, 1));
+            GridLoop::check(self, pos + D(-2, -1));
+            GridLoop::check(self, pos + D(-2, 1));
+            GridLoop::check(self, pos + D(2, -1));
+            GridLoop::check(self, pos + D(2, 1));
         } else {
-            GridLoop::check(self, (Y(y), X(x - 1)));
-            GridLoop::check(self, (Y(y), X(x + 1)));
+            GridLoop::check(self, pos + D(0, -1));
+            GridLoop::check(self, pos + D(0, 1));
 
-            GridLoop::check(self, (Y(y - 1), X(x)));
-            GridLoop::check(self, (Y(y + 1), X(x)));
-            GridLoop::check(self, (Y(y - 1), X(x - 2)));
-            GridLoop::check(self, (Y(y + 1), X(x - 2)));
-            GridLoop::check(self, (Y(y - 1), X(x + 2)));
-            GridLoop::check(self, (Y(y + 1), X(x + 2)));
+            GridLoop::check(self, pos + D(-1, 0));
+            GridLoop::check(self, pos + D(1, 0));
+            GridLoop::check(self, pos + D(-1, -2));
+            GridLoop::check(self, pos + D(1, -2));
+            GridLoop::check(self, pos + D(-1, 2));
+            GridLoop::check(self, pos + D(1, 2));
         }
     }
-    fn inspect(&mut self, (Y(y), X(x)): Coord) {
-        if y % 2 == 1 && x % 2 == 1 {
-            let clue = self.clue[(Y(y / 2), X(x / 2))];
+    fn inspect(&mut self, pos: LP) {
+        if pos.is_cell() {
+            let clue = self.clue[pos.as_cell()];
             if clue == NO_CLUE || clue == Clue(0) {
                 return;
             }
@@ -166,13 +157,13 @@ impl<'a> GridLoopField for Field<'a> {
             let mut neighbors_code = 0;
             let mut pow3 = 1;
             for i in 0..DICTIONARY_NEIGHBOR_SIZE {
-                let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i];
-                neighbors_code += pow3 * match self.grid_loop.get_edge_safe((Y(y + dy), X(x + dx)))
-                {
-                    Edge::Undecided => 0,
-                    Edge::Line => 1,
-                    Edge::Blank => 2,
-                };
+                let d = DICTIONARY_EDGE_OFFSET[i];
+                neighbors_code += pow3
+                    * match self.grid_loop.get_edge_safe(pos + d) {
+                        Edge::Undecided => 0,
+                        Edge::Line => 1,
+                        Edge::Blank => 2,
+                    };
                 pow3 *= 3;
             }
 
@@ -185,10 +176,10 @@ impl<'a> GridLoopField for Field<'a> {
             while res != 0 {
                 let ix = res.trailing_zeros();
                 let i = ix / 2;
-                let (Y(dy), X(dx)) = DICTIONARY_EDGE_OFFSET[i as usize];
+                let d = DICTIONARY_EDGE_OFFSET[i as usize];
                 GridLoop::decide_edge(
                     self,
-                    (Y(y + dy), X(x + dx)),
+                    pos + d,
                     if ix % 2 == 0 { Edge::Line } else { Edge::Blank },
                 );
                 res ^= 1u32 << ix;
@@ -214,7 +205,7 @@ mod tests {
                 row_iter.next();
                 let c = row_iter.next().unwrap();
                 if '0' <= c && c <= '3' {
-                    clue[(Y(y), X(x))] = Clue(((c as u8) - ('0' as u8)) as i32);
+                    clue[P(y, x)] = Clue(((c as u8) - ('0' as u8)) as i32);
                 }
             }
         }
@@ -230,8 +221,9 @@ mod tests {
 
             for x in 0..(input[0].len() as i32) {
                 let ch = row_iter.next().unwrap();
+                let pos = LP(y, x);
 
-                if !field.grid_loop().is_edge((Y(y), X(x))) {
+                if !pos.is_edge() {
                     continue;
                 }
 
@@ -242,7 +234,7 @@ mod tests {
                 };
 
                 assert_eq!(
-                    field.get_edge((Y(y), X(x))),
+                    field.get_edge(pos),
                     expected_edge,
                     "Comparing at y={}, x={}",
                     y,

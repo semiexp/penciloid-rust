@@ -1,8 +1,9 @@
-use super::super::{Coord, Grid, X, Y};
+use super::super::{Grid, D, LP, P};
 use super::*;
 use grid_loop::{Edge, GridLoop, GridLoopField};
 use std::cmp;
 use std::fmt;
+use FOUR_NEIGHBOURS;
 
 #[derive(Clone)]
 pub struct Field {
@@ -14,8 +15,6 @@ pub struct Field {
     decided_cells: i32,
     technique: Technique,
 }
-
-const FOUR_NEIGHBORS: [(i32, i32); 4] = [(-1, 0), (0, -1), (1, 0), (0, 1)];
 
 impl Field {
     pub fn new(clue: &Grid<Clue>) -> Field {
@@ -29,13 +28,15 @@ impl Field {
             let mut handle = GridLoop::get_handle(&mut grid_loop);
             for y in 0..height {
                 for x in 0..width {
-                    let c = clue[(Y(y), X(x))];
+                    let pos = P(y, x);
+                    let c = clue[pos];
                     if c != Clue::NoClue {
-                        cell[(Y(y), X(x))] = Cell::Clue;
-                        GridLoop::decide_edge(&mut *handle, (Y(y * 2 - 1), X(x * 2)), Edge::Blank);
-                        GridLoop::decide_edge(&mut *handle, (Y(y * 2 + 1), X(x * 2)), Edge::Blank);
-                        GridLoop::decide_edge(&mut *handle, (Y(y * 2), X(x * 2 - 1)), Edge::Blank);
-                        GridLoop::decide_edge(&mut *handle, (Y(y * 2), X(x * 2 + 1)), Edge::Blank);
+                        let pos_lp = LP::of_vertex(pos);
+                        cell[pos] = Cell::Clue;
+                        GridLoop::decide_edge(&mut *handle, pos_lp + D(-1, 0), Edge::Blank);
+                        GridLoop::decide_edge(&mut *handle, pos_lp + D(1, 0), Edge::Blank);
+                        GridLoop::decide_edge(&mut *handle, pos_lp + D(0, -1), Edge::Blank);
+                        GridLoop::decide_edge(&mut *handle, pos_lp + D(0, 1), Edge::Blank);
                         decided_cells += 1;
                     }
                 }
@@ -72,30 +73,30 @@ impl Field {
     pub fn fully_solved(&self) -> bool {
         self.grid_loop.fully_solved()
     }
-    pub fn get_cell(&self, cd: Coord) -> Cell {
-        self.cell[cd]
+    pub fn get_cell(&self, pos: P) -> Cell {
+        self.cell[pos]
     }
-    pub fn get_cell_safe(&self, cd: Coord) -> Cell {
-        if self.cell.is_valid_coord(cd) {
-            self.cell[cd]
+    pub fn get_cell_safe(&self, pos: P) -> Cell {
+        if self.cell.is_valid_p(pos) {
+            self.cell[pos]
         } else {
             // The outside of the field can be identified with a (meaningless) clue
             Cell::Clue
         }
     }
-    pub fn get_edge(&self, cd: Coord) -> Edge {
-        self.grid_loop.get_edge(cd)
+    pub fn get_edge(&self, pos: LP) -> Edge {
+        self.grid_loop.get_edge(pos)
     }
-    pub fn get_edge_safe(&self, cd: Coord) -> Edge {
-        self.grid_loop.get_edge_safe(cd)
+    pub fn get_edge_safe(&self, pos: LP) -> Edge {
+        self.grid_loop.get_edge_safe(pos)
     }
     pub fn num_decided_cells(&self) -> i32 {
         self.decided_cells
     }
 
-    pub fn set_cell(&mut self, cd: Coord, v: Cell) {
+    pub fn set_cell(&mut self, pos: P, v: Cell) {
         let mut handle = GridLoop::get_handle(self);
-        handle.set_cell_internal(cd, v);
+        handle.set_cell_internal(pos, v);
     }
     pub fn check_all_cell(&mut self) {
         let height = self.height();
@@ -103,7 +104,7 @@ impl Field {
         let mut handle = GridLoop::get_handle(self);
         for y in 0..height {
             for x in 0..width {
-                GridLoop::check(&mut *handle, (Y(y * 2), X(x * 2)));
+                GridLoop::check(&mut *handle, LP(y * 2, x * 2));
             }
         }
     }
@@ -131,7 +132,7 @@ impl Field {
         let width = self.width() - 1;
         let outside = height * width;
 
-        let cell_id = |(Y(y), X(x))| {
+        let cell_id = |P(y, x)| {
             if 0 <= y && y < height && 0 <= x && x < width {
                 (y * width + x)
             } else {
@@ -143,32 +144,27 @@ impl Field {
 
         for y in 0..height {
             for x in 0..(width + 1) {
-                match self.grid_loop.get_edge((Y(y * 2 + 1), X(x * 2))) {
+                match self.grid_loop.get_edge(LP(y * 2 + 1, x * 2)) {
                     Edge::Line => {
-                        let u = cell_id((Y(y), X(x - 1)));
-                        let v = cell_id((Y(y), X(x)));
+                        let u = cell_id(P(y, x - 1));
+                        let v = cell_id(P(y, x));
                         union_find.join(u * 2, v * 2 + 1);
                         union_find.join(u * 2 + 1, v * 2);
                     }
                     Edge::Blank => {
-                        let u = cell_id((Y(y), X(x - 1)));
-                        let v = cell_id((Y(y), X(x)));
+                        let u = cell_id(P(y, x - 1));
+                        let v = cell_id(P(y, x));
                         union_find.join(u * 2, v * 2);
                         union_find.join(u * 2 + 1, v * 2 + 1);
                     }
                     Edge::Undecided => (),
                 }
-                /*
-                if self.blocked_either_down[(Y(y), X(x))]
-                    && self.get_cell_safe((Y(y - 1), X(x))).is_blocking()
-                    && self.get_cell_safe((Y(y + 2), X(x))).is_blocking()
-                    */
-                if self.blocked_either_down[(Y(y), X(x))]
-                    && self.get_edge_safe((Y(y * 2 - 1), X(x * 2))) == Edge::Blank
-                    && self.get_edge_safe((Y(y * 2 + 3), X(x * 2))) == Edge::Blank
+                if self.blocked_either_down[P(y, x)]
+                    && self.get_edge_safe(LP(y * 2 - 1, x * 2)) == Edge::Blank
+                    && self.get_edge_safe(LP(y * 2 + 3, x * 2)) == Edge::Blank
                 {
-                    let u = cell_id((Y(y - 1), X(x)));
-                    let v = cell_id((Y(y + 1), X(x)));
+                    let u = cell_id(P(y - 1, x));
+                    let v = cell_id(P(y + 1, x));
                     union_find.join(u * 2, v * 2 + 1);
                     union_find.join(u * 2 + 1, v * 2);
                 }
@@ -176,16 +172,16 @@ impl Field {
         }
         for y in 0..(height + 1) {
             for x in 0..width {
-                match self.grid_loop.get_edge((Y(y * 2), X(x * 2 + 1))) {
+                match self.grid_loop.get_edge(LP(y * 2, x * 2 + 1)) {
                     Edge::Line => {
-                        let u = cell_id((Y(y - 1), X(x)));
-                        let v = cell_id((Y(y), X(x)));
+                        let u = cell_id(P(y - 1, x));
+                        let v = cell_id(P(y, x));
                         union_find.join(u * 2, v * 2 + 1);
                         union_find.join(u * 2 + 1, v * 2);
                     }
                     Edge::Blank => {
-                        let u = cell_id((Y(y - 1), X(x)));
-                        let v = cell_id((Y(y), X(x)));
+                        let u = cell_id(P(y - 1, x));
+                        let v = cell_id(P(y, x));
                         union_find.join(u * 2, v * 2);
                         union_find.join(u * 2 + 1, v * 2 + 1);
                     }
@@ -196,12 +192,12 @@ impl Field {
                     && self.get_cell_safe((Y(y), X(x - 1))).is_blocking()
                     && self.get_cell_safe((Y(y), X(x + 2))).is_blocking()
                     */
-                if self.blocked_either_right[(Y(y), X(x))]
-                    && self.get_edge_safe((Y(y * 2), X(x * 2 - 1))) == Edge::Blank
-                    && self.get_edge_safe((Y(y * 2), X(x * 2 + 3))) == Edge::Blank
+                if self.blocked_either_right[P(y, x)]
+                    && self.get_edge_safe(LP(y * 2, x * 2 - 1)) == Edge::Blank
+                    && self.get_edge_safe(LP(y * 2, x * 2 + 3)) == Edge::Blank
                 {
-                    let u = cell_id((Y(y), X(x - 1)));
-                    let v = cell_id((Y(y), X(x + 1)));
+                    let u = cell_id(P(y, x - 1));
+                    let v = cell_id(P(y, x + 1));
                     union_find.join(u * 2, v * 2 + 1);
                     union_find.join(u * 2 + 1, v * 2);
                 }
@@ -210,25 +206,25 @@ impl Field {
 
         for y in 0..height {
             for x in 0..(width + 1) {
-                let u = cell_id((Y(y), X(x - 1)));
-                let v = cell_id((Y(y), X(x)));
+                let u = cell_id(P(y, x - 1));
+                let v = cell_id(P(y, x));
 
                 if union_find.root(u * 2) == union_find.root(v * 2) {
-                    GridLoop::decide_edge(self, (Y(y * 2 + 1), X(x * 2)), Edge::Blank);
+                    GridLoop::decide_edge(self, LP(y * 2 + 1, x * 2), Edge::Blank);
                 } else if union_find.root(u * 2) == union_find.root(v * 2 + 1) {
-                    GridLoop::decide_edge(self, (Y(y * 2 + 1), X(x * 2)), Edge::Line);
+                    GridLoop::decide_edge(self, LP(y * 2 + 1, x * 2), Edge::Line);
                 }
             }
         }
         for y in 0..(height + 1) {
             for x in 0..width {
-                let u = cell_id((Y(y - 1), X(x)));
-                let v = cell_id((Y(y), X(x)));
+                let u = cell_id(P(y - 1, x));
+                let v = cell_id(P(y, x));
 
                 if union_find.root(u * 2) == union_find.root(v * 2) {
-                    GridLoop::decide_edge(self, (Y(y * 2), X(x * 2 + 1)), Edge::Blank);
+                    GridLoop::decide_edge(self, LP(y * 2, x * 2 + 1), Edge::Blank);
                 } else if union_find.root(u * 2) == union_find.root(v * 2 + 1) {
-                    GridLoop::decide_edge(self, (Y(y * 2), X(x * 2 + 1)), Edge::Line);
+                    GridLoop::decide_edge(self, LP(y * 2, x * 2 + 1), Edge::Line);
                 }
             }
         }
@@ -244,30 +240,26 @@ impl Field {
         let mut id = 0;
 
         fn visit(y: i32, x: i32, id: i32, ids: &mut Grid<i32>, grid_loop: &GridLoop) {
-            if ids[(Y(y), X(x))] != -1 {
+            if ids[P(y, x)] != -1 {
                 return;
             }
-            ids[(Y(y), X(x))] = id;
-            if y > 0 && grid_loop.get_edge((Y(2 * y - 1), X(2 * x))) == Edge::Undecided {
+            ids[P(y, x)] = id;
+            if y > 0 && grid_loop.get_edge(LP(2 * y - 1, 2 * x)) == Edge::Undecided {
                 visit(y - 1, x, id, ids, grid_loop);
             }
-            if y < ids.height() - 1
-                && grid_loop.get_edge((Y(2 * y + 1), X(2 * x))) == Edge::Undecided
-            {
+            if y < ids.height() - 1 && grid_loop.get_edge(LP(2 * y + 1, 2 * x)) == Edge::Undecided {
                 visit(y + 1, x, id, ids, grid_loop);
             }
-            if x > 0 && grid_loop.get_edge((Y(2 * y), X(2 * x - 1))) == Edge::Undecided {
+            if x > 0 && grid_loop.get_edge(LP(2 * y, 2 * x - 1)) == Edge::Undecided {
                 visit(y, x - 1, id, ids, grid_loop);
             }
-            if x < ids.width() - 1
-                && grid_loop.get_edge((Y(2 * y), X(2 * x + 1))) == Edge::Undecided
-            {
+            if x < ids.width() - 1 && grid_loop.get_edge(LP(2 * y, 2 * x + 1)) == Edge::Undecided {
                 visit(y, x + 1, id, ids, grid_loop);
             }
         }
         for y in 0..height {
             for x in 0..width {
-                if ids[(Y(y), X(x))] == -1 {
+                if ids[P(y, x)] == -1 {
                     visit(y, x, id, &mut ids, &self.grid_loop);
                     id += 1;
                 }
@@ -282,12 +274,13 @@ impl Field {
                 if y % 2 == x % 2 {
                     continue;
                 }
-                if self.get_edge((Y(y), X(x))) == Edge::Line
-                    && ids[(Y(y / 2), X(x / 2))] != ids[(Y((y + 1) / 2), X((x + 1) / 2))]
+                let pos = LP(y, x);
+                if self.get_edge(pos) == Edge::Line
+                    && ids[P(y / 2, x / 2)] != ids[P((y + 1) / 2, (x + 1) / 2)]
                 {
                     // waf
-                    let id1 = ids[(Y(y / 2), X(x / 2))] as usize;
-                    let id2 = ids[(Y((y + 1) / 2), X((x + 1) / 2))] as usize;
+                    let id1 = ids[P(y / 2, x / 2)] as usize;
+                    let id2 = ids[P((y + 1) / 2, (x + 1) / 2)] as usize;
                     if (y / 2 + x / 2) % 2 == 0 {
                         num_endpoint_even[id1] += 1;
                         num_endpoint_odd[id2] += 1;
@@ -300,9 +293,9 @@ impl Field {
         }
         for y in 0..height {
             for x in 0..width {
-                let id = ids[(Y(y), X(x))] as usize;
+                let id = ids[P(y, x)] as usize;
                 num_cells[id] += 1;
-                if self.get_cell((Y(y), X(x))) == Cell::Undecided {
+                if self.get_cell(P(y, x)) == Cell::Undecided {
                     if undecided_loc[id].0 == -1 {
                         undecided_loc[id] = (y, x);
                     } else {
@@ -318,9 +311,9 @@ impl Field {
             let (y, x) = undecided_loc[i];
             let cell_parity = ((num_endpoint_even[i] - num_endpoint_odd[i]) / 2) & 1;
             if cell_parity == (num_cells[i] & 1) {
-                self.set_cell((Y(y), X(x)), Cell::Line);
+                self.set_cell(P(y, x), Cell::Line);
             } else {
-                self.set_cell((Y(y), X(x)), Cell::Blocked);
+                self.set_cell(P(y, x), Cell::Blocked);
             }
         }
     }
@@ -341,32 +334,33 @@ impl Field {
                     if y % 2 == x % 2 {
                         continue;
                     }
-                    if self.get_edge((Y(y), X(x))) != Edge::Undecided {
+                    let pos = LP(y, x);
+                    if self.get_edge(pos) != Edge::Undecided {
                         continue;
                     }
-                    if !self.grid_loop.is_root((Y(y), X(x))) {
+                    if !self.grid_loop.is_root(pos) {
                         continue;
                     }
 
                     {
                         let mut field_line = self.clone();
-                        GridLoop::decide_edge(&mut field_line, (Y(y), X(x)), Edge::Line);
+                        GridLoop::decide_edge(&mut field_line, pos, Edge::Line);
                         field_line.trial_and_error(depth - 1);
 
                         if field_line.inconsistent() {
                             updated = true;
-                            GridLoop::decide_edge(self, (Y(y), X(x)), Edge::Blank);
+                            GridLoop::decide_edge(self, pos, Edge::Blank);
                             self.trial_and_error(depth - 1);
                         }
                     }
                     {
                         let mut field_blank = self.clone();
-                        GridLoop::decide_edge(&mut field_blank, (Y(y), X(x)), Edge::Blank);
+                        GridLoop::decide_edge(&mut field_blank, pos, Edge::Blank);
                         field_blank.trial_and_error(depth - 1);
 
                         if field_blank.inconsistent() {
                             updated = true;
-                            GridLoop::decide_edge(self, (Y(y), X(x)), Edge::Line);
+                            GridLoop::decide_edge(self, pos, Edge::Line);
                             self.trial_and_error(depth - 1);
                         }
                     }
@@ -377,28 +371,29 @@ impl Field {
             }
             for y in 0..height {
                 for x in 0..width {
-                    if self.get_cell((Y(y), X(x))) != Cell::Undecided {
+                    let pos = P(y, x);
+                    if self.get_cell(pos) != Cell::Undecided {
                         continue;
                     }
                     {
                         let mut field_blocked = self.clone();
-                        field_blocked.set_cell((Y(y), X(x)), Cell::Blocked);
+                        field_blocked.set_cell(pos, Cell::Blocked);
                         field_blocked.trial_and_error(depth - 1);
 
                         if field_blocked.inconsistent() {
                             updated = true;
-                            self.set_cell((Y(y), X(x)), Cell::Line);
+                            self.set_cell(pos, Cell::Line);
                             self.trial_and_error(depth - 1);
                         }
                     }
                     {
                         let mut field_line = self.clone();
-                        field_line.set_cell((Y(y), X(x)), Cell::Line);
+                        field_line.set_cell(pos, Cell::Line);
                         field_line.trial_and_error(depth - 1);
 
                         if field_line.inconsistent() {
                             updated = true;
-                            self.set_cell((Y(y), X(x)), Cell::Blocked);
+                            self.set_cell(pos, Cell::Blocked);
                             self.trial_and_error(depth - 1);
                         }
                     }
@@ -413,8 +408,8 @@ impl Field {
         }
     }
 
-    fn set_cell_internal(&mut self, cd: Coord, v: Cell) {
-        let current = self.cell[cd];
+    fn set_cell_internal(&mut self, pos: P, v: Cell) {
+        let current = self.cell[pos];
         if current != Cell::Undecided {
             if current != v {
                 self.set_inconsistent();
@@ -423,49 +418,48 @@ impl Field {
         }
 
         self.decided_cells += 1;
-        self.cell[cd] = v;
-        let (Y(y), X(x)) = cd;
+        self.cell[pos] = v;
         match v {
             Cell::Undecided => (),
             Cell::Clue => (), // don't do this!
-            Cell::Line => GridLoop::check(self, (Y(y * 2), X(x * 2))),
+            Cell::Line => GridLoop::check(self, LP::of_vertex(pos)),
             Cell::Blocked => {
-                for &(dy, dx) in &FOUR_NEIGHBORS {
-                    if self.get_cell_safe((Y(y + dy), X(x + dx))) != Cell::Clue {
-                        self.set_cell_internal((Y(y + dy), X(x + dx)), Cell::Line);
+                for &d in &FOUR_NEIGHBOURS {
+                    if self.get_cell_safe(pos + d) != Cell::Clue {
+                        self.set_cell_internal(pos + d, Cell::Line);
                     }
-                    GridLoop::decide_edge(self, (Y(y * 2 + dy), X(x * 2 + dx)), Edge::Blank);
+                    GridLoop::decide_edge(self, LP::of_vertex(pos) + d, Edge::Blank);
                 }
             }
         }
     }
-    fn set_cell_internal_unless_clue(&mut self, cd: Coord, v: Cell) {
-        if self.get_cell_safe(cd) == Cell::Clue {
+    fn set_cell_internal_unless_clue(&mut self, pos: P, v: Cell) {
+        if self.get_cell_safe(pos) == Cell::Clue {
             return;
         }
-        self.set_cell_internal(cd, v);
+        self.set_cell_internal(pos, v);
     }
-    fn set_blocked_either(&mut self, cd1: Coord, cd2: Coord) {
-        if self.get_cell(cd1) == Cell::Clue || self.get_cell(cd2) == Cell::Clue {
+    fn set_blocked_either(&mut self, pos1: P, pos2: P) {
+        if self.get_cell(pos1) == Cell::Clue || self.get_cell(pos2) == Cell::Clue {
             return;
         }
 
-        let (Y(y1), X(x1)) = cd1;
-        let (Y(y2), X(x2)) = cd2;
+        let P(y1, x1) = pos1;
+        let P(y2, x2) = pos2;
 
         if y1 == y2 {
             if x2 == x1 + 1 {
-                self.blocked_either_right[(Y(y1), X(x1))] = true;
+                self.blocked_either_right[P(y1, x1)] = true;
             } else if x1 == x2 + 1 {
-                self.blocked_either_right[(Y(y1), X(x2))] = true;
+                self.blocked_either_right[P(y1, x2)] = true;
             } else {
                 panic!();
             }
         } else if x1 == x2 {
             if y2 == y1 + 1 {
-                self.blocked_either_down[(Y(y1), X(x1))] = true;
+                self.blocked_either_down[P(y1, x1)] = true;
             } else if y1 == y2 + 1 {
-                self.blocked_either_down[(Y(y2), X(x1))] = true;
+                self.blocked_either_down[P(y2, x1)] = true;
             } else {
                 panic!();
             }
@@ -473,23 +467,22 @@ impl Field {
             panic!();
         }
     }
-    fn two_by_two(&mut self, top: Coord) {
+    fn two_by_two(&mut self, top: P) {
         if !self.technique.two_by_two {
             return;
         }
         // 2x2 square (y, x) -- (y+1, x+1) has 2 blocked cells
-        let (Y(y), X(x)) = top;
-        for &(y2, x2) in &[
-            (y - 1, x),
-            (y - 1, x + 1),
-            (y, x - 1),
-            (y, x + 2),
-            (y + 1, x - 1),
-            (y + 1, x + 2),
-            (y + 2, x),
-            (y + 2, x + 1),
+        for &d in &[
+            D(-1, 0),
+            D(-1, 1),
+            D(0, -1),
+            D(0, 2),
+            D(1, -1),
+            D(1, 2),
+            D(2, 0),
+            D(2, 1),
         ] {
-            self.set_cell_internal_unless_clue((Y(y2), X(x2)), Cell::Line);
+            self.set_cell_internal_unless_clue(top + d, Cell::Line);
         }
     }
     fn check_two_by_three_rr(
@@ -503,12 +496,12 @@ impl Field {
         ty1: i32,
         tx1: i32,
     ) {
-        if self.blocked_either_right[(Y(y0), X(x0))] && self.blocked_either_right[(Y(y1), X(x1))] {
-            if self.get_cell_safe((Y(ty0), X(tx0))) != Cell::Clue
-                && self.get_cell_safe((Y(ty1), X(tx1))) != Cell::Clue
+        if self.blocked_either_right[P(y0, x0)] && self.blocked_either_right[P(y1, x1)] {
+            if self.get_cell_safe(P(ty0, tx0)) != Cell::Clue
+                && self.get_cell_safe(P(ty1, tx1)) != Cell::Clue
             {
-                self.set_cell_internal((Y(ty0), X(tx0)), Cell::Line);
-                self.set_cell_internal((Y(ty1), X(tx1)), Cell::Line);
+                self.set_cell_internal(P(ty0, tx0), Cell::Line);
+                self.set_cell_internal(P(ty1, tx1), Cell::Line);
             }
         }
     }
@@ -523,12 +516,12 @@ impl Field {
         ty1: i32,
         tx1: i32,
     ) {
-        if self.blocked_either_right[(Y(y0), X(x0))] && self.blocked_either_down[(Y(y1), X(x1))] {
-            if self.get_cell_safe((Y(ty0), X(tx0))) != Cell::Clue
-                && self.get_cell_safe((Y(ty1), X(tx1))) != Cell::Clue
+        if self.blocked_either_right[P(y0, x0)] && self.blocked_either_down[P(y1, x1)] {
+            if self.get_cell_safe(P(ty0, tx0)) != Cell::Clue
+                && self.get_cell_safe(P(ty1, tx1)) != Cell::Clue
             {
-                self.set_cell_internal((Y(ty0), X(tx0)), Cell::Line);
-                self.set_cell_internal((Y(ty1), X(tx1)), Cell::Line);
+                self.set_cell_internal(P(ty0, tx0), Cell::Line);
+                self.set_cell_internal(P(ty1, tx1), Cell::Line);
             }
         }
     }
@@ -543,20 +536,20 @@ impl Field {
         ty1: i32,
         tx1: i32,
     ) {
-        if self.blocked_either_down[(Y(y0), X(x0))] && self.blocked_either_down[(Y(y1), X(x1))] {
-            if self.get_cell_safe((Y(ty0), X(tx0))) != Cell::Clue
-                && self.get_cell_safe((Y(ty1), X(tx1))) != Cell::Clue
+        if self.blocked_either_down[P(y0, x0)] && self.blocked_either_down[P(y1, x1)] {
+            if self.get_cell_safe(P(ty0, tx0)) != Cell::Clue
+                && self.get_cell_safe(P(ty1, tx1)) != Cell::Clue
             {
-                self.set_cell_internal((Y(ty0), X(tx0)), Cell::Line);
-                self.set_cell_internal((Y(ty1), X(tx1)), Cell::Line);
+                self.set_cell_internal(P(ty0, tx0), Cell::Line);
+                self.set_cell_internal(P(ty1, tx1), Cell::Line);
             }
         }
     }
-    fn check_two_by_three(&mut self, top: Coord) {
+    fn check_two_by_three(&mut self, top: P) {
         if !self.technique.two_by_three {
             return;
         }
-        let (Y(y), X(x)) = top;
+        let P(y, x) = top;
 
         if y <= self.height() - 2 && x <= self.width() - 3 {
             // aa.
@@ -615,60 +608,57 @@ impl Field {
             self.check_two_by_three_rd(y + 2, x, y, x + 1, y, x, y + 1, x);
         }
     }
-    fn around_blocked_either(&mut self, cd: Coord) {
-        let (Y(y), X(x)) = cd;
-
-        if y < self.height() - 1 && self.blocked_either_down[cd] {
-            if self.get_cell_safe((Y(y - 1), X(x))) == Cell::Clue {
-                self.set_cell_internal_unless_clue((Y(y), X(x - 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y), X(x + 1)), Cell::Line);
+    fn around_blocked_either(&mut self, pos: P) {
+        if pos.0 < self.height() - 1 && self.blocked_either_down[pos] {
+            if self.get_cell_safe(pos + D(-1, 0)) == Cell::Clue {
+                self.set_cell_internal_unless_clue(pos + D(0, -1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(0, 1), Cell::Line);
             }
-            if self.get_cell_safe((Y(y + 2), X(x))) == Cell::Clue {
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x - 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x + 1)), Cell::Line);
+            if self.get_cell_safe(pos + D(2, 0)) == Cell::Clue {
+                self.set_cell_internal_unless_clue(pos + D(1, -1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
             }
-            if self.get_cell_safe((Y(y), X(x - 1))) == Cell::Clue
-                || self.get_cell_safe((Y(y), X(x + 1))) == Cell::Clue
+            if self.get_cell_safe(pos + D(0, -1)) == Cell::Clue
+                || self.get_cell_safe(pos + D(0, 1)) == Cell::Clue
             {
-                self.set_cell_internal_unless_clue((Y(y), X(x - 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y - 1), X(x)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y), X(x + 1)), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(0, -1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(-1, 0), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(0, 1), Cell::Line);
             }
-            if self.get_cell_safe((Y(y + 1), X(x - 1))) == Cell::Clue
-                || self.get_cell_safe((Y(y + 1), X(x + 1))) == Cell::Clue
+            if self.get_cell_safe(pos + D(1, -1)) == Cell::Clue
+                || self.get_cell_safe(pos + D(1, 1)) == Cell::Clue
             {
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x - 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 2), X(x)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x + 1)), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, -1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(2, 0), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
             }
         }
-        if x < self.width() - 1 && self.blocked_either_right[cd] {
-            if self.get_cell_safe((Y(y), X(x - 1))) == Cell::Clue {
-                self.set_cell_internal_unless_clue((Y(y - 1), X(x)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x)), Cell::Line);
+        if pos.1 < self.width() - 1 && self.blocked_either_right[pos] {
+            if self.get_cell_safe(pos + D(0, -1)) == Cell::Clue {
+                self.set_cell_internal_unless_clue(pos + D(-1, 0), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 0), Cell::Line);
             }
-            if self.get_cell_safe((Y(y), X(x + 2))) == Cell::Clue {
-                self.set_cell_internal_unless_clue((Y(y - 1), X(x + 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x + 1)), Cell::Line);
+            if self.get_cell_safe(pos + D(0, 2)) == Cell::Clue {
+                self.set_cell_internal_unless_clue(pos + D(-1, 1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
             }
-            if self.get_cell_safe((Y(y - 1), X(x))) == Cell::Clue
-                || self.get_cell_safe((Y(y + 1), X(x))) == Cell::Clue
+            if self.get_cell_safe(pos + D(-1, 0)) == Cell::Clue
+                || self.get_cell_safe(pos + D(1, 0)) == Cell::Clue
             {
-                self.set_cell_internal_unless_clue((Y(y - 1), X(x)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y), X(x - 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x)), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(-1, 0), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(0, -1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 0), Cell::Line);
             }
-            if self.get_cell_safe((Y(y - 1), X(x + 1))) == Cell::Clue
-                || self.get_cell_safe((Y(y + 1), X(x + 1))) == Cell::Clue
+            if self.get_cell_safe(pos + D(-1, 1)) == Cell::Clue
+                || self.get_cell_safe(pos + D(1, 1)) == Cell::Clue
             {
-                self.set_cell_internal_unless_clue((Y(y - 1), X(x + 1)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y), X(x + 2)), Cell::Line);
-                self.set_cell_internal_unless_clue((Y(y + 1), X(x + 1)), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(-1, 1), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(0, 2), Cell::Line);
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
             }
         }
     }
-    fn inspect_clue(&mut self, cell_cd: Coord) {
-        let (Y(y), X(x)) = cell_cd;
+    fn inspect_clue(&mut self, cell_cd: P) {
         let clue = self.clue[cell_cd];
         let (dy, dx, mut n) = match clue {
             Clue::NoClue | Clue::Empty => return,
@@ -677,18 +667,18 @@ impl Field {
             Clue::Right(n) => (0, 1, n),
             Clue::Down(n) => (1, 0, n),
         };
+        let d = D(dy, dx);
+        let dr = d.rotate_clockwise();
         let mut involving_cells = 0;
         {
-            let mut y = y + dy;
-            let mut x = x + dx;
-            while self.clue.is_valid_coord((Y(y), X(x))) {
-                let c = self.clue[(Y(y), X(x))];
+            let mut pos = cell_cd + d;
+            while self.clue.is_valid_p(pos) {
+                let c = self.clue[pos];
                 if c.same_shape(clue) {
                     n -= c.clue_number();
                     break;
                 }
-                y += dy;
-                x += dx;
+                pos = pos + d;
                 involving_cells += 1;
             }
         }
@@ -699,29 +689,23 @@ impl Field {
 
         let mut stride_three_hi = vec![2; cmp::max(0, involving_cells - 2) as usize];
         for i in 0..(involving_cells - 2) {
-            if self.get_cell((Y(y + dy * (i + 2)), X(x + dx * (i + 2)))) == Cell::Clue {
+            if self.get_cell(cell_cd + d * (i + 2)) == Cell::Clue {
                 continue;
             }
-            if self
-                .get_cell_safe((Y(y + dy * (i + 2) + dx), X(x + dx * (i + 2) + dy)))
-                .is_blocking()
-            {
+            if self.get_cell_safe(cell_cd + d * (i + 2) + dr).is_blocking() {
                 stride_three_hi[i as usize] = 1;
             }
-            if self
-                .get_cell_safe((Y(y + dy * (i + 2) - dx), X(x + dx * (i + 2) - dy)))
-                .is_blocking()
-            {
+            if self.get_cell_safe(cell_cd + d * (i + 2) - dr).is_blocking() {
                 stride_three_hi[i as usize] = 1;
             }
             if dx == 0
                 && self.technique.one_in_three_orthogonal_either
                 && (self
                     .blocked_either_right
-                    .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2) - 1)), false)
+                    .get_or_default_p(cell_cd + d * (i + 2) + D(0, -1), false)
                     || self
                         .blocked_either_right
-                        .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                        .get_or_default_p(cell_cd + d * (i + 2), false))
             {
                 stride_three_hi[i as usize] = 1;
             }
@@ -729,42 +713,24 @@ impl Field {
                 && self.technique.one_in_three_orthogonal_either
                 && (self
                     .blocked_either_down
-                    .get_or_default((Y(y + dy * (i + 2) - 1), X(x + dx * (i + 2))), false)
+                    .get_or_default_p(cell_cd + d * (i + 2) + D(-1, 0), false)
                     || self
                         .blocked_either_down
-                        .get_or_default((Y(y + dy * (i + 2)), X(x + dx * (i + 2))), false))
+                        .get_or_default_p(cell_cd + d * (i + 2), false))
             {
                 stride_three_hi[i as usize] = 1;
             }
             if self.technique.one_in_three_remote {
-                for d in &[-1, 1] {
-                    if self
-                        .get_cell_safe((Y(y + dy * (i + 1) + dx * d), X(x + dx * (i + 1) + dy * d)))
-                        != Cell::Clue
-                        && self.get_cell_safe((
-                            Y(y + dy * (i + 3) + dx * d),
-                            X(x + dx * (i + 3) + dy * d),
-                        )) != Cell::Clue
-                        && (self
-                            .get_cell_safe((Y(y + dy * i + dx * d), X(x + dx * i + dy * d)))
-                            .is_blocking()
+                for &sgn in &[-1, 1] {
+                    if self.get_cell_safe(cell_cd + d * (i + 1) + dr * sgn) != Cell::Clue
+                        && self.get_cell_safe(cell_cd + d * (i + 3) + dr * sgn) != Cell::Clue
+                        && (self.get_cell_safe(cell_cd + d * i + dr * sgn).is_blocking()
                             || self
-                                .get_cell_safe((
-                                    Y(y + dy * (i + 1) + dx * d * 2),
-                                    X(x + dx * (i + 1) + dy * d * 2),
-                                ))
+                                .get_cell_safe(cell_cd + d * (i + 1) + dr * (sgn * 2))
                                 .is_blocking())
-                        && (self
-                            .get_cell_safe((
-                                Y(y + dy * (i + 4) + dx * d),
-                                X(x + dx * (i + 4) + dy * d),
-                            ))
-                            .is_blocking()
+                        && (self.get_cell_safe(cell_cd + d * (i + 4) + dr).is_blocking()
                             || self
-                                .get_cell_safe((
-                                    Y(y + dy * (i + 3) + dx * d * 2),
-                                    X(x + dx * (i + 3) + dy * d * 2),
-                                ))
+                                .get_cell_safe(cell_cd + d * (i + 3) + dr * (sgn * 2))
                                 .is_blocking())
                     {
                         stride_three_hi[i as usize] = 1;
@@ -780,7 +746,7 @@ impl Field {
 
         for i in 0..involving_cells {
             let (lo, hi) = dp_left[i as usize];
-            let (nlo, nhi) = match self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1)))) {
+            let (nlo, nhi) = match self.get_cell(cell_cd + d * (i + 1)) {
                 Cell::Blocked => (lo + 1, hi + 1),
                 Cell::Undecided => (lo, hi + 1),
                 Cell::Line | Cell::Clue => (lo, hi),
@@ -801,7 +767,7 @@ impl Field {
         for i in 0..involving_cells {
             let i = involving_cells - i;
             let (lo, hi) = dp_right[i as usize];
-            let (nlo, nhi) = match self.get_cell((Y(y + dy * i), X(x + dx * i))) {
+            let (nlo, nhi) = match self.get_cell(cell_cd + d * i) {
                 Cell::Blocked => (lo + 1, hi + 1),
                 Cell::Undecided => (lo, hi + 1),
                 Cell::Line | Cell::Clue => (lo, hi),
@@ -828,21 +794,21 @@ impl Field {
                 self.set_inconsistent();
                 return;
             } else if left_hi + right_hi == n - 1 {
-                self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Blocked);
+                self.set_cell_internal(cell_cd + d * (i + 1), Cell::Blocked);
             }
 
             if left_lo + right_lo > n {
                 self.set_inconsistent();
                 return;
             } else if left_lo + right_lo == n {
-                if self.get_cell((Y(y + dy * (i + 1)), X(x + dx * (i + 1)))) != Cell::Clue {
-                    self.set_cell_internal((Y(y + dy * (i + 1)), X(x + dx * (i + 1))), Cell::Line);
+                if self.get_cell(cell_cd + d * (i + 1)) != Cell::Clue {
+                    self.set_cell_internal(cell_cd + d * (i + 1), Cell::Line);
                 }
             }
 
             if i != involving_cells - 1 && left_hi + dp_right[(i + 2) as usize].1 == n - 1 {
-                let cell1 = (Y(y + dy * (i + 1)), X(x + dx * (i + 1)));
-                let cell2 = (Y(y + dy * (i + 2)), X(x + dx * (i + 2)));
+                let cell1 = cell_cd + d * (i + 1);
+                let cell2 = cell_cd + d * (i + 2);
                 if self.get_cell(cell1) != Cell::Clue && self.get_cell(cell2) != Cell::Clue {
                     self.set_blocked_either(cell1, cell2);
                 }
@@ -855,23 +821,21 @@ impl GridLoopField for Field {
     fn grid_loop(&mut self) -> &mut GridLoop {
         &mut self.grid_loop
     }
-    fn check_neighborhood(&mut self, (Y(y), X(x)): Coord) {
-        if y % 2 == 0 {
-            GridLoop::check(self, (Y(y), X(x - 1)));
-            GridLoop::check(self, (Y(y), X(x + 1)));
+    fn check_neighborhood(&mut self, pos: LP) {
+        if pos.0 % 2 == 0 {
+            GridLoop::check(self, pos + D(0, -1));
+            GridLoop::check(self, pos + D(0, 1));
         } else {
-            GridLoop::check(self, (Y(y - 1), X(x)));
-            GridLoop::check(self, (Y(y + 1), X(x)));
+            GridLoop::check(self, pos + D(-1, 0));
+            GridLoop::check(self, pos + D(1, 0));
         }
     }
-    fn inspect(&mut self, cd: Coord) {
-        let (Y(y), X(x)) = cd;
-        if !(y % 2 == 0 && x % 2 == 0) {
+    fn inspect(&mut self, cd: LP) {
+        if !cd.is_vertex() {
             return;
         }
-        let cy = y / 2;
-        let cx = x / 2;
-        let cell = self.get_cell((Y(cy), X(cx)));
+        let cell_cd = cd.as_vertex();
+        let cell = self.get_cell(cell_cd);
         if cell == Cell::Line || cell == Cell::Undecided {
             let (n_line, n_undecided) = self.grid_loop.neighbor_summary(cd);
 
@@ -880,17 +844,17 @@ impl GridLoopField for Field {
                     self.set_inconsistent();
                     return;
                 } else if n_line + n_undecided <= 2 {
-                    for &(dy, dx) in &FOUR_NEIGHBORS {
-                        if self.get_edge_safe((Y(y + dy), X(x + dx))) != Edge::Blank {
-                            GridLoop::decide_edge(self, (Y(y + dy), X(x + dx)), Edge::Line);
+                    for &d in &FOUR_NEIGHBOURS {
+                        if self.get_edge_safe(cd + d) != Edge::Blank {
+                            GridLoop::decide_edge(self, cd + d, Edge::Line);
                         }
                     }
                 }
             } else {
                 if n_line == 0 && n_undecided == 2 {
-                    for &(dy, dx) in &FOUR_NEIGHBORS {
-                        if self.get_edge_safe((Y(y + dy), X(x + dx))) == Edge::Undecided {
-                            self.set_cell_internal((Y(y / 2 + dy), X(x / 2 + dx)), Cell::Line);
+                    for &d in &FOUR_NEIGHBOURS {
+                        if self.get_edge_safe(cd + d) == Edge::Undecided {
+                            self.set_cell_internal(cell_cd + d, Cell::Line);
                         }
                     }
                 }
@@ -898,33 +862,33 @@ impl GridLoopField for Field {
 
             if cell == Cell::Undecided {
                 if n_line >= 1 {
-                    self.set_cell_internal((Y(y / 2), X(x / 2)), Cell::Line);
+                    self.set_cell_internal(cell_cd, Cell::Line);
                 }
                 if n_line == 0 && n_undecided <= 1 {
-                    self.set_cell_internal((Y(y / 2), X(x / 2)), Cell::Blocked);
+                    self.set_cell_internal(cell_cd, Cell::Blocked);
                 }
             }
         } else if cell == Cell::Clue {
-            self.inspect_clue((Y(y / 2), X(x / 2)));
+            self.inspect_clue(cell_cd);
         }
 
-        if cy != self.height() - 1 && self.blocked_either_down[(Y(cy), X(cx))] {
-            if cx != 0 && self.blocked_either_down[(Y(cy), X(cx - 1))] {
-                self.two_by_two((Y(cy), X(cx - 1)));
+        if cell_cd.0 != self.height() - 1 && self.blocked_either_down[cell_cd] {
+            if cell_cd.1 != 0 && self.blocked_either_down[cell_cd + D(0, -1)] {
+                self.two_by_two(cell_cd + D(0, -1));
             }
-            if cx != self.width() - 1 && self.blocked_either_down[(Y(cy), X(cx + 1))] {
-                self.two_by_two((Y(cy), X(cx)));
-            }
-        }
-        if cx != self.width() - 1 && self.blocked_either_right[(Y(cy), X(cx))] {
-            if cy != 0 && self.blocked_either_right[(Y(cy - 1), X(cx))] {
-                self.two_by_two((Y(cy - 1), X(cx)));
-            }
-            if cy != self.height() - 1 && self.blocked_either_right[(Y(cy + 1), X(cx))] {
-                self.two_by_two((Y(cy), X(cx)));
+            if cell_cd.1 != self.width() - 1 && self.blocked_either_down[cell_cd + D(0, 1)] {
+                self.two_by_two(cell_cd);
             }
         }
-        self.check_two_by_three((Y(cy), X(cx)));
+        if cell_cd.1 != self.width() - 1 && self.blocked_either_right[cell_cd] {
+            if cell_cd.0 != 0 && self.blocked_either_right[cell_cd + D(-1, 0)] {
+                self.two_by_two(cell_cd + D(-1, 0));
+            }
+            if cell_cd.0 != self.height() - 1 && self.blocked_either_right[cell_cd + D(1, 0)] {
+                self.two_by_two(cell_cd);
+            }
+        }
+        self.check_two_by_three(cell_cd);
     }
 }
 
@@ -967,11 +931,11 @@ impl fmt::Display for Field {
         for y in 0..(2 * height - 1) {
             for x in 0..(2 * width - 1) {
                 match (y % 2, x % 2) {
-                    (0, 0) => match self.get_cell((Y(y / 2), X(x / 2))) {
+                    (0, 0) => match self.get_cell(P(y / 2, x / 2)) {
                         Cell::Undecided => write!(f, "+")?,
                         Cell::Line => write!(f, "*")?,
                         Cell::Blocked => write!(f, "#")?,
-                        Cell::Clue => match self.clue[(Y(y / 2), X(x / 2))] {
+                        Cell::Clue => match self.clue[P(y / 2, x / 2)] {
                             Clue::NoClue => panic!(),
                             Clue::Empty => write!(f, "? ")?,
                             Clue::Up(n) => write!(f, "^{}", n)?,
@@ -981,12 +945,12 @@ impl fmt::Display for Field {
                         },
                     },
                     (0, 1) => {
-                        if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue {
+                        if self.get_cell(P(y / 2, x / 2)) == Cell::Clue {
                             write!(f, "  ")?;
-                        } else if self.get_cell((Y(y / 2), X(x / 2 + 1))) == Cell::Clue {
+                        } else if self.get_cell(P(y / 2, x / 2 + 1)) == Cell::Clue {
                             write!(f, "   ")?;
                         } else {
-                            match self.get_edge((Y(y), X(x))) {
+                            match self.get_edge(LP(y, x)) {
                                 Edge::Line => write!(f, "---")?,
                                 Edge::Blank => write!(f, " x ")?,
                                 Edge::Undecided => write!(f, "   ")?,
@@ -994,12 +958,12 @@ impl fmt::Display for Field {
                         }
                     }
                     (1, 0) => {
-                        if self.get_cell((Y(y / 2), X(x / 2))) == Cell::Clue
-                            || self.get_cell((Y(y / 2 + 1), X(x / 2))) == Cell::Clue
+                        if self.get_cell(P(y / 2, x / 2)) == Cell::Clue
+                            || self.get_cell(P(y / 2 + 1, x / 2)) == Cell::Clue
                         {
                             write!(f, " ")?;
                         } else {
-                            match self.get_edge((Y(y), X(x))) {
+                            match self.get_edge(LP(y, x)) {
                                 Edge::Line => write!(f, "|")?,
                                 Edge::Blank => write!(f, "x")?,
                                 Edge::Undecided => write!(f, " ")?,
@@ -1025,126 +989,126 @@ mod tests {
         {
             // Loop must not pass through clue cells
             let mut problem = Grid::new(5, 5, Clue::NoClue);
-            problem[(Y(0), X(0))] = Clue::Right(1);
+            problem[P(0, 0)] = Clue::Right(1);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_edge((Y(0), X(1))), Edge::Blank);
-            assert_eq!(field.get_edge((Y(1), X(0))), Edge::Blank);
+            assert_eq!(field.get_edge(LP(0, 1)), Edge::Blank);
+            assert_eq!(field.get_edge(LP(1, 0)), Edge::Blank);
         }
         {
             // 0 block cells
             let mut problem = Grid::new(5, 7, Clue::NoClue);
-            problem[(Y(0), X(3))] = Clue::Right(0);
+            problem[P(0, 3)] = Clue::Right(0);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(0), X(4))), Cell::Line);
-            assert_eq!(field.get_cell((Y(0), X(5))), Cell::Line);
-            assert_eq!(field.get_cell((Y(0), X(6))), Cell::Line);
-            assert_eq!(field.get_edge((Y(1), X(8))), Edge::Line);
+            assert_eq!(field.get_cell(P(0, 4)), Cell::Line);
+            assert_eq!(field.get_cell(P(0, 5)), Cell::Line);
+            assert_eq!(field.get_cell(P(0, 6)), Cell::Line);
+            assert_eq!(field.get_edge(LP(1, 8)), Edge::Line);
         }
         {
             // 2 block cells in 3 consecutive cells
             let mut problem = Grid::new(5, 5, Clue::NoClue);
-            problem[(Y(2), X(1))] = Clue::Right(2);
+            problem[P(2, 1)] = Clue::Right(2);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.fully_solved(), true);
-            assert_eq!(field.get_cell((Y(2), X(2))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(2), X(4))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(2), X(0))), Cell::Line);
-            assert_eq!(field.get_edge((Y(3), X(6))), Edge::Line);
-            assert_eq!(field.get_edge((Y(5), X(6))), Edge::Line);
-            assert_eq!(field.get_edge((Y(2), X(3))), Edge::Line);
-            assert_eq!(field.get_edge((Y(3), X(0))), Edge::Line);
+            assert_eq!(field.get_cell(P(2, 2)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(2, 4)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(2, 0)), Cell::Line);
+            assert_eq!(field.get_edge(LP(3, 6)), Edge::Line);
+            assert_eq!(field.get_edge(LP(5, 6)), Edge::Line);
+            assert_eq!(field.get_edge(LP(2, 3)), Edge::Line);
+            assert_eq!(field.get_edge(LP(3, 0)), Edge::Line);
         }
         {
             // Cells which the loop does not pass through must be blocked (or have a clue)
             let mut problem = Grid::new(6, 6, Clue::NoClue);
-            problem[(Y(2), X(4))] = Clue::Up(1);
-            problem[(Y(4), X(4))] = Clue::Left(1);
+            problem[P(2, 4)] = Clue::Up(1);
+            problem[P(4, 4)] = Clue::Left(1);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(1), X(4))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(3), X(4))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(1, 4)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(3, 4)), Cell::Blocked);
         }
         {
             // Clues to the same direction
             let mut problem = Grid::new(6, 6, Clue::NoClue);
-            problem[(Y(2), X(0))] = Clue::Right(2);
-            problem[(Y(2), X(2))] = Clue::Right(1);
+            problem[P(2, 0)] = Clue::Right(2);
+            problem[P(2, 2)] = Clue::Right(1);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(2), X(1))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(2, 1)), Cell::Blocked);
         }
         {
             // 3 block cells in 7 consecutive cells on the edge
             let mut problem = Grid::new(5, 8, Clue::NoClue);
-            problem[(Y(0), X(0))] = Clue::Right(3);
+            problem[P(0, 0)] = Clue::Right(3);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(0), X(1))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(0), X(4))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(0), X(7))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(0, 1)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(0, 4)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(0, 7)), Cell::Blocked);
         }
         {
             // crossing (2 blocks in 4) and (2 blocks in 5)
             let mut problem = Grid::new(10, 10, Clue::NoClue);
-            problem[(Y(2), X(4))] = Clue::Down(2);
-            problem[(Y(7), X(4))] = Clue::Down(0);
-            problem[(Y(4), X(2))] = Clue::Right(2);
-            problem[(Y(4), X(8))] = Clue::Right(0);
-            problem[(Y(5), X(6))] = Clue::Up(0);
+            problem[P(2, 4)] = Clue::Down(2);
+            problem[P(7, 4)] = Clue::Down(0);
+            problem[P(4, 2)] = Clue::Right(2);
+            problem[P(4, 8)] = Clue::Right(0);
+            problem[P(5, 6)] = Clue::Up(0);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(4), X(7))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(4, 7)), Cell::Blocked);
         }
     }
     #[test]
     fn test_one_in_three_remote() {
         {
             let mut problem = Grid::new(4, 8, Clue::NoClue);
-            problem[(Y(2), X(2))] = Clue::Right(2);
+            problem[P(2, 2)] = Clue::Right(2);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(2), X(3))), Cell::Blocked);
-            assert_eq!(field.get_cell((Y(2), X(6))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(2, 3)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(2, 6)), Cell::Blocked);
         }
         {
             let mut problem = Grid::new(6, 6, Clue::NoClue);
-            problem[(Y(1), X(2))] = Clue::Right(1);
-            problem[(Y(3), X(4))] = Clue::Left(2);
+            problem[P(1, 2)] = Clue::Right(1);
+            problem[P(3, 4)] = Clue::Left(2);
 
             let mut field = Field::new(&problem);
             field.check_all_cell();
 
             assert_eq!(field.inconsistent(), false);
-            assert_eq!(field.get_cell((Y(3), X(3))), Cell::Blocked);
+            assert_eq!(field.get_cell(P(3, 3)), Cell::Blocked);
         }
     }
 }
