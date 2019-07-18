@@ -60,10 +60,25 @@ impl<T: Clone> Grid<T> {
         let idx = idx as i32;
         (Y(idx / self.width), X(idx % self.width))
     }
+    pub fn p(&self, idx: usize) -> P {
+        let idx = idx as i32;
+        P(idx / self.width, idx % self.width)
+    }
+    pub fn lp(&self, idx: usize) -> LP {
+        let idx = idx as i32;
+        LP(idx / self.width, idx % self.width)
+    }
 }
 impl<T: Copy> Grid<T> {
     pub fn get_or_default(&self, cd: Coord, default: T) -> T {
         if self.is_valid_coord(cd) {
+            self[cd]
+        } else {
+            default
+        }
+    }
+    pub fn get_or_default_p(&self, cd: P, default: T) -> T {
+        if self.is_valid_p(cd) {
             self[cd]
         } else {
             default

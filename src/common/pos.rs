@@ -9,7 +9,7 @@ pub struct LP(pub i32, pub i32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct D(pub i32, pub i32);
 
-const FOUR_NEIGHBOURS: [D; 4] = [D(-1, 0), D(0, -1), D(1, 0), D(0, 1)];
+pub const FOUR_NEIGHBOURS: [D; 4] = [D(-1, 0), D(0, -1), D(1, 0), D(0, 1)];
 
 impl LP {
     pub fn of_cell(pos: P) -> LP {
@@ -17,6 +17,21 @@ impl LP {
     }
     pub fn of_vertex(pos: P) -> LP {
         LP(pos.0 * 2, pos.1 * 2)
+    }
+    pub fn is_edge(self) -> bool {
+        self.0 % 2 != self.1 % 2
+    }
+    pub fn is_vertex(self) -> bool {
+        self.0 % 2 == 0 && self.1 % 2 == 0
+    }
+    pub fn is_cell(self) -> bool {
+        self.0 % 2 == 1 && self.1 % 2 == 1
+    }
+    pub fn as_vertex(self) -> P {
+        P(self.0 / 2, self.1 / 2)
+    }
+    pub fn as_cell(self) -> P {
+        P(self.0 / 2, self.1 / 2)
     }
 }
 impl D {
