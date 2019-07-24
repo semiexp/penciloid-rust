@@ -1,4 +1,4 @@
-use super::super::Grid;
+use super::super::{Grid, D, P};
 use super::*;
 
 use rand::distributions::Distribution;
@@ -17,8 +17,8 @@ pub fn generate<R: Rng>(
     let mut current_total_cands = height * width * 9;
     for y in 0..height {
         for x in 0..width {
-            if !has_clue[(Y(y), X(x))] {
-                answer[(Y(y), X(x))] = (y + x) % MAX_VAL + 1;
+            if !has_clue[P(y, x)] {
+                answer[P(y, x)] = (y + x) % MAX_VAL + 1;
             }
         }
     }
@@ -34,58 +34,58 @@ pub fn generate<R: Rng>(
             vec![[None; (MAX_VAL + 1) as usize]; field_shape.group_to_cells.len()];
         for y in 0..height {
             for x in 0..width {
-                let loc = (Y(y), X(x));
-                if has_clue[loc] {
+                let pos = P(y, x);
+                if has_clue[pos] {
                     continue;
                 }
-                let (g1, g2) = field_shape.cell_to_groups[loc];
-                grp_val_loc[g1][answer[loc] as usize] = Some(has_clue.index(loc));
-                grp_val_loc[g2][answer[loc] as usize] = Some(has_clue.index(loc));
+                let (g1, g2) = field_shape.cell_to_groups[pos];
+                grp_val_loc[g1][answer[pos] as usize] = Some(has_clue.index_p(pos));
+                grp_val_loc[g2][answer[pos] as usize] = Some(has_clue.index_p(pos));
             }
         }
         for y in 0..height {
             for x in 0..width {
-                let loc = (Y(y), X(x));
-                let c = has_clue.index(loc);
-                if has_clue[loc] {
+                let pos = P(y, x);
+                let c = has_clue.index_p(pos);
+                if has_clue[pos] {
                     continue;
                 }
-                let (g1, g2) = field_shape.cell_to_groups[loc];
+                let (g1, g2) = field_shape.cell_to_groups[pos];
                 for v in 1..(MAX_VAL + 1) {
-                    if answer[loc] == v {
+                    if answer[pos] == v {
                         continue;
                     }
                     match (grp_val_loc[g1][v as usize], grp_val_loc[g2][v as usize]) {
-                        (None, None) => move_cand.push(vec![(c, answer[loc], v)]),
+                        (None, None) => move_cand.push(vec![(c, answer[pos], v)]),
                         (Some(c1), None) => {
-                            if answer[loc] < v
+                            if answer[pos] < v
                                 && grp_val_loc[field_shape.cell_to_groups[c1].1]
-                                    [answer[loc] as usize]
+                                    [answer[pos] as usize]
                                     == None
                             {
-                                move_cand.push(vec![(c, answer[loc], v), (c1, v, answer[loc])]);
+                                move_cand.push(vec![(c, answer[pos], v), (c1, v, answer[pos])]);
                             }
                         }
                         (None, Some(c2)) => {
-                            if answer[loc] < v
+                            if answer[pos] < v
                                 && grp_val_loc[field_shape.cell_to_groups[c2].0]
-                                    [answer[loc] as usize]
+                                    [answer[pos] as usize]
                                     == None
                             {
-                                move_cand.push(vec![(c, answer[loc], v), (c2, v, answer[loc])]);
+                                move_cand.push(vec![(c, answer[pos], v), (c2, v, answer[pos])]);
                             }
                         }
                         (Some(c1), Some(c2)) => {
-                            if grp_val_loc[field_shape.cell_to_groups[c1].1][answer[loc] as usize]
+                            if grp_val_loc[field_shape.cell_to_groups[c1].1][answer[pos] as usize]
                                 == None
                                 && grp_val_loc[field_shape.cell_to_groups[c2].0]
-                                    [answer[loc] as usize]
+                                    [answer[pos] as usize]
                                     == None
                             {
                                 move_cand.push(vec![
-                                    (c, answer[loc], v),
-                                    (c1, v, answer[loc]),
-                                    (c2, v, answer[loc]),
+                                    (c, answer[pos], v),
+                                    (c1, v, answer[pos]),
+                                    (c2, v, answer[pos]),
                                 ]);
                             }
                         }
@@ -134,10 +134,11 @@ pub fn generate<R: Rng>(
 fn check_connectivity(grid: &Grid<bool>) -> i32 {
     // returns the sum of sizes of non-largest components
     fn dfs(y: i32, x: i32, grid: &Grid<bool>, vis: &mut Grid<bool>) -> i32 {
-        if vis[(Y(y), X(x))] || grid[(Y(y), X(x))] {
+        let pos = P(y, x);
+        if vis[pos] || grid[pos] {
             return 0;
         }
-        vis[(Y(y), X(x))] = true;
+        vis[pos] = true;
         let mut ret = 1;
         if y > 0 {
             ret += dfs(y - 1, x, grid, vis);
@@ -158,7 +159,8 @@ fn check_connectivity(grid: &Grid<bool>) -> i32 {
     let mut largest = 0;
     for y in 0..grid.height() {
         for x in 0..grid.width() {
-            if !grid[(Y(y), X(x))] && !vis[(Y(y), X(x))] {
+            let pos = P(y, x);
+            if !grid[pos] && !vis[pos] {
                 let sz = dfs(y, x, &grid, &mut vis);
                 sum += sz;
                 largest = std::cmp::max(largest, sz);
@@ -172,10 +174,11 @@ pub fn disconnectivity_score(grid: &Grid<bool>) -> i32 {
     let mut ret = 0;
     for y in 0..grid.height() {
         for x in 0..grid.width() {
-            if !grid[(Y(y), X(x))] {
-                grid[(Y(y), X(x))] = true;
+            let pos = P(y, x);
+            if !grid[pos] {
+                grid[pos] = true;
                 ret += check_connectivity(&grid);
-                grid[(Y(y), X(x))] = false;
+                grid[pos] = false;
             }
         }
     }
@@ -191,35 +194,35 @@ pub fn generate_placement<'a, T: Rng>(
 
     let mut placement = Grid::new(height, width, false);
     for y in 0..height {
-        placement[(Y(y), X(0))] = true;
-        placement[(Y(y), X(width - 1))] = true;
+        placement[P(y, 0)] = true;
+        placement[P(y, width - 1)] = true;
     }
     for x in 0..width {
-        placement[(Y(0), X(x))] = true;
-        placement[(Y(height - 1), X(x))] = true;
+        placement[P(0, x)] = true;
+        placement[P(height - 1, x)] = true;
     }
     loop {
         let mut cand = vec![];
         for y in 0..height {
             for x in 0..width {
-                let loc = (Y(y), X(x));
-                if placement[loc] {
+                let pos = P(y, x);
+                if placement[pos] {
                     continue;
                 }
 
-                if x >= 2 && !placement[(Y(y), X(x - 1))] && placement[(Y(y), X(x - 2))] {
+                if x >= 2 && !placement[pos + D(0, -1)] && placement[pos + D(0, -2)] {
                     continue;
                 }
-                if x < width - 2 && !placement[(Y(y), X(x + 1))] && placement[(Y(y), X(x + 2))] {
+                if x < width - 2 && !placement[pos + D(0, 1)] && placement[pos + D(0, 2)] {
                     continue;
                 }
-                if y >= 2 && !placement[(Y(y - 1), X(x))] && placement[(Y(y - 2), X(x))] {
+                if y >= 2 && !placement[pos + D(-1, 0)] && placement[pos + D(-2, 0)] {
                     continue;
                 }
-                if y < height - 2 && !placement[(Y(y + 1), X(x))] && placement[(Y(y + 2), X(x))] {
+                if y < height - 2 && !placement[pos + D(1, 0)] && placement[pos + D(2, 0)] {
                     continue;
                 }
-                if height % 2 == 1 && width % 2 == 1 && !placement[(Y(height / 2), X(width / 2))] {
+                if height % 2 == 1 && width % 2 == 1 && !placement[P(height / 2, width / 2)] {
                     if y == height / 2 && (x == width / 2 - 1 || x == width / 2 + 1) {
                         continue;
                     }
@@ -233,35 +236,34 @@ pub fn generate_placement<'a, T: Rng>(
                 let mut wu = 0;
                 let mut wd = 0;
                 for d in 0..height {
-                    if placement[(Y(y), X(x - d))] {
+                    if placement[pos + D(0, -d)] {
                         wl = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[(Y(y), X(x + d))] {
+                    if placement[pos + D(0, d)] {
                         wr = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[(Y(y - d), X(x))] {
+                    if placement[pos + D(-d, 0)] {
                         wu = d;
                         break;
                     }
                 }
                 for d in 0..height {
-                    if placement[(Y(y + d), X(x))] {
+                    if placement[pos + D(d, 0)] {
                         wd = d;
                         break;
                     }
                 }
                 let mut weight = std::cmp::max(wl + wr, wu + wd);
-                let adj = if wl == 1 { 1 } else { 0 } + if wr == 1 { 1 } else { 0 } + if wu == 1 {
-                    1
-                } else {
-                    0
-                } + if wd == 1 { 1 } else { 0 };
+                let adj = if wl == 1 { 1 } else { 0 }
+                    + if wr == 1 { 1 } else { 0 }
+                    + if wu == 1 { 1 } else { 0 }
+                    + if wd == 1 { 1 } else { 0 };
                 if y == 1 || x == 1 || y == height - 2 || x == width - 2 {
                     weight *= 4;
                 } else if adj <= 1 {
@@ -282,8 +284,8 @@ pub fn generate_placement<'a, T: Rng>(
 
         for _ in 0..10 {
             let (y, x) = wc.sample(rng);
-            placement[(Y(y), X(x))] = true;
-            placement[(Y(height - 1 - y), X(width - 1 - x))] = true;
+            placement[P(y, x)] = true;
+            placement[P(height - 1 - y, width - 1 - x)] = true;
 
             if check_connectivity(&placement) == 0 {
                 upd = true;
@@ -299,7 +301,7 @@ pub fn generate_placement<'a, T: Rng>(
         for y in 0..height {
             let mut con = 0;
             for x in 0..width {
-                if placement[(Y(y), X(x))] {
+                if placement[P(y, x)] {
                     con = 0;
                 } else {
                     con += 1;
@@ -312,7 +314,7 @@ pub fn generate_placement<'a, T: Rng>(
         for x in 0..width {
             let mut con = 0;
             for y in 0..height {
-                if placement[(Y(y), X(x))] {
+                if placement[P(y, x)] {
                     con = 0;
                 } else {
                     con += 1;
@@ -330,8 +332,8 @@ pub fn generate_placement<'a, T: Rng>(
     let mut ret = Grid::new(height - 1, width - 1, false);
     for y in 0..(height - 1) {
         for x in 0..(width - 1) {
-            let loc = (Y(y), X(x));
-            ret[loc] = placement[loc];
+            let pos = P(y, x);
+            ret[pos] = placement[pos];
         }
     }
     Some(ret)

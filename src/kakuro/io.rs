@@ -39,22 +39,26 @@ pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, 
     for _ in 0..n_clue_cells {
         next_valid_line(reader, &mut buffer)?;
         let mut row = buffer.split(' ');
-        let y = row.next()
+        let y = row
+            .next()
             .ok_or(ReadError::InvalidFormat)?
             .trim()
             .parse::<i32>()
             .map_err(|_| ReadError::InvalidValue)?;
-        let x = row.next()
+        let x = row
+            .next()
             .ok_or(ReadError::InvalidFormat)?
             .trim()
             .parse::<i32>()
             .map_err(|_| ReadError::InvalidValue)?;
-        let clue_horizontal = row.next()
+        let clue_horizontal = row
+            .next()
             .ok_or(ReadError::InvalidFormat)?
             .trim()
             .parse::<i32>()
             .map_err(|_| ReadError::InvalidValue)?;
-        let clue_vertical = row.next()
+        let clue_vertical = row
+            .next()
             .ok_or(ReadError::InvalidFormat)?
             .trim()
             .parse::<i32>()

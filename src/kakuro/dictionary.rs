@@ -32,8 +32,8 @@ impl Dictionary {
                     for i in 1..(MAX_VAL + 1) {
                         if Cand(vals).is_set(i) && sum >= i {
                             let nxt = data[(((len - 1) * (MAX_SUM + 1) + (sum - i) << MAX_VAL)
-                                               | (vals as i32 ^ (1 << (i - 1))))
-                                               as usize];
+                                | (vals as i32 ^ (1 << (i - 1))))
+                                as usize];
                             if nxt != IMPOSSIBLE {
                                 imperative &= nxt.0 | Cand::singleton(i);
                                 allowed |= nxt.1 | Cand::singleton(i);

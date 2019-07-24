@@ -1,4 +1,4 @@
-use super::super::{Coord, FiniteSearchQueue, Grid};
+use super::super::{FiniteSearchQueue, Grid, P};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -109,8 +109,8 @@ impl<'a> Field<'a> {
     pub fn width(&self) -> i32 {
         self.shape.has_clue.width()
     }
-    pub fn val(&self, loc: Coord) -> i32 {
-        self.val[self.location(loc)]
+    pub fn val(&self, pos: P) -> i32 {
+        self.val[self.location(pos)]
     }
     pub fn technique(&self) -> FieldTechnique {
         self.technique
@@ -118,8 +118,8 @@ impl<'a> Field<'a> {
     pub fn set_technique(&mut self, technique: FieldTechnique) {
         self.technique = technique;
     }
-    pub fn decide(&mut self, loc: Coord, val: i32) {
-        let loc = self.location(loc);
+    pub fn decide(&mut self, pos: P, val: i32) {
+        let loc = self.location(pos);
 
         self.queue.start();
         self.decide_int(loc, val);
@@ -140,8 +140,8 @@ impl<'a> Field<'a> {
         }
         self.queue.finish();
     }
-    fn location(&self, loc: Coord) -> usize {
-        self.shape.has_clue.index(loc)
+    fn location(&self, pos: P) -> usize {
+        self.shape.has_clue.index_p(pos)
     }
     fn decide_int(&mut self, loc: usize, val: i32) {
         if self.val[loc] != UNDECIDED {
@@ -263,12 +263,14 @@ impl<'a> Field<'a> {
             let mut c1_lim = CAND_ALL;
             let mut c2_lim = CAND_ALL;
             for i in 1..(MAX_VAL + 1) {
-                if !self.cand[c1].is_set(i) && 1 <= (grp.unmet_sum - i)
+                if !self.cand[c1].is_set(i)
+                    && 1 <= (grp.unmet_sum - i)
                     && (grp.unmet_sum - i) <= MAX_VAL
                 {
                     c2_lim = c2_lim.exclude(grp.unmet_sum - i);
                 }
-                if !self.cand[c2].is_set(i) && 1 <= (grp.unmet_sum - i)
+                if !self.cand[c2].is_set(i)
+                    && 1 <= (grp.unmet_sum - i)
                     && (grp.unmet_sum - i) <= MAX_VAL
                 {
                     c1_lim = c1_lim.exclude(grp.unmet_sum - i);
@@ -349,23 +351,23 @@ mod tests {
     fn test_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[(Y(0), X(0))] = Clue::Clue {
+        problem_base[P(0, 0)] = Clue::Clue {
             horizontal: -1,
             vertical: -1,
         };
-        problem_base[(Y(0), X(1))] = Clue::Clue {
+        problem_base[P(0, 1)] = Clue::Clue {
             horizontal: -1,
             vertical: 3,
         };
-        problem_base[(Y(0), X(2))] = Clue::Clue {
+        problem_base[P(0, 2)] = Clue::Clue {
             horizontal: -1,
             vertical: 8,
         };
-        problem_base[(Y(1), X(0))] = Clue::Clue {
+        problem_base[P(1, 0)] = Clue::Clue {
             horizontal: 4,
             vertical: -1,
         };
-        problem_base[(Y(2), X(0))] = Clue::Clue {
+        problem_base[P(2, 0)] = Clue::Clue {
             horizontal: 7,
             vertical: -1,
         };
@@ -373,10 +375,10 @@ mod tests {
         let mut field = Field::new(&problem_base, &dic);
         field.check_all();
 
-        assert_eq!(field.val((Y(1), X(1))), 1);
-        assert_eq!(field.val((Y(1), X(2))), 3);
-        assert_eq!(field.val((Y(2), X(1))), 2);
-        assert_eq!(field.val((Y(2), X(2))), 5);
+        assert_eq!(field.val(P(1, 1)), 1);
+        assert_eq!(field.val(P(1, 2)), 3);
+        assert_eq!(field.val(P(2, 1)), 2);
+        assert_eq!(field.val(P(2, 2)), 5);
         assert_eq!(field.solved(), true);
         assert_eq!(field.inconsistent(), false);
         assert_eq!(field.undecided_cells(), 0);
@@ -387,23 +389,23 @@ mod tests {
     fn test_inconsistent_field() {
         let dic = Dictionary::default();
         let mut problem_base = Grid::new(3, 3, Clue::NoClue);
-        problem_base[(Y(0), X(0))] = Clue::Clue {
+        problem_base[P(0, 0)] = Clue::Clue {
             horizontal: -1,
             vertical: -1,
         };
-        problem_base[(Y(0), X(1))] = Clue::Clue {
+        problem_base[P(0, 1)] = Clue::Clue {
             horizontal: -1,
             vertical: 3,
         };
-        problem_base[(Y(0), X(2))] = Clue::Clue {
+        problem_base[P(0, 2)] = Clue::Clue {
             horizontal: -1,
             vertical: 6,
         };
-        problem_base[(Y(1), X(0))] = Clue::Clue {
+        problem_base[P(1, 0)] = Clue::Clue {
             horizontal: 4,
             vertical: -1,
         };
-        problem_base[(Y(2), X(0))] = Clue::Clue {
+        problem_base[P(2, 0)] = Clue::Clue {
             horizontal: 5,
             vertical: -1,
         };
