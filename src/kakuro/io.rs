@@ -1,7 +1,7 @@
 use std::io::BufRead;
 
 use super::Clue;
-use common::{Grid, X, Y};
+use common::{Grid, P};
 use io::{next_valid_line, ReadError};
 
 pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, ReadError> {
@@ -64,7 +64,7 @@ pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, 
             .parse::<i32>()
             .map_err(|_| ReadError::InvalidValue)?;
 
-        ret[(Y(y), X(x))] = Clue::Clue {
+        ret[P(y, x)] = Clue::Clue {
             horizontal: clue_horizontal,
             vertical: clue_vertical,
         };

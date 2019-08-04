@@ -1,7 +1,7 @@
 use std::io::BufRead;
 
 use super::*;
-use common::{Grid, X, Y};
+use common::Grid;
 use io::{read_grid, ReadError};
 
 pub fn read_penciloid_problem<T: BufRead>(reader: &mut T) -> Result<Grid<Clue>, ReadError> {

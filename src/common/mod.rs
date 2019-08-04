@@ -5,14 +5,6 @@ mod pos;
 pub use self::graph_separation::*;
 pub use self::pos::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Y(pub i32);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct X(pub i32);
-
-pub type Coord = (Y, X);
-
 #[derive(Debug, Clone)]
 pub struct Grid<T: Clone> {
     height: i32,
@@ -33,9 +25,6 @@ impl<T: Clone> Grid<T> {
     pub fn width(&self) -> i32 {
         self.width
     }
-    pub fn is_valid_coord(&self, (Y(y), X(x)): Coord) -> bool {
-        0 <= y && y < self.height && 0 <= x && x < self.width
-    }
     pub fn is_valid_p(&self, pos: P) -> bool {
         0 <= pos.0 && pos.0 < self.height && 0 <= pos.1 && pos.1 < self.width
     }
@@ -50,18 +39,11 @@ impl<T: Clone> Grid<T> {
         assert_eq!(self.width, src.width);
         self.data.copy_from_slice(&src.data);
     }
-    pub fn index(&self, (Y(y), X(x)): Coord) -> usize {
-        (y * self.width + x) as usize
-    }
     pub fn index_p(&self, pos: P) -> usize {
         (pos.0 * self.width + pos.1) as usize
     }
     pub fn index_lp(&self, pos: LP) -> usize {
         (pos.0 * self.width + pos.1) as usize
-    }
-    pub fn coord(&self, idx: usize) -> Coord {
-        let idx = idx as i32;
-        (Y(idx / self.width), X(idx % self.width))
     }
     pub fn p(&self, idx: usize) -> P {
         let idx = idx as i32;
@@ -73,32 +55,12 @@ impl<T: Clone> Grid<T> {
     }
 }
 impl<T: Copy> Grid<T> {
-    pub fn get_or_default(&self, cd: Coord, default: T) -> T {
-        if self.is_valid_coord(cd) {
-            self[cd]
-        } else {
-            default
-        }
-    }
     pub fn get_or_default_p(&self, cd: P, default: T) -> T {
         if self.is_valid_p(cd) {
             self[cd]
         } else {
             default
         }
-    }
-}
-impl<T: Clone> Index<Coord> for Grid<T> {
-    type Output = T;
-    fn index<'a>(&'a self, idx: Coord) -> &'a T {
-        let idx = self.index(idx);
-        &self.data[idx]
-    }
-}
-impl<T: Clone> IndexMut<Coord> for Grid<T> {
-    fn index_mut<'a>(&'a mut self, idx: Coord) -> &'a mut T {
-        let idx = self.index(idx);
-        &mut self.data[idx]
     }
 }
 impl<T: Clone> Index<P> for Grid<T> {
@@ -252,11 +214,11 @@ mod tests {
         let mut grid = Grid::new(3, 3, 0);
         assert_eq!(grid.height(), 3);
         assert_eq!(grid.width(), 3);
-        assert_eq!(grid[(Y(1), X(1))], 0);
-        grid[(Y(1), X(1))] = 4;
-        assert_eq!(grid[(Y(1), X(1))], 4);
-        assert_eq!(grid[(Y(1), X(0))], 0);
-        assert_eq!(grid[(Y(2), X(1))], 0);
+        assert_eq!(grid[P(1, 1)], 0);
+        grid[P(1, 1)] = 4;
+        assert_eq!(grid[P(1, 1)], 4);
+        assert_eq!(grid[P(1, 0)], 0);
+        assert_eq!(grid[P(2, 1)], 0);
         assert_eq!(grid[4], 4);
     }
 }

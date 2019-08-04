@@ -2,7 +2,7 @@ use std::error;
 use std::fmt::{self, Debug, Display};
 use std::io::{self, BufRead};
 
-use {Grid, X, Y};
+use {Grid, P};
 
 /// The type for errors occurring in reading puzrs data.
 #[derive(Debug)]
@@ -96,7 +96,7 @@ where
             let elem = row.next().ok_or(ReadError::InvalidFormat)?;
             let converted_elem = converter(elem.as_ref())?;
 
-            ret[(Y(y), X(x))] = converted_elem;
+            ret[P(y, x)] = converted_elem;
         }
     }
 
@@ -116,11 +116,11 @@ mod tests {
 x y z w
 p q r s
 "
-            .as_bytes();
+        .as_bytes();
         let grid = read_grid(&mut src, |s| Ok(s.to_string()), String::new()).unwrap();
 
         assert_eq!(grid.height(), 3);
         assert_eq!(grid.width(), 4);
-        assert_eq!(grid[(Y(1), X(2))], "z".to_string());
+        assert_eq!(grid[P(1, 2)], "z".to_string());
     }
 }
