@@ -1,11 +1,11 @@
 use super::*;
-use {numberlink, Symmetry, X, Y};
 use rand;
+use {numberlink, Symmetry, P};
 
-use std::sync::{Arc, Mutex};
-use std::io::{stdout, Write};
-use std::thread;
 use super::getopts::{Matches, Options};
+use std::io::{stdout, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 #[derive(Clone, Copy, Debug)]
 struct GeneratorOption {
@@ -202,7 +202,7 @@ fn run_generator(opts: GeneratorOption) -> Result<(), CliError> {
                         writeln!(handle, "{} {}", height, width).unwrap();
                         for y in 0..height {
                             for x in 0..width {
-                                let numberlink::Clue(c) = problem[(Y(y), X(x))];
+                                let numberlink::Clue(c) = problem[P(y, x)];
                                 if c >= 1 {
                                     write!(
                                         handle,

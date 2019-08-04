@@ -39,6 +39,9 @@ impl<T: Clone> Grid<T> {
     pub fn is_valid_p(&self, pos: P) -> bool {
         0 <= pos.0 && pos.0 < self.height && 0 <= pos.1 && pos.1 < self.width
     }
+    pub fn is_valid_lp(&self, pos: LP) -> bool {
+        0 <= pos.0 && pos.0 < self.height && 0 <= pos.1 && pos.1 < self.width
+    }
     pub fn copy_from(&mut self, src: &Grid<T>)
     where
         T: Copy,

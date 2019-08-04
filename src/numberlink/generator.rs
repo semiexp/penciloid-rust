@@ -1,4 +1,4 @@
-use super::super::{Coord, Grid, Symmetry, X, Y};
+use super::super::{Grid, Symmetry, D, LP, P};
 use super::*;
 
 extern crate rand;
@@ -32,12 +32,12 @@ pub fn generate_endpoint_constraint<R: Rng>(
     let mut ret = Grid::new(height, width, Endpoint::Any);
     for d in 0..empty_width {
         for y in 0..height {
-            ret[(Y(y), X(d))] = Endpoint::Prohibited;
-            ret[(Y(y), X(width - 1 - d))] = Endpoint::Prohibited;
+            ret[P(y, d)] = Endpoint::Prohibited;
+            ret[P(y, width - 1 - d)] = Endpoint::Prohibited;
         }
         for x in 0..width {
-            ret[(Y(d), X(x))] = Endpoint::Prohibited;
-            ret[(Y(height - 1 - d), X(x))] = Endpoint::Prohibited;
+            ret[P(d, x)] = Endpoint::Prohibited;
+            ret[P(height - 1 - d, x)] = Endpoint::Prohibited;
         }
     }
     if let Some((lo, hi)) = corner_constraint {
@@ -69,7 +69,7 @@ pub fn generate_endpoint_constraint<R: Rng>(
             } else {
                 width - 1 - corner_positions[i]
             };
-            ret[(Y(y), X(x))] = Endpoint::Forced;
+            ret[P(y, x)] = Endpoint::Forced;
         }
     }
     ret
@@ -81,9 +81,9 @@ pub fn generate_endpoint_constraint<R: Rng>(
 /// - `Extend(e)`: `e` must be `Line` to extend an existing chain.
 #[derive(Clone, Copy)]
 enum FieldUpdate {
-    Corner(Coord, Coord),
-    Endpoint(Coord, Coord),
-    Extend(Coord),
+    Corner(LP, LP),
+    Endpoint(LP, LP),
+    Extend(LP),
 }
 
 pub struct PlacementGenerator {
@@ -139,27 +139,26 @@ impl PlacementGenerator {
             None => Grid::new(height, width, Endpoint::Any),
         };
         if symmetry.dyad && height % 2 == 1 && width % 2 == 1 {
-            endpoint_constraint[(Y(height / 2), X(width / 2))] = Endpoint::Prohibited;
+            endpoint_constraint[P(height / 2, width / 2)] = Endpoint::Prohibited;
         }
         if opt.forbid_adjacent_clue {
             if symmetry.horizontal && height % 2 == 0 {
                 for x in 0..width {
-                    endpoint_constraint[(Y(height / 2), X(x))] = Endpoint::Prohibited;
-                    endpoint_constraint[(Y(height / 2 + 1), X(x))] = Endpoint::Prohibited;
+                    endpoint_constraint[P(height / 2, x)] = Endpoint::Prohibited;
+                    endpoint_constraint[P(height / 2 + 1, x)] = Endpoint::Prohibited;
                 }
             }
             if symmetry.horizontal && width % 2 == 0 {
                 for y in 0..height {
-                    endpoint_constraint[(Y(y), X(width / 2))] = Endpoint::Prohibited;
-                    endpoint_constraint[(Y(y), X(width / 2 + 1))] = Endpoint::Prohibited;
+                    endpoint_constraint[P(y, width / 2)] = Endpoint::Prohibited;
+                    endpoint_constraint[P(y, width / 2 + 1)] = Endpoint::Prohibited;
                 }
             }
             if symmetry.dyad {
-                endpoint_constraint[(Y(height / 2), X(width / 2))] = Endpoint::Prohibited;
-                endpoint_constraint[(Y(height / 2), X((width - 1) / 2))] = Endpoint::Prohibited;
-                endpoint_constraint[(Y((height - 1) / 2), X(width / 2))] = Endpoint::Prohibited;
-                endpoint_constraint[(Y((height - 1) / 2), X((width - 1) / 2))] =
-                    Endpoint::Prohibited;
+                endpoint_constraint[P(height / 2, width / 2)] = Endpoint::Prohibited;
+                endpoint_constraint[P(height / 2, (width - 1) / 2)] = Endpoint::Prohibited;
+                endpoint_constraint[P((height - 1) / 2, width / 2)] = Endpoint::Prohibited;
+                endpoint_constraint[P((height - 1) / 2, (width - 1) / 2)] = Endpoint::Prohibited;
             }
         }
         let opt = GeneratorOption {
@@ -288,13 +287,12 @@ impl PlacementGenerator {
             field.set_invalid();
         }
     }
-    fn choose_update<R: Rng>(field: &AnswerField, cd: Coord, rng: &mut R) -> FieldUpdate {
-        let (Y(y), X(x)) = cd;
-        let cd_vtx = (Y(y / 2), X(x / 2));
-        let nbs = field.undecided_neighbors(cd);
+    fn choose_update<R: Rng>(field: &AnswerField, pos: LP, rng: &mut R) -> FieldUpdate {
+        let pos_vtx = pos.as_vertex();
+        let nbs = field.undecided_neighbors(pos);
 
-        if field.count_neighbor(cd) == (0, 2) {
-            let constraint = field.get_endpoint_constraint(cd_vtx);
+        if field.count_neighbor(pos) == (0, 2) {
+            let constraint = field.get_endpoint_constraint(pos_vtx);
 
             if constraint != Endpoint::Forced && rng.gen::<f64>() < 0.9f64 {
                 FieldUpdate::Corner(nbs[0], nbs[1])
@@ -320,11 +318,10 @@ impl PlacementGenerator {
             FieldUpdate::Extend(e) => field.decide(e, Edge::Line),
         }
     }
-    fn deny_update(field: &mut AnswerField, cd: Coord, update: FieldUpdate) {
+    fn deny_update(field: &mut AnswerField, pos: LP, update: FieldUpdate) {
         match update {
             FieldUpdate::Corner(_, _) => {
-                let (Y(y), X(x)) = cd;
-                field.update_endpoint_constraint((Y(y / 2), X(x / 2)), Endpoint::Forced);
+                field.update_endpoint_constraint(pos.as_vertex(), Endpoint::Forced);
             }
             FieldUpdate::Endpoint(e, _) => field.decide(e, Edge::Blank),
             FieldUpdate::Extend(e) => field.decide(e, Edge::Blank),
@@ -333,8 +330,6 @@ impl PlacementGenerator {
 }
 
 fn is_entangled(field: &AnswerField) -> bool {
-    let dirs = [(Y(1), X(0)), (Y(0), X(1)), (Y(-1), X(0)), (Y(0), X(-1))];
-
     let height = field.height();
     let width = field.width();
 
@@ -342,33 +337,24 @@ fn is_entangled(field: &AnswerField) -> bool {
 
     for y in 1..(height - 1) {
         for x in 1..(width - 1) {
-            if field.get_endpoint_constraint((Y(y), X(x))) == Endpoint::Forced {
-                for d in 0..4 {
-                    let (Y(dy), X(dx)) = dirs[d];
-                    if field.get_edge((Y(y * 2 + dy), X(x * 2 + dx))) != Edge::Line {
+            if field.get_endpoint_constraint(P(y, x)) == Endpoint::Forced {
+                let pos = LP(y * 2, x * 2);
+                for &d in &FOUR_NEIGHBOURS {
+                    if field.get_edge(pos + d) != Edge::Line {
                         continue;
                     }
-
-                    if field.get_edge((Y(y * 2 + 2 * dx - dy), X(x * 2 + 2 * dy - dx)))
-                        == Edge::Line
-                        && field.get_edge((Y(y * 2 - 2 * dx - dy), X(x * 2 - 2 * dy - dx)))
-                            == Edge::Line
-                        && field.get_edge((Y(y * 2 + dx - 2 * dy), X(x * 2 + dy - 2 * dx)))
-                            == Edge::Line
-                        && field.get_edge((Y(y * 2 - dx - 2 * dy), X(x * 2 - dy - 2 * dx)))
-                            == Edge::Line
-                        && (field.get_edge((Y(y * 2 + 2 * dx + dy), X(x * 2 + 2 * dy + dx)))
-                            == Edge::Line
-                            || field.get_edge((Y(y * 2 + dx + 2 * dy), X(x * 2 + dy + 2 * dx)))
-                                == Edge::Line)
-                        && (field.get_edge((Y(y * 2 - 2 * dx + dy), X(x * 2 - 2 * dy + dx)))
-                            == Edge::Line
-                            || field.get_edge((Y(y * 2 - dx + 2 * dy), X(x * 2 - dy + 2 * dx)))
-                                == Edge::Line)
+                    let dr = d.rotate_clockwise();
+                    if field.get_edge(pos + dr * 2 - d) == Edge::Line
+                        && field.get_edge(pos - dr * 2 - d) == Edge::Line
+                        && field.get_edge(pos + dr - d * 2) == Edge::Line
+                        && field.get_edge(pos - dr - d * 2) == Edge::Line
+                        && (field.get_edge(pos + dr * 2 + d) == Edge::Line
+                            || field.get_edge(pos + dr + d * 2) == Edge::Line)
+                        && (field.get_edge(pos - dr * 2 + d) == Edge::Line
+                            || field.get_edge(pos - dr + d * 2) == Edge::Line)
                     {
-                        let u = field.root_from_coord((Y(y), X(x)));
-                        let v = field.root_from_coord((Y(y - dy), X(x - dx)));
-
+                        let u = field.root_from_coord(P(y, x));
+                        let v = field.root_from_coord(P(y, x) - d);
                         if u < v {
                             entangled_pairs.push((u, v));
                         } else {
@@ -404,7 +390,7 @@ pub fn extract_problem<R: Rng>(placement: &LinePlacement, rng: &mut R) -> Grid<C
     let mut max_id = 0;
     for y in 0..height {
         for x in 0..width {
-            max_id = ::std::cmp::max(max_id, groups[(Y(y), X(x))]);
+            max_id = ::std::cmp::max(max_id, groups[P(y, x)]);
         }
     }
 
@@ -417,8 +403,9 @@ pub fn extract_problem<R: Rng>(placement: &LinePlacement, rng: &mut R) -> Grid<C
     let mut ret = Grid::new(height, width, NO_CLUE);
     for y in 0..height {
         for x in 0..width {
-            if placement.is_endpoint((Y(y), X(x))) {
-                ret[(Y(y), X(x))] = Clue(1 + shuffler[groups[(Y(y), X(x))] as usize]);
+            let pos = P(y, x);
+            if placement.is_endpoint(pos) {
+                ret[pos] = Clue(1 + shuffler[groups[pos] as usize]);
             }
         }
     }
@@ -444,7 +431,8 @@ pub fn uniqueness_pretest(placement: &LinePlacement) -> bool {
         let mut ids_fliped = Grid::new(width, height, -1);
         for y in 0..height {
             for x in 0..width {
-                ids_fliped[(Y(x), X(y))] = ids[(Y(y), X(x))];
+                let pos = P(y, x);
+                ids_fliped[pos] = ids[pos];
             }
         }
 
@@ -462,14 +450,15 @@ fn uniqueness_pretest_horizontal(ids: &Grid<i32>) -> bool {
     let mut max_id = 0;
     for y in 0..height {
         for x in 0..width {
-            max_id = ::std::cmp::max(max_id, ids[(Y(y), X(x))]);
+            max_id = ::std::cmp::max(max_id, ids[P(y, x)]);
         }
     }
 
     let mut positions = vec![vec![]; (max_id + 1) as usize];
     for y in 0..height {
         for x in 0..width {
-            positions[ids[(Y(y), X(x))] as usize].push((Y(y), X(x)));
+            let pos = P(y, x);
+            positions[ids[pos] as usize].push(pos);
         }
     }
 
@@ -480,33 +469,30 @@ fn uniqueness_pretest_horizontal(ids: &Grid<i32>) -> bool {
         for x in 0..width {
             let x = if mode == 0 { x } else { width - 1 - x };
             for y in 0..height {
-                let i = ids[(Y(y), X(x))];
+                let pos = P(y, x);
+                let i = ids[pos];
                 if !checked[i as usize] {
                     for &loc in &positions[i as usize] {
-                        let (Y(y), X(x)) = loc;
+                        let P(y, x) = loc;
                         let is_endpoint = 1
-                            == (if y > 0 && ids[(Y(y), X(x))] == ids[(Y(y - 1), X(x))] {
+                            == (if y > 0 && ids[loc] == ids[loc + D(-1, 0)] {
                                 1
                             } else {
                                 0
-                            }
-                                + if x > 0 && ids[(Y(y), X(x))] == ids[(Y(y), X(x - 1))] {
-                                    1
-                                } else {
-                                    0
-                                }
-                                + if y < height - 1 && ids[(Y(y), X(x))] == ids[(Y(y + 1), X(x))] {
-                                    1
-                                } else {
-                                    0
-                                }
-                                + if x < width - 1 && ids[(Y(y), X(x))] == ids[(Y(y), X(x + 1))] {
-                                    1
-                                } else {
-                                    0
-                                });
-                        screen_problem[(Y(y), X(x))] =
-                            if is_endpoint { Clue(i + 1) } else { NO_CLUE };
+                            } + if x > 0 && ids[loc] == ids[loc + D(0, -1)] {
+                                1
+                            } else {
+                                0
+                            } + if y < height - 1 && ids[loc] == ids[loc + D(1, 0)] {
+                                1
+                            } else {
+                                0
+                            } + if x < width - 1 && ids[loc] == ids[loc + D(0, 1)] {
+                                1
+                            } else {
+                                0
+                            });
+                        screen_problem[loc] = if is_endpoint { Clue(i + 1) } else { NO_CLUE };
                     }
                     checked[i as usize] = true;
                     used_cells += positions[i as usize].len() as i32;
@@ -534,8 +520,9 @@ fn check_answer_validity(field: &AnswerField) -> bool {
     let mut id = 1;
     for y in 0..height {
         for x in 0..width {
-            if ids[(Y(y), X(x))] == -1 {
-                fill_line_id((Y(y), X(x)), &field, &mut ids, id);
+            let pos = P(y, x);
+            if ids[pos] == -1 {
+                fill_line_id(pos, &field, &mut ids, id);
                 id += 1;
             }
         }
@@ -544,8 +531,8 @@ fn check_answer_validity(field: &AnswerField) -> bool {
     let mut end_count = vec![0; id as usize];
     for y in 0..height {
         for x in 0..width {
-            if field.count_neighbor((Y(y * 2), X(x * 2))) == (1, 0) {
-                end_count[ids[(Y(y), X(x))] as usize] += 1;
+            if field.count_neighbor(LP(y * 2, x * 2)) == (1, 0) {
+                end_count[ids[P(y, x)] as usize] += 1;
             }
         }
     }
@@ -558,14 +545,14 @@ fn check_answer_validity(field: &AnswerField) -> bool {
     for y in 0..(2 * height - 1) {
         for x in 0..(2 * width - 1) {
             if y % 2 == 1 && x % 2 == 0 {
-                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2 + 1), X(x / 2))])
-                    != (field.get_edge((Y(y), X(x))) == Edge::Line)
+                if (ids[P(y / 2, x / 2)] == ids[P(y / 2 + 1, x / 2)])
+                    != (field.get_edge(LP(y, x)) == Edge::Line)
                 {
                     return false;
                 }
             } else if y % 2 == 0 && x % 2 == 1 {
-                if (ids[(Y(y / 2), X(x / 2))] == ids[(Y(y / 2), X(x / 2 + 1))])
-                    != (field.get_edge((Y(y), X(x))) == Edge::Line)
+                if (ids[P(y / 2, x / 2)] == ids[P(y / 2, x / 2 + 1)])
+                    != (field.get_edge(LP(y, x)) == Edge::Line)
                 {
                     return false;
                 }
@@ -585,8 +572,8 @@ fn check_symmetry(field: &AnswerField) -> bool {
     for y in 0..(2 * height - 1) {
         for x in 0..(2 * width - 1) {
             if y % 2 != x % 2 {
-                let e1 = field.get_edge((Y(y), X(x)));
-                let e2 = field.get_edge((Y(2 * height - 2 - y), X(2 * width - 2 - x)));
+                let e1 = field.get_edge(LP(y, x));
+                let e2 = field.get_edge(LP(2 * height - 2 - y, 2 * width - 2 - x));
 
                 if e1 == Edge::Undecided && e2 == Edge::Undecided {
                     continue;
@@ -617,17 +604,15 @@ fn limit_clue_number(field: &mut AnswerField, limit: i32) {
     }
 }
 
-fn fill_line_id(cd: Coord, field: &AnswerField, ids: &mut Grid<i32>, id: i32) {
-    if ids[cd] != -1 {
+fn fill_line_id(pos: P, field: &AnswerField, ids: &mut Grid<i32>, id: i32) {
+    if ids[pos] != -1 {
         return;
     }
-    ids[cd] = id;
-    let (Y(y), X(x)) = cd;
+    ids[pos] = id;
 
-    let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-    for &(dy, dx) in &dirs {
-        if field.get_edge((Y(y * 2 + dy), X(x * 2 + dx))) == Edge::Line {
-            fill_line_id((Y(y + dy), X(x + dx)), field, ids, id);
+    for &d in &FOUR_NEIGHBOURS {
+        if field.get_edge(LP::of_vertex(pos) + d) == Edge::Line {
+            fill_line_id(pos + d, field, ids, id);
         }
     }
 }

@@ -1,4 +1,4 @@
-use super::super::{Grid, X, Y};
+use super::super::{Grid, D, LP, P};
 use super::*;
 use std::fmt;
 
@@ -11,7 +11,7 @@ enum Edge {
 
 enum History {
     AnotherEnd(i32, i32),
-    Edge(Coord),
+    Edge(LP),
     Inconsistent(bool),
     OpenEndCount(i32, i32),
     NumberEnd(i32, (i32, i32)),
@@ -49,30 +49,31 @@ impl SolverField {
         let mut max_clue = 0;
         for y in 0..height {
             for x in 0..width {
-                let c = problem[(Y(y), X(x))];
+                let pos = P(y, x);
+                let c = problem[pos];
                 if c == UNUSED {
-                    has_clue[(Y(y), X(x))] = true;
-                    unused[(Y(y), X(x))] = true;
+                    has_clue[pos] = true;
+                    unused[pos] = true;
 
                     if y > 0 {
-                        edge[(Y(y * 2 - 1), X(x * 2))] = Edge::Blank;
+                        edge[LP::of_vertex(pos) + D(-1, 0)] = Edge::Blank;
                     }
                     if x > 0 {
-                        edge[(Y(y * 2), X(x * 2 - 1))] = Edge::Blank;
+                        edge[LP::of_vertex(pos) + D(0, -1)] = Edge::Blank;
                     }
                     if y < height - 1 {
-                        edge[(Y(y * 2 + 1), X(x * 2))] = Edge::Blank;
+                        edge[LP::of_vertex(pos) + D(1, 0)] = Edge::Blank;
                     }
                     if x < width - 1 {
-                        edge[(Y(y * 2), X(x * 2 + 1))] = Edge::Blank;
+                        edge[LP::of_vertex(pos) + D(0, 1)] = Edge::Blank;
                     }
                 } else if c == NO_CLUE {
-                    let id = another_end.index((Y(y), X(x))) as i32;
-                    another_end[(Y(y), X(x))] = id;
+                    let id = another_end.index_p(pos) as i32;
+                    another_end[pos] = id;
                 } else {
                     max_clue = ::std::cmp::max(max_clue, c.0);
-                    another_end[(Y(y), X(x))] = -(c.0 + 1);
-                    has_clue[(Y(y), X(x))] = true;
+                    another_end[pos] = -(c.0 + 1);
+                    has_clue[pos] = true;
                 }
             }
         }
@@ -82,14 +83,12 @@ impl SolverField {
             let y = height - 1 - y;
             for x in 0..width {
                 if y != height - 1 {
-                    if x > 0 && (down_left[(Y(y + 1), X(x - 1))] || has_clue[(Y(y + 1), X(x - 1))])
-                    {
-                        down_left[(Y(y), X(x))] = true;
+                    let pos = P(y, x);
+                    if x > 0 && (down_left[pos + D(1, -1)] || has_clue[pos + D(1, -1)]) {
+                        down_left[pos] = true;
                     }
-                    if x < width - 1
-                        && (down_right[(Y(y + 1), X(x + 1))] || has_clue[(Y(y + 1), X(x + 1))])
-                    {
-                        down_right[(Y(y), X(x))] = true;
+                    if x < width - 1 && (down_right[pos + D(1, 1)] || has_clue[pos + D(1, 1)]) {
+                        down_right[pos] = true;
                     }
                 }
             }
@@ -99,8 +98,9 @@ impl SolverField {
             let mut d = width;
             for x in 0..width {
                 d += 1;
-                left_clue_distance[(Y(y), X(x))] = d;
-                if has_clue[(Y(y), X(x))] {
+                let pos = P(y, x);
+                left_clue_distance[pos] = d;
+                if has_clue[pos] {
                     d = 0;
                 }
             }
@@ -110,7 +110,7 @@ impl SolverField {
         let mut number_end = vec![(-1, -1); (max_clue + 1) as usize];
         for y in 0..height {
             for x in 0..width {
-                let Clue(c) = problem[(Y(y), X(x))];
+                let Clue(c) = problem[P(y, x)];
                 if c > 0 {
                     let c = c as usize;
                     if number_end[c].0 == -1 {
@@ -139,15 +139,15 @@ impl SolverField {
         if disallow_unused_cell {
             for y in 0..height {
                 for x in 0..width {
-                    ret.inspect((Y(y), X(x)));
+                    ret.inspect(P(y, x));
                 }
             }
         }
         ret
     }
-    fn get_edge(&self, cd: Coord) -> Edge {
-        if self.edge.is_valid_coord(cd) {
-            self.edge[cd]
+    fn get_edge(&self, pos: LP) -> Edge {
+        if self.edge.is_valid_lp(pos) {
+            self.edge[pos]
         } else {
             Edge::Blank
         }
@@ -164,11 +164,12 @@ impl SolverField {
         let mut ret = LinePlacement::new(height, width);
         for y in 0..height {
             for x in 0..width {
-                if y != height - 1 && self.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line {
-                    ret.set_down((Y(y), X(x)), true);
+                let pos = P(y, x);
+                if y != height - 1 && self.get_edge(LP::of_vertex(pos) + D(1, 0)) == Edge::Line {
+                    ret.set_down(pos, true);
                 }
-                if x != width - 1 && self.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line {
-                    ret.set_right((Y(y), X(x)), true);
+                if x != width - 1 && self.get_edge(LP::of_vertex(pos) + D(0, 1)) == Edge::Line {
+                    ret.set_right(pos, true);
                 }
             }
         }
@@ -185,7 +186,7 @@ impl SolverField {
             .push(History::AnotherEnd(id, self.another_end[id as usize]));
         self.another_end[id as usize] = value;
     }
-    fn update_open_end_count(&mut self, X(x1): X, X(x2): X, sgn: i32) {
+    fn update_open_end_count(&mut self, x1: i32, x2: i32, sgn: i32) {
         if x1 < x2 {
             self.open_end_count[x1 as usize] += sgn;
             self.open_end_count[x2 as usize] -= sgn;
@@ -198,7 +199,7 @@ impl SolverField {
             self.history.push(History::OpenEndCount(x1, sgn));
         }
     }
-    fn update_number_end(&mut self, n: i32, X(before): X, X(after): X) {
+    fn update_number_end(&mut self, n: i32, before: i32, after: i32) {
         self.history
             .push(History::NumberEnd(n, self.number_end[n as usize]));
         let n = n as usize;
@@ -224,7 +225,7 @@ impl SolverField {
                 History::AnotherEnd(id, val) => self.another_end[id as usize] = val,
                 History::Edge(cd) => {
                     self.edge[cd] = Edge::Undecided;
-                    let (_, X(x)) = cd;
+                    let LP(_, x) = cd;
                     if x % 2 == 1 {
                         self.undecided_count[(x / 2) as usize] += 1;
                     }
@@ -238,8 +239,8 @@ impl SolverField {
     }
     /// Decide edge `cd`.
     /// `cd` must be in universal-coordination.
-    fn decide_edge(&mut self, cd: Coord, state: Edge) -> bool {
-        let current_state = self.get_edge(cd);
+    fn decide_edge(&mut self, pos: LP, state: Edge) -> bool {
+        let current_state = self.get_edge(pos);
         if current_state != Edge::Undecided {
             if current_state != state {
                 return self.set_inconsistent();
@@ -247,27 +248,28 @@ impl SolverField {
             return false;
         }
 
-        let (Y(y), X(x)) = cd;
+        let LP(y, x) = pos;
 
         // update endpoints or detect inconsistency
         let end1;
         let end2;
         if y % 2 == 0 {
-            end1 = (Y(y / 2), X(x / 2));
-            end2 = (Y(y / 2), X(x / 2 + 1));
+            end1 = P(y / 2, x / 2);
+            end2 = P(y / 2, x / 2 + 1);
         } else {
-            end1 = (Y(y / 2), X(x / 2));
-            end2 = (Y(y / 2 + 1), X(x / 2));
+            end1 = P(y / 2, x / 2);
+            end2 = P(y / 2 + 1, x / 2);
         }
-        let end1_id = self.another_end.index(end1) as i32;
-        let end2_id = self.another_end.index(end2) as i32;
+        let end1_id = self.another_end.index_p(end1) as i32;
+        let end2_id = self.another_end.index_p(end2) as i32;
 
         if state == Edge::Line {
             let another_end1_id = self.another_end[end1];
             let another_end2_id = self.another_end[end2];
 
             // connecting closed ends / closing single chain
-            if another_end1_id == CLOSED_END || another_end2_id == CLOSED_END
+            if another_end1_id == CLOSED_END
+                || another_end2_id == CLOSED_END
                 || another_end1_id == end2_id
             {
                 return self.set_inconsistent();
@@ -283,7 +285,7 @@ impl SolverField {
                     }
                 }
                 (false, true) => {
-                    let ae1_x = self.another_end.coord(another_end1_id as usize).1;
+                    let ae1_x = self.another_end.p(another_end1_id as usize).x();
                     self.update_open_end_count(ae1_x, end1.1, -1);
                     self.update_number_end(-another_end2_id - 1, end2.1, ae1_x);
                     if end1_id != another_end1_id {
@@ -293,7 +295,7 @@ impl SolverField {
                     self.update_another_end(end2_id, CLOSED_END);
                 }
                 (true, false) => {
-                    let ae2_x = self.another_end.coord(another_end2_id as usize).1;
+                    let ae2_x = self.another_end.p(another_end2_id as usize).x();
                     self.update_open_end_count(ae2_x, end2.1, -1);
                     self.update_number_end(-another_end1_id - 1, end1.1, ae2_x);
                     if end2_id != another_end2_id {
@@ -303,8 +305,8 @@ impl SolverField {
                     self.update_another_end(end1_id, CLOSED_END);
                 }
                 (false, false) => {
-                    let ae1_x = self.another_end.coord(another_end1_id as usize).1;
-                    let ae2_x = self.another_end.coord(another_end2_id as usize).1;
+                    let ae1_x = self.another_end.p(another_end1_id as usize).x();
+                    let ae2_x = self.another_end.p(another_end2_id as usize).x();
                     self.update_open_end_count(ae1_x, end1.1, -1);
                     self.update_open_end_count(ae2_x, end2.1, -1);
                     self.update_open_end_count(ae1_x, ae2_x, 1);
@@ -321,8 +323,8 @@ impl SolverField {
         }
 
         // update edge state
-        self.history.push(History::Edge(cd));
-        self.edge[cd] = state;
+        self.history.push(History::Edge(pos));
+        self.edge[pos] = state;
         if x % 2 == 1 {
             self.undecided_count[(x / 2) as usize] -= 1;
         }
@@ -330,156 +332,153 @@ impl SolverField {
         // ensure canonical form
         if state == Edge::Line {
             if y % 2 == 0 {
-                if !self.down_right[(Y(y / 2), X(x / 2))]
-                    && self.get_edge((Y(y + 1), X(x - 1))) == Edge::Line
+                if !self.down_right[P(y / 2, x / 2)] && self.get_edge(pos + D(1, -1)) == Edge::Line
                 {
                     return self.set_inconsistent();
                 }
-                if !self.down_left[(Y(y / 2), X(x / 2 + 1))]
-                    && self.get_edge((Y(y + 1), X(x + 1))) == Edge::Line
+                if !self.down_left[P(y / 2, x / 2 + 1)]
+                    && self.get_edge(pos + D(1, 1)) == Edge::Line
                 {
                     return self.set_inconsistent();
                 }
 
-                if self.get_edge((Y(y - 2), X(x))) == Edge::Line {
-                    if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) {
+                if self.get_edge(pos + D(-2, 0)) == Edge::Line {
+                    if self.decide_edge(pos + D(-1, -1), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y - 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(-1, 1), Edge::Blank) {
                         return true;
                     }
-                } else if self.get_edge((Y(y - 1), X(x - 1))) == Edge::Line {
-                    if self.decide_edge((Y(y - 2), X(x)), Edge::Blank) {
+                } else if self.get_edge(pos + D(-1, -1)) == Edge::Line {
+                    if self.decide_edge(pos + D(-2, 0), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y - 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(-1, 1), Edge::Blank) {
                         return true;
                     }
-                } else if self.get_edge((Y(y - 1), X(x + 1))) == Edge::Line {
-                    if self.decide_edge((Y(y - 2), X(x)), Edge::Blank) {
+                } else if self.get_edge(pos + D(-1, 1)) == Edge::Line {
+                    if self.decide_edge(pos + D(-2, 0), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(-1, -1), Edge::Blank) {
                         return true;
                     }
                 }
 
-                if self.get_edge((Y(y + 2), X(x))) == Edge::Line {
-                    if self.decide_edge((Y(y + 1), X(x - 1)), Edge::Blank) {
+                if self.get_edge(pos + D(2, 0)) == Edge::Line {
+                    if self.decide_edge(pos + D(1, -1), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, 1), Edge::Blank) {
                         return true;
                     }
-                } else if self.get_edge((Y(y + 1), X(x - 1))) == Edge::Line {
-                    if self.decide_edge((Y(y + 2), X(x)), Edge::Blank) {
+                } else if self.get_edge(pos + D(1, -1)) == Edge::Line {
+                    if self.decide_edge(pos + D(2, 0), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, 1), Edge::Blank) {
                         return true;
                     }
 
                     // yielding L-chain
-                    if !self.has_clue[(Y(y / 2 + 1), X(x / 2 + 1))] {
-                        if self.decide_edge((Y(y + 2), X(x + 2)), Edge::Line) {
+                    if !self.has_clue[P(y / 2 + 1, x / 2 + 1)] {
+                        if self.decide_edge(pos + D(2, 2), Edge::Line) {
                             return true;
                         }
-                        if self.decide_edge((Y(y + 3), X(x + 1)), Edge::Line) {
+                        if self.decide_edge(pos + D(3, 1), Edge::Line) {
                             return true;
                         }
                     }
-                } else if self.get_edge((Y(y + 1), X(x + 1))) == Edge::Line {
-                    if self.decide_edge((Y(y + 2), X(x)), Edge::Blank) {
+                } else if self.get_edge(pos + D(1, 1)) == Edge::Line {
+                    if self.decide_edge(pos + D(2, 0), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x - 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, -1), Edge::Blank) {
                         return true;
                     }
 
                     // yielding L-chain
-                    if !self.has_clue[(Y(y / 2 + 1), X(x / 2))] {
-                        if self.decide_edge((Y(y + 2), X(x - 2)), Edge::Line) {
+                    if !self.has_clue[P(y / 2 + 1, x / 2)] {
+                        if self.decide_edge(pos + D(2, -2), Edge::Line) {
                             return true;
                         }
-                        if self.decide_edge((Y(y + 3), X(x - 1)), Edge::Line) {
+                        if self.decide_edge(pos + D(3, -1), Edge::Line) {
                             return true;
                         }
                     }
                 }
             } else {
-                if !self.down_left[(Y(y / 2), X(x / 2))]
-                    && self.get_edge((Y(y - 1), X(x - 1))) == Edge::Line
+                if !self.down_left[P(y / 2, x / 2)] && self.get_edge(pos + D(-1, -1)) == Edge::Line
                 {
                     return self.set_inconsistent();
                 }
-                if !self.down_right[(Y(y / 2), X(x / 2))]
-                    && self.get_edge((Y(y - 1), X(x + 1))) == Edge::Line
+                if !self.down_right[P(y / 2, x / 2)] && self.get_edge(pos + D(-1, 1)) == Edge::Line
                 {
                     return self.set_inconsistent();
                 }
 
-                if self.get_edge((Y(y), X(x - 2))) == Edge::Line {
-                    if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) {
+                if self.get_edge(pos + D(0, -2)) == Edge::Line {
+                    if self.decide_edge(pos + D(-1, -1), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x - 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, -1), Edge::Blank) {
                         return true;
                     }
-                } else if self.get_edge((Y(y - 1), X(x - 1))) == Edge::Line {
-                    if self.decide_edge((Y(y), X(x - 2)), Edge::Blank) {
+                } else if self.get_edge(pos + D(-1, -1)) == Edge::Line {
+                    if self.decide_edge(pos + D(0, -2), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x - 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, -1), Edge::Blank) {
                         return true;
                     }
 
                     // yielding L-chain
-                    if !self.has_clue[(Y(y / 2 + 1), X(x / 2 - 1))] {
-                        if self.decide_edge((Y(y + 1), X(x - 3)), Edge::Line) {
+                    if !self.has_clue[P(y / 2 + 1, x / 2 - 1)] {
+                        if self.decide_edge(pos + D(1, -3), Edge::Line) {
                             return true;
                         }
-                        if self.decide_edge((Y(y + 2), X(x - 2)), Edge::Line) {
+                        if self.decide_edge(pos + D(2, -2), Edge::Line) {
                             return true;
                         }
                     }
-                } else if self.get_edge((Y(y + 1), X(x - 1))) == Edge::Line {
-                    if self.decide_edge((Y(y), X(x - 2)), Edge::Blank) {
+                } else if self.get_edge(pos + D(1, -1)) == Edge::Line {
+                    if self.decide_edge(pos + D(0, -2), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y - 1), X(x - 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(-1, -1), Edge::Blank) {
                         return true;
                     }
                 }
 
-                if self.get_edge((Y(y), X(x + 2))) == Edge::Line {
-                    if self.decide_edge((Y(y - 1), X(x + 1)), Edge::Blank) {
+                if self.get_edge(pos + D(0, 2)) == Edge::Line {
+                    if self.decide_edge(pos + D(-1, 1), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, 1), Edge::Blank) {
                         return true;
                     }
-                } else if self.get_edge((Y(y - 1), X(x + 1))) == Edge::Line {
-                    if self.decide_edge((Y(y), X(x + 2)), Edge::Blank) {
+                } else if self.get_edge(pos + D(-1, 1)) == Edge::Line {
+                    if self.decide_edge(pos + D(0, 2), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y + 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(1, 1), Edge::Blank) {
                         return true;
                     }
 
                     // yielding L-chain
-                    if !self.has_clue[(Y(y / 2 + 1), X(x / 2 + 1))] {
-                        if self.decide_edge((Y(y + 1), X(x + 3)), Edge::Line) {
+                    if !self.has_clue[P(y / 2 + 1, x / 2 + 1)] {
+                        if self.decide_edge(pos + D(1, 3), Edge::Line) {
                             return true;
                         }
-                        if self.decide_edge((Y(y + 2), X(x + 2)), Edge::Line) {
+                        if self.decide_edge(pos + D(2, 2), Edge::Line) {
                             return true;
                         }
                     }
-                } else if self.get_edge((Y(y + 1), X(x + 1))) == Edge::Line {
-                    if self.decide_edge((Y(y), X(x + 2)), Edge::Blank) {
+                } else if self.get_edge(pos + D(1, 1)) == Edge::Line {
+                    if self.decide_edge(pos + D(0, 2), Edge::Blank) {
                         return true;
                     }
-                    if self.decide_edge((Y(y - 1), X(x + 1)), Edge::Blank) {
+                    if self.decide_edge(pos + D(-1, 1), Edge::Blank) {
                         return true;
                     }
                 }
@@ -499,33 +498,32 @@ impl SolverField {
 
     /// Inspect vertex `cd`.
     /// `cd` must be in vertex-coordination.
-    fn inspect(&mut self, cd: Coord) -> bool {
-        if self.unused[cd] {
+    fn inspect(&mut self, pos: P) -> bool {
+        if self.unused[pos] {
             return false;
         }
 
-        let (Y(y), X(x)) = cd;
+        //let (Y(y), X(x)) = cd;
 
-        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-        let mut n_line = if self.has_clue[cd] { 1 } else { 0 };
+        let mut n_line = if self.has_clue[pos] { 1 } else { 0 };
         let mut n_undecided = 0;
-        for &(dy, dx) in &dirs {
-            match self.get_edge((Y(y * 2 + dy), X(x * 2 + dx))) {
+        for &d in &FOUR_NEIGHBOURS {
+            match self.get_edge(LP::of_vertex(pos) + d) {
                 Edge::Undecided => n_undecided += 1,
                 Edge::Line => n_line += 1,
                 Edge::Blank => (),
             }
         }
 
-        let another_end = self.another_end[(Y(y), X(x))];
+        let another_end = self.another_end[pos];
         if another_end < -1 {
-            for &(dy, dx) in &dirs {
-                let cd2 = (Y(y + dy), X(x + dx));
-                if self.another_end.is_valid_coord(cd2) {
-                    let another_end2 = self.another_end[cd2];
+            for &d in &FOUR_NEIGHBOURS {
+                let pos2 = pos + d;
+                if self.another_end.is_valid_p(pos2) {
+                    let another_end2 = self.another_end[pos2];
                     if another_end2 < -1 {
                         if self.decide_edge(
-                            (Y(y * 2 + dy), X(x * 2 + dx)),
+                            LP::of_vertex(pos) + d,
                             if another_end == another_end2 {
                                 Edge::Line
                             } else {
@@ -543,20 +541,20 @@ impl SolverField {
             return self.set_inconsistent();
         }
         if n_line == 2 {
-            for &(dy, dx) in &dirs {
-                let cd2 = (Y(y * 2 + dy), X(x * 2 + dx));
-                if self.get_edge(cd2) == Edge::Undecided {
-                    if self.decide_edge(cd2, Edge::Blank) {
+            for &d in &FOUR_NEIGHBOURS {
+                let pos2 = LP::of_vertex(pos) + d;
+                if self.get_edge(pos2) == Edge::Undecided {
+                    if self.decide_edge(pos2, Edge::Blank) {
                         return true;
                     }
                 }
             }
         } else if n_line == 1 {
             if n_undecided == 1 {
-                for &(dy, dx) in &dirs {
-                    let cd2 = (Y(y * 2 + dy), X(x * 2 + dx));
-                    if self.get_edge(cd2) == Edge::Undecided {
-                        if self.decide_edge(cd2, Edge::Line) {
+                for &d in &FOUR_NEIGHBOURS {
+                    let pos2 = LP::of_vertex(pos) + d;
+                    if self.get_edge(pos2) == Edge::Undecided {
+                        if self.decide_edge(pos2, Edge::Line) {
                             return true;
                         }
                     }
@@ -568,10 +566,10 @@ impl SolverField {
             if n_undecided < 2 {
                 return self.set_inconsistent();
             } else if n_undecided == 2 {
-                for &(dy, dx) in &dirs {
-                    let cd2 = (Y(y * 2 + dy), X(x * 2 + dx));
-                    if self.get_edge(cd2) == Edge::Undecided {
-                        if self.decide_edge(cd2, Edge::Line) {
+                for &d in &FOUR_NEIGHBOURS {
+                    let pos2 = LP::of_vertex(pos) + d;
+                    if self.get_edge(pos2) == Edge::Undecided {
+                        if self.decide_edge(pos2, Edge::Line) {
                             return true;
                         }
                     }
@@ -608,7 +606,7 @@ impl fmt::Debug for SolverField {
                     (0, 0) => write!(
                         f,
                         "{}",
-                        match self.another_end[(Y(y / 2), X(x / 2))] {
+                        match self.another_end[P(y / 2, x / 2)] {
                             n @ -100...-2 => trans[((-n) - 2) as usize],
                             _ => '+',
                         }
@@ -616,7 +614,7 @@ impl fmt::Debug for SolverField {
                     (0, 1) => write!(
                         f,
                         "{}",
-                        match self.get_edge((Y(y), X(x))) {
+                        match self.get_edge(LP(y, x)) {
                             Edge::Undecided => ' ',
                             Edge::Line => '-',
                             Edge::Blank => 'x',
@@ -625,7 +623,7 @@ impl fmt::Debug for SolverField {
                     (1, 0) => write!(
                         f,
                         "{}",
-                        match self.get_edge((Y(y), X(x))) {
+                        match self.get_edge(LP(y, x)) {
                             Edge::Undecided => ' ',
                             Edge::Line => '|',
                             Edge::Blank => 'x',
@@ -724,8 +722,9 @@ fn search(
         x = 0;
         line_chain = 0;
     }
-    while y < field.height() && field.get_edge((Y(y * 2 + 1), X(x * 2))) != Edge::Undecided
-        && field.get_edge((Y(y * 2), X(x * 2 + 1))) != Edge::Undecided
+    while y < field.height()
+        && field.get_edge(LP(y * 2 + 1, x * 2)) != Edge::Undecided
+        && field.get_edge(LP(y * 2, x * 2 + 1)) != Edge::Undecided
     {
         if x == field.width() - 1 {
             y += 1;
@@ -733,8 +732,8 @@ fn search(
         } else {
             x += 1;
             if y > 0 {
-                if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line {
-                    if field.get_edge((Y(y * 2 - 2), X(x * 2 - 1))) == Edge::Line {
+                if field.get_edge(LP(y * 2, x * 2 - 1)) == Edge::Line {
+                    if field.get_edge(LP(y * 2 - 2, x * 2 - 1)) == Edge::Line {
                         line_chain = -field.width();
                     } else {
                         line_chain += 1;
@@ -743,9 +742,9 @@ fn search(
                     line_chain = 0;
                 }
             }
-            if line_chain > 0 && field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line {
-                if field.get_edge((Y(y * 2 - 1), X((x - line_chain) * 2))) == Edge::Line
-                    && field.left_clue_distance[(Y(y - 1), X(x))] >= line_chain
+            if line_chain > 0 && field.get_edge(LP(y * 2 - 1, x * 2)) == Edge::Line {
+                if field.get_edge(LP(y * 2 - 1, (x - line_chain) * 2)) == Edge::Line
+                    && field.left_clue_distance[P(y - 1, x)] >= line_chain
                 {
                     return false;
                 }
@@ -761,11 +760,11 @@ fn search(
             let mut full = true;
             for y in 0..field.height() {
                 for x in 0..field.width() {
-                    if !field.unused[(Y(y), X(x))]
-                        && field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Blank
-                        && field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Blank
-                        && field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Blank
-                        && field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Blank
+                    if !field.unused[P(y, x)]
+                        && field.get_edge(LP(y * 2 - 1, x * 2)) == Edge::Blank
+                        && field.get_edge(LP(y * 2 + 1, x * 2)) == Edge::Blank
+                        && field.get_edge(LP(y * 2, x * 2 - 1)) == Edge::Blank
+                        && field.get_edge(LP(y * 2, x * 2 + 1)) == Edge::Blank
                     {
                         full = false;
                     }
@@ -784,34 +783,37 @@ fn search(
         return false;
     }
 
-    let degree_common = if field.has_clue[(Y(y), X(x))] { 1 } else { 0 }
-        + if field.get_edge((Y(y * 2), X(x * 2 - 1))) == Edge::Line {
+    let degree_common = if field.has_clue[P(y, x)] { 1 } else { 0 }
+        + if field.get_edge(LP(y * 2, x * 2 - 1)) == Edge::Line {
             1
         } else {
             0
-        } + if field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line {
-        1
-    } else {
-        0
-    } + if field.get_edge((Y(y * 2 - 1), X(x * 2))) == Edge::Line {
-        1
-    } else {
-        0
-    } + if field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line {
-        1
-    } else {
-        0
-    };
+        }
+        + if field.get_edge(LP(y * 2, x * 2 + 1)) == Edge::Line {
+            1
+        } else {
+            0
+        }
+        + if field.get_edge(LP(y * 2 - 1, x * 2)) == Edge::Line {
+            1
+        } else {
+            0
+        }
+        + if field.get_edge(LP(y * 2 + 1, x * 2)) == Edge::Line {
+            1
+        } else {
+            0
+        };
 
     for mask in 0..4 {
         let mask = 3 - mask;
         let right = (mask & 1) != 0;
         let down = (mask & 2) != 0;
 
-        if right && field.get_edge((Y(y * 2), X(x * 2 + 1))) != Edge::Undecided {
+        if right && field.get_edge(LP(y * 2, x * 2 + 1)) != Edge::Undecided {
             continue;
         }
-        if down && field.get_edge((Y(y * 2 + 1), X(x * 2))) != Edge::Undecided {
+        if down && field.get_edge(LP(y * 2 + 1, x * 2)) != Edge::Undecided {
             continue;
         }
 
@@ -820,17 +822,18 @@ fn search(
             continue;
         }
 
-        let right_effective = right || (field.get_edge((Y(y * 2), X(x * 2 + 1))) == Edge::Line);
-        let down_effective = down || (field.get_edge((Y(y * 2 + 1), X(x * 2))) == Edge::Line);
+        let right_effective = right || (field.get_edge(LP(y * 2, x * 2 + 1)) == Edge::Line);
+        let down_effective = down || (field.get_edge(LP(y * 2 + 1, x * 2)) == Edge::Line);
         if right_effective && down_effective {
-            if !field.down_right[(Y(y), X(x))] {
+            if !field.down_right[P(y, x)] {
                 continue;
             }
         }
-        if right_effective && field.get_edge((Y(y * 2 - 1), X(x * 2 + 2))) == Edge::Line {
-            if line_chain > 0 && field.get_edge((Y(y * 2 - 2), X(x * 2 + 1))) == Edge::Blank
-                && field.get_edge((Y(y * 2 - 1), X((x - line_chain) * 2))) == Edge::Line
-                && field.left_clue_distance[(Y(y - 1), X(x + 1))] >= line_chain + 1
+        if right_effective && field.get_edge(LP(y * 2 - 1, x * 2 + 2)) == Edge::Line {
+            if line_chain > 0
+                && field.get_edge(LP(y * 2 - 2, x * 2 + 1)) == Edge::Blank
+                && field.get_edge(LP(y * 2 - 1, (x - line_chain) * 2)) == Edge::Line
+                && field.left_clue_distance[P(y - 1, x + 1)] >= line_chain + 1
             {
                 continue;
             }
@@ -839,12 +842,12 @@ fn search(
         let mut inconsistent = false;
 
         inconsistent |= field.decide_edge(
-            (Y(y * 2), X(x * 2 + 1)),
+            LP(y * 2, x * 2 + 1),
             if right { Edge::Line } else { Edge::Blank },
         );
         if !inconsistent {
             inconsistent |= field.decide_edge(
-                (Y(y * 2 + 1), X(x * 2)),
+                LP(y * 2 + 1, x * 2),
                 if down { Edge::Line } else { Edge::Blank },
             );
         }
@@ -853,7 +856,7 @@ fn search(
         }
         if !inconsistent {
             let line_chain2 = if right_effective {
-                if field.get_edge((Y(y * 2 - 2), X(x * 2 + 1))) == Edge::Line {
+                if field.get_edge(LP(y * 2 - 2, x * 2 + 1)) == Edge::Line {
                     -field.width()
                 } else {
                     line_chain + 1
@@ -888,7 +891,7 @@ mod tests {
         );
         for y in 0..problem_base.len() {
             for x in 0..problem_base[0].len() {
-                problem[(Y(y as i32), X(x as i32))] = Clue(problem_base[y][x]);
+                problem[P(y as i32, x as i32)] = Clue(problem_base[y][x]);
             }
         }
 

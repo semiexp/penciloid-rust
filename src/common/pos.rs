@@ -33,6 +33,20 @@ impl LP {
     pub fn as_cell(self) -> P {
         P(self.0 / 2, self.1 / 2)
     }
+    pub fn y(self) -> i32 {
+        self.0
+    }
+    pub fn x(self) -> i32 {
+        self.1
+    }
+}
+impl P {
+    pub fn y(self) -> i32 {
+        self.0
+    }
+    pub fn x(self) -> i32 {
+        self.1
+    }
 }
 impl D {
     pub fn rotate_clockwise(self) -> D {

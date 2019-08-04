@@ -1,13 +1,13 @@
 use std::ops::Index;
 
-mod io;
 mod generator;
 mod generator_field;
+mod io;
 mod solver2;
 
-pub use self::io::*;
 pub use self::generator::*;
 use self::generator_field::*;
+pub use self::io::*;
 pub use self::solver2::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -16,7 +16,8 @@ pub struct Clue(pub i32);
 pub const NO_CLUE: Clue = Clue(0);
 pub const UNUSED: Clue = Clue(-1);
 
-use super::{Coord, Grid, X, Y};
+use super::{Grid, D, LP, P};
+use FOUR_NEIGHBOURS;
 
 #[derive(Clone)]
 pub struct LinePlacement {
@@ -37,58 +38,48 @@ impl LinePlacement {
     pub fn width(&self) -> i32 {
         self.down.width()
     }
-    pub fn right(&self, cd: Coord) -> bool {
-        self.right.is_valid_coord(cd) && self.right[cd]
+    pub fn right(&self, pos: P) -> bool {
+        self.right.is_valid_p(pos) && self.right[pos]
     }
-    pub fn set_right(&mut self, cd: Coord, e: bool) {
-        self.right[cd] = e;
+    pub fn set_right(&mut self, pos: P, e: bool) {
+        self.right[pos] = e;
     }
-    pub fn down(&self, cd: Coord) -> bool {
-        self.down.is_valid_coord(cd) && self.down[cd]
+    pub fn down(&self, pos: P) -> bool {
+        self.down.is_valid_p(pos) && self.down[pos]
     }
-    pub fn set_down(&mut self, cd: Coord, e: bool) {
-        self.down[cd] = e;
+    pub fn set_down(&mut self, pos: P, e: bool) {
+        self.down[pos] = e;
     }
-    pub fn get(&self, cd: Coord) -> bool {
-        let (Y(y), X(x)) = cd;
+    pub fn get(&self, pos: LP) -> bool {
+        let LP(y, x) = pos;
         match (y % 2, x % 2) {
-            (0, 1) => self.right((Y(y / 2), X(x / 2))),
-            (1, 0) => self.down((Y(y / 2), X(x / 2))),
+            (0, 1) => self.right(P(y / 2, x / 2)),
+            (1, 0) => self.down(P(y / 2, x / 2)),
             _ => panic!(),
         }
     }
-    pub fn get_checked(&self, cd: Coord) -> bool {
-        let (Y(y), X(x)) = cd;
+    pub fn get_checked(&self, pos: LP) -> bool {
+        let LP(y, x) = pos;
         if 0 <= y && y < self.height() * 2 - 1 && 0 <= x && x < self.width() * 2 - 1 {
-            self.get(cd)
+            self.get(pos)
         } else {
             false
         }
     }
-    pub fn isolated(&self, cd: Coord) -> bool {
-        let (Y(y), X(x)) = cd;
-        !(self.right((Y(y), X(x - 1))) || self.right((Y(y), X(x))) || self.down((Y(y - 1), X(x)))
-            || self.down((Y(y), X(x))))
+    pub fn isolated(&self, pos: P) -> bool {
+        !(self.right(pos + D(0, -1))
+            || self.right(pos)
+            || self.down(pos + D(-1, 0))
+            || self.down(pos))
     }
-    pub fn is_endpoint(&self, cd: Coord) -> bool {
-        let (Y(y), X(x)) = cd;
-        let n_lines = if self.get_checked((Y(y * 2 + 0), X(x * 2 - 1))) {
-            1
-        } else {
-            0
-        } + if self.get_checked((Y(y * 2 - 1), X(x * 2 + 0))) {
-            1
-        } else {
-            0
-        } + if self.get_checked((Y(y * 2 + 0), X(x * 2 + 1))) {
-            1
-        } else {
-            0
-        } + if self.get_checked((Y(y * 2 + 1), X(x * 2 + 0))) {
-            1
-        } else {
-            0
-        };
+    pub fn is_endpoint(&self, pos: P) -> bool {
+        let mut n_lines = 0;
+        let pos_vtx = LP::of_vertex(pos);
+        for &d in &FOUR_NEIGHBOURS {
+            if self.get_checked(pos_vtx + d) {
+                n_lines += 1;
+            }
+        }
         n_lines == 1
     }
     pub fn extract_chain_groups(&self) -> Option<Grid<i32>> {
@@ -97,26 +88,20 @@ impl LinePlacement {
         let mut ids = Grid::new(height, width, -1);
         let mut last_id = 0;
 
-        let dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
-
         for y in 0..height {
             for x in 0..width {
-                if self.is_endpoint((Y(y), X(x))) && ids[(Y(y), X(x))] == -1 {
+                let pos = P(y, x);
+                if self.is_endpoint(pos) && ids[pos] == -1 {
                     // traverse chain
-                    let (mut ly, mut lx) = (-1, -1);
-                    let (mut cy, mut cx) = (y, x);
-                    'traverse: loop {
-                        ids[(Y(cy), X(cx))] = last_id;
-                        for d in 0..4 {
-                            let (dy, dx) = dirs[d];
+                    let mut l = P(-1, -1);
+                    let mut c = pos;
 
-                            if (cy + dy, cx + dx) != (ly, lx)
-                                && self.get_checked((Y(cy * 2 + dy), X(cx * 2 + dx)))
-                            {
-                                ly = cy;
-                                lx = cx;
-                                cy += dy;
-                                cx += dx;
+                    'traverse: loop {
+                        ids[c] = last_id;
+                        for &d in &FOUR_NEIGHBOURS {
+                            if c + d != l && self.get_checked(LP::of_vertex(c) + d) {
+                                l = c;
+                                c = c + d;
                                 continue 'traverse;
                             }
                         }
@@ -129,17 +114,14 @@ impl LinePlacement {
 
         for y in 0..height {
             for x in 0..width {
-                if ids[(Y(y), X(x))] == -1 {
+                let pos = P(y, x);
+                if ids[pos] == -1 {
                     return None;
                 }
-                if y < height - 1
-                    && (ids[(Y(y), X(x))] == ids[(Y(y + 1), X(x))]) != self.down((Y(y), X(x)))
-                {
+                if y < height - 1 && (ids[pos] == ids[pos + D(1, 0)]) != self.down(pos) {
                     return None;
                 }
-                if x < width - 1
-                    && (ids[(Y(y), X(x))] == ids[(Y(y), X(x + 1))]) != self.right((Y(y), X(x)))
-                {
+                if x < width - 1 && (ids[pos] == ids[pos + D(0, 1)]) != self.right(pos) {
                     return None;
                 }
             }
