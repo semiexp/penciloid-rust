@@ -710,10 +710,46 @@ impl Field {
 
             // width2
             if i < count - 1 {
-                // TODO: more strict bounds
                 let c = if start1 <= i + 1 && i < end1 { 1 } else { 0 }
                     + if start2 <= i + 1 && i < end2 { 1 } else { 0 };
-                max_width2[i as usize] = c;
+                let refined_c;
+                if c == 2 {
+                    let corner_a = base1 + dir * i;
+                    let corner_b = base2 + dir * (i + 1);
+                    let top = P(
+                        cmp::min(corner_a.0, corner_b.0),
+                        cmp::min(corner_a.1, corner_b.1),
+                    );
+
+                    let isok_a = self.get_cell_safe(top).can_be_blocked()
+                        && self.get_cell_safe(top + D(1, 1)).can_be_blocked()
+                        && self.get_cell_safe(top + D(0, 1)) != Cell::Blocked
+                        && self.get_cell_safe(top + D(1, 0)) != Cell::Blocked
+                        && (self.get_cell_safe(top + D(0, 1)) == Cell::Clue
+                            || (!self.get_cell_safe(top + D(-1, 1)).is_blocking()
+                                && !self.get_cell_safe(top + D(0, 2)).is_blocking()))
+                        && (self.get_cell_safe(top + D(1, 0)) == Cell::Clue
+                            || (!self.get_cell_safe(top + D(1, -1)).is_blocking()
+                                && !self.get_cell_safe(top + D(2, 0)).is_blocking()));
+                    let isok_b = self.get_cell_safe(top + D(0, 1)).can_be_blocked()
+                        && self.get_cell_safe(top + D(1, 0)).can_be_blocked()
+                        && self.get_cell_safe(top) != Cell::Blocked
+                        && self.get_cell_safe(top + D(1, 1)) != Cell::Blocked
+                        && (self.get_cell_safe(top) == Cell::Clue
+                            || (!self.get_cell_safe(top + D(-1, 0)).is_blocking()
+                                && !self.get_cell_safe(top + D(0, -1)).is_blocking()))
+                        && (self.get_cell_safe(top + D(1, 1)) == Cell::Clue
+                            || (!self.get_cell_safe(top + D(2, 1)).is_blocking()
+                                && !self.get_cell_safe(top + D(1, 2)).is_blocking()));
+                    if isok_a || isok_b {
+                        refined_c = 2;
+                    } else {
+                        refined_c = 1;
+                    }
+                } else {
+                    refined_c = c;
+                }
+                max_width2[i as usize] = refined_c;
             }
 
             // width3
@@ -759,8 +795,12 @@ impl Field {
         }
 
         for i in 0..count {
-            if dp_max_left[i as usize] + dp_max_right[(i + 1) as usize] == n_blocked_total - 1 {
+            let cnt = dp_max_left[i as usize] + dp_max_right[(i + 1) as usize];
+            if cnt == n_blocked_total - 1 {
                 self.set_blocked_either(base1 + dir * i, base2 + dir * i);
+            } else if cnt < n_blocked_total - 1 {
+                self.set_inconsistent();
+                return;
             }
         }
     }
@@ -1365,6 +1405,22 @@ mod tests {
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.get_cell(P(4, 2)), Cell::Blocked);
+        }
+        {
+            let mut problem = Grid::new(10, 10, Clue::NoClue);
+            problem[P(4, 0)] = Clue::Right(3);
+            problem[P(5, 0)] = Clue::Right(2);
+
+            let mut field = Field::new(&problem);
+            field.set_cell(P(4, 6), Cell::Line);
+            field.set_cell(P(4, 7), Cell::Line);
+            field.set_cell(P(5, 7), Cell::Line);
+
+            field.solve();
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(5, 6)), Cell::Blocked);
         }
     }
 }
