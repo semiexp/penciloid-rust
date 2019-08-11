@@ -117,6 +117,7 @@ impl Field {
             GridLoop::check_connectability(self);
             self.apply_inout_rule_advanced();
             self.check_local_parity();
+            self.two_rows_entire_board();
             if current_decided_lines == self.grid_loop.num_decided_lines()
                 && current_decided_cells == self.num_decided_cells()
             {
@@ -610,6 +611,12 @@ impl Field {
     }
     fn around_blocked_either(&mut self, pos: P) {
         if pos.0 < self.height() - 1 && self.blocked_either_down[pos] {
+            if !self.get_cell_safe(pos).can_be_blocked() {
+                self.set_cell_internal(pos + D(1, 0), Cell::Blocked);
+            }
+            if !self.get_cell_safe(pos + D(1, 0)).can_be_blocked() {
+                self.set_cell_internal(pos, Cell::Blocked);
+            }
             if self.get_cell_safe(pos + D(-1, 0)) == Cell::Clue {
                 self.set_cell_internal_unless_clue(pos + D(0, -1), Cell::Line);
                 self.set_cell_internal_unless_clue(pos + D(0, 1), Cell::Line);
@@ -634,6 +641,12 @@ impl Field {
             }
         }
         if pos.1 < self.width() - 1 && self.blocked_either_right[pos] {
+            if !self.get_cell_safe(pos).can_be_blocked() {
+                self.set_cell_internal(pos + D(0, 1), Cell::Blocked);
+            }
+            if !self.get_cell_safe(pos + D(0, 1)).can_be_blocked() {
+                self.set_cell_internal(pos, Cell::Blocked);
+            }
             if self.get_cell_safe(pos + D(0, -1)) == Cell::Clue {
                 self.set_cell_internal_unless_clue(pos + D(-1, 0), Cell::Line);
                 self.set_cell_internal_unless_clue(pos + D(1, 0), Cell::Line);
@@ -658,20 +671,228 @@ impl Field {
             }
         }
     }
-    fn inspect_clue(&mut self, cell_cd: P) {
-        let clue = self.clue[cell_cd];
+    fn two_rows_rule_sub(
+        &mut self,
+        base1: P,
+        base2: P,
+        dir: D,
+        start1: i32,
+        end1: i32,
+        start2: i32,
+        end2: i32,
+        n_blocked_total: i32,
+    ) {
+        let count = cmp::max(end1, end2);
+        let mut max_width1 = vec![1; count as usize];
+        let mut max_width2 = vec![2; cmp::max(count - 1, 0) as usize];
+        let mut max_width3 = vec![3; cmp::max(count - 1, 0) as usize];
+
+        for i in 0..count {
+            // width1
+            {
+                let c = if start1 <= i
+                    && i < end1
+                    && self.get_cell_safe(base1 + dir * i).can_be_blocked()
+                {
+                    1
+                } else {
+                    0
+                } + if start2 <= i
+                    && i < end2
+                    && self.get_cell_safe(base2 + dir * i).can_be_blocked()
+                {
+                    1
+                } else {
+                    0
+                };
+                max_width1[i as usize] = cmp::min(1, c);
+            }
+
+            // width2
+            if i < count - 1 {
+                // TODO: more strict bounds
+                let c = if start1 <= i + 1 && i < end1 { 1 } else { 0 }
+                    + if start2 <= i + 1 && i < end2 { 1 } else { 0 };
+                max_width2[i as usize] = c;
+            }
+
+            // width3
+            if i < count - 2 {
+                // TODO: more strict bounds
+                let c = if self.get_cell_safe(base1 + dir * (i + 1)) == Cell::Clue
+                    || self.get_cell_safe(base2 + dir * (i + 1)) == Cell::Clue
+                {
+                    3
+                } else {
+                    2
+                };
+                max_width3[i as usize] = c;
+            }
+        }
+
+        let mut dp_max_left = vec![count; (count + 1) as usize];
+        let mut dp_max_right = vec![count; (count + 1) as usize];
+
+        dp_max_left[0] = 0;
+        for i in 0..(count as usize) {
+            dp_max_left[i + 1] = cmp::min(dp_max_left[i + 1], dp_max_left[i] + max_width1[i]);
+            if i + 1 < count as usize {
+                dp_max_left[i + 2] = cmp::min(dp_max_left[i + 2], dp_max_left[i] + max_width2[i]);
+            }
+            if i + 2 < count as usize {
+                dp_max_left[i + 3] = cmp::min(dp_max_left[i + 3], dp_max_left[i] + max_width3[i]);
+            }
+        }
+        dp_max_right[count as usize] = 0;
+        for i in 0..(count as usize) {
+            let i = count as usize - i;
+            dp_max_right[i - 1] =
+                cmp::min(dp_max_right[i - 1], dp_max_right[i] + max_width1[i - 1]);
+            if i >= 2 {
+                dp_max_right[i - 2] =
+                    cmp::min(dp_max_right[i - 2], dp_max_right[i] + max_width2[i - 2]);
+            }
+            if i >= 3 {
+                dp_max_right[i - 3] =
+                    cmp::min(dp_max_right[i - 3], dp_max_right[i] + max_width3[i - 3]);
+            }
+        }
+
+        for i in 0..count {
+            if dp_max_left[i as usize] + dp_max_right[(i + 1) as usize] == n_blocked_total - 1 {
+                self.set_blocked_either(base1 + dir * i, base2 + dir * i);
+            }
+        }
+    }
+    fn two_rows_by_two_clues(&mut self, pos1: P, pos2: P) {
+        if pos1 == P(-1, -1) || pos2 == P(-1, -1) {
+            return;
+        }
+        let (d1, cells1, blocks1) = self.clue_detail(pos1);
+        let (d2, cells2, blocks2) = self.clue_detail(pos2);
+        let P(y1, x1) = pos1;
+        let P(y2, x2) = pos2;
+
+        if d1 != d2 {
+            panic!("two_rows_by_two_clues called with clues of different directions");
+        }
+
+        let (base1, base2) = match d1 {
+            D(1, 0) => (P(cmp::min(y1, y2), x1), P(cmp::min(y1, y2), x2)),
+            D(-1, 0) => (P(cmp::max(y1, y2), x1), P(cmp::max(y1, y2), x2)),
+            D(0, 1) => (P(y1, cmp::min(x1, x2)), P(y2, cmp::min(x1, x2))),
+            D(0, -1) => (P(y1, cmp::max(x1, x2)), P(y2, cmp::max(x1, x2))),
+            _ => unreachable!(),
+        };
+
+        fn manhattan(d: D) -> i32 {
+            let D(y, x) = d;
+            y.abs() + x.abs()
+        }
+        let start1 = manhattan(pos1 - base1);
+        let start2 = manhattan(pos2 - base2);
+        self.two_rows_rule_sub(
+            base1 + d1,
+            base2 + d1,
+            d1,
+            start1,
+            start1 + cells1,
+            start2,
+            start2 + cells2,
+            blocks1 + blocks2,
+        );
+    }
+    fn two_rows_entire_board(&mut self) {
+        if !self.technique.two_rows {
+            return;
+        }
+        let height = self.height();
+        let width = self.width();
+
+        // down
+        for x in 0..(width - 1) {
+            let mut clue1 = P(-1, -1);
+            let mut clue2 = P(-1, -1);
+            for y in 0..height {
+                if self.clue[P(y, x)].get_direction() == D(1, 0) {
+                    clue1 = P(y, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+                if self.clue[P(y, x + 1)].get_direction() == D(1, 0) {
+                    clue2 = P(y, x + 1);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+            }
+        }
+
+        // up
+        for x in 0..(width - 1) {
+            let mut clue1 = P(-1, -1);
+            let mut clue2 = P(-1, -1);
+            for y in 0..height {
+                let y = height - 1 - y;
+                if self.clue[P(y, x)].get_direction() == D(-1, 0) {
+                    clue1 = P(y, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+                if self.clue[P(y, x + 1)].get_direction() == D(-1, 0) {
+                    clue2 = P(y, x + 1);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+            }
+        }
+
+        // right
+        for y in 0..(height - 1) {
+            let mut clue1 = P(-1, -1);
+            let mut clue2 = P(-1, -1);
+            for x in 0..width {
+                if self.clue[P(y, x)].get_direction() == D(0, 1) {
+                    clue1 = P(y, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+                if self.clue[P(y + 1, x)].get_direction() == D(0, 1) {
+                    clue2 = P(y + 1, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+            }
+        }
+
+        // left
+        for y in 0..(height - 1) {
+            let mut clue1 = P(-1, -1);
+            let mut clue2 = P(-1, -1);
+            for x in 0..width {
+                let x = width - 1 - x;
+                if self.clue[P(y, x)].get_direction() == D(0, -1) {
+                    clue1 = P(y, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+                if self.clue[P(y + 1, x)].get_direction() == D(0, -1) {
+                    clue2 = P(y + 1, x);
+                    self.two_rows_by_two_clues(clue1, clue2);
+                }
+            }
+        }
+    }
+    /// Computes the detailed information of the clue at `pos`.
+    /// It returns a tuple (dir, n_cells, n_blocked), where
+    /// - dir is the direction of the arrow of the clue,
+    /// - n_cells is the number of cells between the clue and the next clue in this direction, and
+    /// - n_blocked is the required number of blocked cells between these two clues.
+    fn clue_detail(&self, pos: P) -> (D, i32, i32) {
+        let clue = self.clue[pos];
         let (dy, dx, mut n) = match clue {
-            Clue::NoClue | Clue::Empty => return,
+            Clue::NoClue | Clue::Empty => return (D(0, 0), 0, 0),
             Clue::Up(n) => (-1, 0, n),
             Clue::Left(n) => (0, -1, n),
             Clue::Right(n) => (0, 1, n),
             Clue::Down(n) => (1, 0, n),
         };
         let d = D(dy, dx);
-        let dr = d.rotate_clockwise();
         let mut involving_cells = 0;
         {
-            let mut pos = cell_cd + d;
+            let mut pos = pos + d;
             while self.clue.is_valid_p(pos) {
                 let c = self.clue[pos];
                 if c.same_shape(clue) {
@@ -682,6 +903,16 @@ impl Field {
                 involving_cells += 1;
             }
         }
+        (d, involving_cells, n)
+    }
+    fn inspect_clue(&mut self, cell_cd: P) {
+        let clue = self.clue[cell_cd];
+        let (d, involving_cells, n) = self.clue_detail(cell_cd);
+        let D(dy, dx) = d;
+        if d == D(0, 0) {
+            return;
+        }
+        let dr = d.rotate_clockwise();
         if involving_cells == 0 && n != 0 {
             self.set_inconsistent();
             return;
@@ -873,6 +1104,7 @@ impl GridLoopField for Field {
         }
 
         if cell_cd.0 != self.height() - 1 && self.blocked_either_down[cell_cd] {
+            self.around_blocked_either(cell_cd);
             if cell_cd.1 != 0 && self.blocked_either_down[cell_cd + D(0, -1)] {
                 self.two_by_two(cell_cd + D(0, -1));
             }
@@ -881,6 +1113,7 @@ impl GridLoopField for Field {
             }
         }
         if cell_cd.1 != self.width() - 1 && self.blocked_either_right[cell_cd] {
+            self.around_blocked_either(cell_cd);
             if cell_cd.0 != 0 && self.blocked_either_right[cell_cd + D(-1, 0)] {
                 self.two_by_two(cell_cd + D(-1, 0));
             }
@@ -1109,6 +1342,29 @@ mod tests {
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.get_cell(P(3, 3)), Cell::Blocked);
+        }
+    }
+    #[test]
+    fn test_two_rows() {
+        {
+            let mut problem = Grid::new(8, 8, Clue::NoClue);
+            problem[P(3, 0)] = Clue::Right(1);
+            problem[P(4, 0)] = Clue::Right(2);
+
+            let mut field = Field::new(&problem);
+            field.set_cell(P(3, 1), Cell::Line);
+            field.set_cell(P(3, 2), Cell::Line);
+            field.set_cell(P(3, 3), Cell::Line);
+            field.set_cell(P(3, 7), Cell::Line);
+            field.set_cell(P(4, 1), Cell::Line);
+            field.set_cell(P(4, 3), Cell::Line);
+            field.set_cell(P(4, 7), Cell::Line);
+
+            field.solve();
+            field.check_all_cell();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(4, 2)), Cell::Blocked);
         }
     }
 }

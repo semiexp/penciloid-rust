@@ -3,6 +3,7 @@ mod generator;
 
 pub use self::field::*;
 pub use self::generator::*;
+use super::D;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Clue {
@@ -30,6 +31,15 @@ impl Clue {
             Clue::Up(n) | Clue::Left(n) | Clue::Down(n) | Clue::Right(n) => n,
         }
     }
+    pub fn get_direction(self) -> D {
+        match self {
+            Clue::NoClue | Clue::Empty => D(0, 0),
+            Clue::Up(_) => D(-1, 0),
+            Clue::Left(_) => D(0, -1),
+            Clue::Down(_) => D(1, 0),
+            Clue::Right(_) => D(0, 1),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +57,12 @@ impl Cell {
             _ => false,
         }
     }
+    pub fn can_be_blocked(self) -> bool {
+        match self {
+            Cell::Undecided | Cell::Blocked => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -57,17 +73,25 @@ pub struct Technique {
     pub one_in_three_remote: bool,
     pub inout_advanced: bool,
     pub local_parity: bool,
+    pub two_rows: bool,
 }
 
 impl Technique {
     pub fn new() -> Technique {
+        Technique::with_all(true)
+    }
+    pub fn disabled_all() -> Technique {
+        Technique::with_all(false)
+    }
+    fn with_all(val: bool) -> Technique {
         Technique {
-            two_by_two: true,
-            two_by_three: true,
-            one_in_three_orthogonal_either: true,
-            one_in_three_remote: true,
-            inout_advanced: true,
-            local_parity: true,
+            two_by_two: val,
+            two_by_three: val,
+            one_in_three_orthogonal_either: val,
+            one_in_three_remote: val,
+            inout_advanced: val,
+            local_parity: val,
+            two_rows: val,
         }
     }
 }
