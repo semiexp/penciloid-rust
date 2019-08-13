@@ -68,6 +68,12 @@ impl Sub<D> for P {
         P(self.0 - rhs.0, self.1 - rhs.1)
     }
 }
+impl Sub<P> for P {
+    type Output = D;
+    fn sub(self, rhs: P) -> D {
+        D(self.0 - rhs.0, self.1 - rhs.1)
+    }
+}
 impl Add<D> for LP {
     type Output = LP;
     fn add(self, rhs: D) -> LP {

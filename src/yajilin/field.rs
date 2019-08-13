@@ -958,7 +958,16 @@ impl Field {
             return;
         }
 
+        let mut stride_two_low = vec![0; cmp::max(0, involving_cells - 1) as usize];
         let mut stride_three_hi = vec![2; cmp::max(0, involving_cells - 2) as usize];
+        for i in 0..(involving_cells - 1) {
+            if dy == 0 && self.blocked_either_right[cell_cd + d * (i + 1) + D(0, cmp::min(0, dx))] {
+                stride_two_low[i as usize] = 1;
+            }
+            if dx == 0 && self.blocked_either_down[cell_cd + d * (i + 1) + D(cmp::min(0, dy), 0)] {
+                stride_two_low[i as usize] = 1;
+            }
+        }
         for i in 0..(involving_cells - 2) {
             if self.get_cell(cell_cd + d * (i + 2)) == Cell::Clue {
                 continue;
@@ -1026,6 +1035,8 @@ impl Field {
             dp_left[(i + 1) as usize].1 = cmp::min(dp_left[(i + 1) as usize].1, nhi);
 
             if i < involving_cells - 1 {
+                dp_left[(i + 2) as usize].0 =
+                    cmp::max(dp_left[(i + 2) as usize].0, lo + stride_two_low[i as usize]);
                 dp_left[(i + 2) as usize].1 = cmp::min(dp_left[(i + 2) as usize].1, hi + 1);
             }
             if i < involving_cells - 2 {
@@ -1047,6 +1058,10 @@ impl Field {
             dp_right[(i - 1) as usize].1 = cmp::min(dp_right[(i - 1) as usize].1, nhi);
 
             if i >= 2 {
+                dp_right[(i - 2) as usize].0 = cmp::max(
+                    dp_right[(i - 2) as usize].0,
+                    lo + stride_two_low[(i - 2) as usize],
+                );
                 dp_right[(i - 2) as usize].1 = cmp::min(dp_right[(i - 2) as usize].1, hi + 1);
             }
             if i >= 3 {
