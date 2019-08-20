@@ -945,6 +945,32 @@ impl Field {
         }
         (d, involving_cells, n)
     }
+    fn avoid_branching(&mut self, center: P) {
+        if !self.technique.avoid_branching {
+            return;
+        }
+        for &d in &FOUR_NEIGHBOURS {
+            let dr = d.rotate_clockwise();
+            let edge1 = self.get_edge_safe(LP::of_vertex(center) + d);
+            let edge2 = self.get_edge_safe(LP::of_vertex(center) + dr);
+
+            if !((edge1 == Edge::Line && edge2 == Edge::Blank)
+                || (edge1 == Edge::Blank && edge2 == Edge::Line))
+            {
+                continue;
+            }
+
+            if !self.get_cell_safe(center - d).is_blocking()
+                && !self.get_cell_safe(center - dr).is_blocking()
+                && (self.get_cell_safe(center - d * 2).is_blocking()
+                    || self.get_cell_safe(center - d + dr).is_blocking())
+                && (self.get_cell_safe(center - dr * 2).is_blocking()
+                    || self.get_cell_safe(center - dr + d).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(center - d - dr, Cell::Line);
+            }
+        }
+    }
     fn inspect_clue(&mut self, cell_cd: P) {
         let clue = self.clue[cell_cd];
         let (d, involving_cells, n) = self.clue_detail(cell_cd);
@@ -1136,6 +1162,7 @@ impl GridLoopField for Field {
                         }
                     }
                 }
+                self.avoid_branching(cd.as_vertex());
             } else {
                 if n_line == 0 && n_undecided == 2 {
                     for &d in &FOUR_NEIGHBOURS {

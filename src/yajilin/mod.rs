@@ -74,6 +74,7 @@ pub struct Technique {
     pub inout_advanced: bool,
     pub local_parity: bool,
     pub two_rows: bool,
+    pub avoid_branching: bool,
 }
 
 impl Technique {
@@ -92,6 +93,7 @@ impl Technique {
             inout_advanced: val,
             local_parity: val,
             two_rows: val,
+            avoid_branching: val,
         }
     }
 }
