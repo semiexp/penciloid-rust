@@ -639,6 +639,30 @@ impl Field {
                 self.set_cell_internal_unless_clue(pos + D(2, 0), Cell::Line);
                 self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
             }
+            if self.get_cell_safe(pos + D(0, -1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(-1, -1)).is_blocking()
+                    || self.get_cell_safe(pos + D(0, -2)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(1, -1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(0, 1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(-1, 1)).is_blocking()
+                    || self.get_cell_safe(pos + D(0, 2)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(1, -1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(2, -1)).is_blocking()
+                    || self.get_cell_safe(pos + D(1, -2)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(0, -1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(1, 1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(2, 1)).is_blocking()
+                    || self.get_cell_safe(pos + D(1, 2)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(0, 1), Cell::Line);
+            }
         }
         if pos.1 < self.width() - 1 && self.blocked_either_right[pos] {
             if !self.get_cell_safe(pos).can_be_blocked() {
@@ -668,6 +692,30 @@ impl Field {
                 self.set_cell_internal_unless_clue(pos + D(-1, 1), Cell::Line);
                 self.set_cell_internal_unless_clue(pos + D(0, 2), Cell::Line);
                 self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(-1, 0)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(-1, -1)).is_blocking()
+                    || self.get_cell_safe(pos + D(-2, 0)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(-1, 1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(1, 0)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(1, -1)).is_blocking()
+                    || self.get_cell_safe(pos + D(2, 0)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(1, 1), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(-1, 1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(-1, 2)).is_blocking()
+                    || self.get_cell_safe(pos + D(-2, 1)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(-1, 0), Cell::Line);
+            }
+            if self.get_cell_safe(pos + D(1, 1)) != Cell::Clue
+                && (self.get_cell_safe(pos + D(1, 2)).is_blocking()
+                    || self.get_cell_safe(pos + D(2, 1)).is_blocking())
+            {
+                self.set_cell_internal_unless_clue(pos + D(1, 0), Cell::Line);
             }
         }
     }
