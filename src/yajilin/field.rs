@@ -1020,7 +1020,6 @@ impl Field {
         }
     }
     fn inspect_clue(&mut self, cell_cd: P) {
-        let clue = self.clue[cell_cd];
         let (d, involving_cells, n) = self.clue_detail(cell_cd);
         let D(dy, dx) = d;
         if d == D(0, 0) {

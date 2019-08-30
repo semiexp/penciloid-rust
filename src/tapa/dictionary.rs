@@ -1,4 +1,4 @@
-use super::super::{D, P};
+use super::super::D;
 use super::{Cell, Clue, CLUE_TYPES, CLUE_VALUES};
 
 pub const DICTIONARY_NEIGHBOR_SIZE: usize = 8;
@@ -146,7 +146,7 @@ impl Dictionary {
                                 {
                                     for j in 0..chain_length {
                                         let j = (i - j + 7) % 8;
-                                        ignored_cells_mask |= (1 << j);
+                                        ignored_cells_mask |= 1 << j;
                                     }
                                 }
 

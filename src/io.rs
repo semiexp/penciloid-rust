@@ -1,5 +1,5 @@
 use std::error;
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Display};
 use std::io::{self, BufRead};
 
 use {Grid, P};

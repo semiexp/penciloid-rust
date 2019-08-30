@@ -1,9 +1,8 @@
 use super::super::grid_loop::GridLoopField;
-use super::super::{Grid, D, LP, P};
+use super::super::{Grid, D, P};
 use super::*;
 
-use rand::distributions::Distribution;
-use rand::{distributions, Rng};
+use rand::Rng;
 use FOUR_NEIGHBOURS;
 
 pub fn generate<R: Rng>(
@@ -48,9 +47,9 @@ pub fn generate<R: Rng>(
 
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
-            has_clue[loc] = (clue != Clue::NoClue);
+            has_clue[loc] = clue != Clue::NoClue;
             if disallow_dead_ends && has_dead_end_nearby(loc, &has_clue) {
-                has_clue[loc] = (previous_clue != Clue::NoClue);
+                has_clue[loc] = previous_clue != Clue::NoClue;
                 continue;
             }
 
@@ -77,7 +76,7 @@ pub fn generate<R: Rng>(
                 break;
             } else {
                 problem[loc] = previous_clue;
-                has_clue[loc] = (previous_clue != Clue::NoClue);
+                has_clue[loc] = previous_clue != Clue::NoClue;
             }
         }
 

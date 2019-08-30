@@ -1,9 +1,7 @@
 use super::super::{Grid, D, P};
 use super::*;
 
-use rand::distributions::Distribution;
-use rand::{distributions, Rng};
-use std::cmp;
+use rand::Rng;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ClueConstraint {
@@ -107,7 +105,7 @@ pub fn generate<R: Rng>(
     let n_step = height * width * 10;
     let mut temperature = 20f64;
 
-    for s in 0..n_step {
+    for _ in 0..n_step {
         let mut update_cand = vec![];
         for y in 0..height {
             for x in 0..width {
@@ -226,7 +224,8 @@ pub fn generate<R: Rng>(
                 let mut clue_filled = true;
                 for y in 0..height {
                     for x in 0..width {
-                        if has_clue.get(loc) && problem[loc] == NO_CLUE {
+                        let pos = P(y, x);
+                        if has_clue.get(pos) && problem[pos] == NO_CLUE {
                             clue_filled = false;
                         }
                     }

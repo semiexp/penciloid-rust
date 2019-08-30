@@ -252,7 +252,7 @@ impl<'a, 'b> Field<'a, 'b> {
                         let v = self.cell_checked(pos + d);
 
                         if v == Cell::White {
-                            virtually_ignored_cell_pattern |= (3 << (i * 2));
+                            virtually_ignored_cell_pattern |= 3 << (i * 2);
                         } else {
                             let mut is_degree_2;
                             if d.0 == 0 || d.1 == 0 {
@@ -274,10 +274,10 @@ impl<'a, 'b> Field<'a, 'b> {
                             }
 
                             if is_degree_2 {
-                                virtually_ignored_cell_pattern |= (1 << (i * 2));
+                                virtually_ignored_cell_pattern |= 1 << (i * 2);
                             } else {
                                 if v == Cell::Black {
-                                    virtually_ignored_cell_pattern |= (2 << (i * 2));
+                                    virtually_ignored_cell_pattern |= 2 << (i * 2);
                                 }
                             }
                         }
@@ -437,8 +437,6 @@ impl<'a, 'b> Field<'a, 'b> {
             }
 
             // TODO: rewrite more clearly
-            let P(y, x) = cd;
-
             for &d in &CONSECUTIVE_DICTIONARY_ADJACENCY_OFFSET {
                 let cd2 = cd + d;
                 if cell.is_valid_p(cd2) {
@@ -560,7 +558,6 @@ impl<'a, 'b> Field<'a, 'b> {
             return;
         }
 
-        let cell = self.cell(loc);
         let clue = self.clue[loc];
         if clue != NO_CLUE {
             let mut neighbor = 0;

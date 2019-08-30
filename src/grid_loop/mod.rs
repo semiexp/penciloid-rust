@@ -343,8 +343,6 @@ impl GridLoop {
         }
         visited[pos] = true;
 
-        let dy = [1, 0, -1, 0];
-        let dx = [0, 1, 0, -1];
         for &d in &FOUR_NEIGHBOURS {
             let pos2 = pos + d;
             if visited.is_valid_p(pos2) {

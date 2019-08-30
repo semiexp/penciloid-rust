@@ -19,9 +19,9 @@ macro_rules! run_timed {
 }
 
 use std::env;
-use std::io;
 use std::error;
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Display};
+use std::io;
 use std::time::Instant;
 
 pub mod nl_generator;
@@ -147,10 +147,10 @@ pub fn run_cli() {
     let result = subcommand.and_then(|subcommand| match subcommand {
         (Puzzle::Numberlink, Mode::Generator) => {
             nl_generator::nl_generator_frontend(&args[2..], &program)
-        },
+        }
         (Puzzle::Tapa, Mode::Generator) => {
             tapa_generator::tapa_generator_frontend(&args[2..], &program)
-        },
+        }
         _ => unimplemented!(),
     });
     if result.is_err() {

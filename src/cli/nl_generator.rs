@@ -3,7 +3,7 @@ use rand;
 use {numberlink, Symmetry, P};
 
 use super::getopts::{Matches, Options};
-use std::io::{stdout, Write};
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
 

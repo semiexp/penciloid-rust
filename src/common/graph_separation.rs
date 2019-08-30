@@ -1,6 +1,6 @@
-use std::ops::{Add, Sub};
-use std::default::Default;
 use std::cmp::min;
+use std::default::Default;
+use std::ops::{Add, Sub};
 
 const TERMINAL: usize = ::std::usize::MAX;
 
