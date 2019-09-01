@@ -3,6 +3,7 @@ use std::fmt;
 use GraphSeparation;
 use {Grid, D, FOUR_NEIGHBOURS, P};
 
+#[derive(Clone)]
 pub struct Field {
     cell: Grid<Cell>,
     decided_cells: i32,
@@ -97,6 +98,56 @@ impl Field {
             }
         }
     }
+    pub fn trial_and_error(&mut self, depth: i32) {
+        let height = self.height();
+        let width = self.width();
+
+        if depth == 0 {
+            self.solve();
+            return;
+        }
+        self.trial_and_error(depth - 1);
+
+        loop {
+            let mut updated = false;
+            for y in 0..height {
+                for x in 0..width {
+                    let pos = P(y, x);
+                    if self.get_cell(pos) != Cell::Undecided {
+                        continue;
+                    }
+                    {
+                        let mut field_blocked = self.clone();
+                        field_blocked.decide_cell(pos, Cell::Black);
+                        field_blocked.trial_and_error(depth - 1);
+
+                        if field_blocked.inconsistent() {
+                            updated = true;
+                            self.decide_cell(pos, Cell::White);
+                            self.trial_and_error(depth - 1);
+                        }
+                    }
+                    {
+                        let mut field_line = self.clone();
+                        field_line.decide_cell(pos, Cell::White);
+                        field_line.trial_and_error(depth - 1);
+
+                        if field_line.inconsistent() {
+                            updated = true;
+                            self.decide_cell(pos, Cell::Black);
+                            self.trial_and_error(depth - 1);
+                        }
+                    }
+                    if self.inconsistent() {
+                        return;
+                    }
+                }
+            }
+            if !updated {
+                break;
+            }
+        }
+    }
     fn avoid_2x2_cluster(&mut self, top: P) {
         let P(y, x) = top;
         if !(0 <= y && y < self.height() - 1 && 0 <= x && x < self.width() - 1) {
@@ -130,7 +181,6 @@ impl Field {
     }
     fn is_bad_cape_direction(&self, pos: P, n: i32, dir: D) -> bool {
         if n <= 0 {
-            // TODO
             if !self.cell.is_valid_p(pos + dir) || self.get_cell(pos + dir) == Cell::Black {
                 return true;
             }
