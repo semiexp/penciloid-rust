@@ -91,7 +91,9 @@ impl Field {
             let last_decided_cells = self.decided_cells();
 
             self.inspect_all_cell();
-            self.ensure_connectivity();
+            self.avoid_forbidden_pattern_simple();
+            self.ensure_connectivity(false);
+            self.ensure_connectivity(true);
 
             if last_decided_cells == self.decided_cells() {
                 break;
@@ -175,6 +177,80 @@ impl Field {
             for &d in &related {
                 if self.get_cell(top + d) == Cell::Undecided {
                     self.decide_cell(top + d, Cell::Black);
+                }
+            }
+        }
+    }
+    fn is_black_or_outside(&self, pos: P) -> bool {
+        !self.cell.is_valid_p(pos) || self.get_cell(pos) == Cell::Black
+    }
+    fn single_forbidden_pattern(&mut self, pos: [P; 4]) {
+        for i in 0..4 {
+            let mut flg = true;
+            for j in 0..4 {
+                if i != j {
+                    if !self.is_black_or_outside(pos[j]) {
+                        flg = false;
+                        break;
+                    }
+                }
+            }
+            if flg {
+                if !self.cell.is_valid_p(pos[i]) {
+                    self.set_inconsistent();
+                } else {
+                    self.decide_cell(pos[i], Cell::White);
+                }
+            }
+        }
+    }
+    fn avoid_forbidden_pattern_simple(&mut self) {
+        let height = self.height();
+        let width = self.width();
+
+        // cup technique
+        for y in 0..height {
+            for x in 0..width {
+                let pos = P(y, x);
+                if self.get_cell(pos).is_cape() {
+                    continue;
+                }
+
+                if y < height - 1 && !self.get_cell(pos + D(1, 0)).is_cape() {
+                    if x != 0 {
+                        self.single_forbidden_pattern([
+                            pos + D(-1, 0),
+                            pos + D(0, -1),
+                            pos + D(1, -1),
+                            pos + D(2, 0),
+                        ]);
+                    }
+                    if x != width - 1 {
+                        self.single_forbidden_pattern([
+                            pos + D(-1, 0),
+                            pos + D(0, 1),
+                            pos + D(1, 1),
+                            pos + D(2, 0),
+                        ]);
+                    }
+                }
+                if x < width - 1 && !self.get_cell(pos + D(0, 1)).is_cape() {
+                    if y != 0 {
+                        self.single_forbidden_pattern([
+                            pos + D(0, -1),
+                            pos + D(-1, 0),
+                            pos + D(-1, 1),
+                            pos + D(0, 2),
+                        ]);
+                    }
+                    if y != height - 1 {
+                        self.single_forbidden_pattern([
+                            pos + D(0, -1),
+                            pos + D(1, 0),
+                            pos + D(1, 1),
+                            pos + D(0, 2),
+                        ]);
+                    }
                 }
             }
         }
@@ -291,24 +367,30 @@ impl Field {
             }
         }
     }
-    fn ensure_connectivity(&mut self) {
+    fn ensure_connectivity(&mut self, ignore_capes: bool) {
         let height = self.height();
         let width = self.width();
         let mut graph =
             GraphSeparation::new((height * width) as usize, (height * width * 2) as usize);
 
+        let is_considered_cell =
+            |cell: Cell| !(cell == Cell::Black || (ignore_capes && cell.is_cape()));
+
         for y in 0..height {
             for x in 0..width {
                 let pos = P(y, x);
-                match self.get_cell(pos) {
-                    Cell::Black => continue,
-                    Cell::White | Cell::Cape(_) => graph.set_weight((y * width + x) as usize, 1),
-                    _ => (),
+                let cell = self.get_cell(pos);
+
+                if !is_considered_cell(cell) {
+                    continue;
                 }
-                if y < height - 1 && self.get_cell(pos + D(1, 0)) != Cell::Black {
+                if cell.is_white_like() {
+                    graph.set_weight((y * width + x) as usize, 1);
+                }
+                if y < height - 1 && is_considered_cell(self.get_cell(pos + D(1, 0))) {
                     graph.add_edge((y * width + x) as usize, ((y + 1) * width + x) as usize);
                 }
-                if x < width - 1 && self.get_cell(pos + D(0, 1)) != Cell::Black {
+                if x < width - 1 && is_considered_cell(self.get_cell(pos + D(0, 1))) {
                     graph.add_edge((y * width + x) as usize, (y * width + x + 1) as usize);
                 }
             }
@@ -332,6 +414,9 @@ impl Field {
                         self.decide_cell(P(y, x), Cell::White);
                     }
                 } else if cell.is_white_like() {
+                    if ignore_capes && cell.is_cape() {
+                        continue;
+                    }
                     let root = graph.union_root((y * width + x) as usize);
                     match global_root {
                         None => global_root = Some(root),

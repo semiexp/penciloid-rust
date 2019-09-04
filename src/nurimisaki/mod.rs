@@ -17,4 +17,10 @@ impl Cell {
             _ => false,
         }
     }
+    pub fn is_cape(self) -> bool {
+        match self {
+            Cell::Cape(_) => true,
+            _ => false,
+        }
+    }
 }
