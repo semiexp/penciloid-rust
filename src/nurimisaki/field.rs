@@ -92,6 +92,7 @@ impl Field {
 
             self.inspect_all_cell();
             self.avoid_forbidden_pattern_simple();
+            self.avoid_forbidden_pattern_with_cape();
             self.ensure_connectivity(false);
             self.ensure_connectivity(true);
 
@@ -204,11 +205,25 @@ impl Field {
             }
         }
     }
+    fn single_forbidden_pattern_with_cape(&mut self, a: P, b: P, x: P, c: P, d: P, y: P) {
+        if self.is_black_or_outside(a) && self.is_black_or_outside(b) {
+            if self.cell.is_valid_p(y) && self.get_cell(y).is_cape() {
+                self.decide_cell(y + (y - c), Cell::Black);
+                self.decide_cell(y + (y - d), Cell::Black);
+            }
+        }
+        if self.is_black_or_outside(c) && self.is_black_or_outside(d) {
+            if self.cell.is_valid_p(x) && self.get_cell(x).is_cape() {
+                self.decide_cell(x + (x - a), Cell::Black);
+                self.decide_cell(x + (x - b), Cell::Black);
+            }
+        }
+    }
     fn avoid_forbidden_pattern_simple(&mut self) {
         let height = self.height();
         let width = self.width();
 
-        // cup technique
+        // cup pattern
         for y in 0..height {
             for x in 0..width {
                 let pos = P(y, x);
@@ -251,6 +266,149 @@ impl Field {
                             pos + D(0, 2),
                         ]);
                     }
+                }
+            }
+        }
+
+        // zigzag pattern
+        for y in 0..(height - 1) {
+            for x in 0..(width - 1) {
+                let pos = P(y, x);
+
+                if !self.get_cell(pos).is_cape() && !self.get_cell(pos + D(1, 1)).is_cape() {
+                    self.single_forbidden_pattern([
+                        pos + D(-1, 0),
+                        pos + D(0, 1),
+                        pos + D(1, 0),
+                        pos + D(2, 1),
+                    ]);
+                    self.single_forbidden_pattern([
+                        pos + D(0, -1),
+                        pos + D(1, 0),
+                        pos + D(0, 1),
+                        pos + D(1, 2),
+                    ]);
+                }
+                if !self.get_cell(pos + D(1, 0)).is_cape()
+                    && !self.get_cell(pos + D(0, 1)).is_cape()
+                {
+                    self.single_forbidden_pattern([
+                        pos + D(-1, 1),
+                        pos + D(0, 0),
+                        pos + D(1, 1),
+                        pos + D(2, 0),
+                    ]);
+                    self.single_forbidden_pattern([
+                        pos + D(1, -1),
+                        pos + D(0, 0),
+                        pos + D(1, 1),
+                        pos + D(0, 2),
+                    ]);
+                }
+            }
+        }
+    }
+    fn avoid_forbidden_pattern_with_cape(&mut self) {
+        let height = self.height();
+        let width = self.width();
+
+        // cup pattern
+        for y in 0..height {
+            for x in 0..width {
+                let pos = P(y, x);
+                if self.get_cell(pos).is_cape() {
+                    continue;
+                }
+
+                if y < height - 1 && !self.get_cell(pos + D(1, 0)).is_cape() {
+                    if x != 0 {
+                        self.single_forbidden_pattern_with_cape(
+                            pos + D(-1, 0),
+                            pos + D(0, -1),
+                            pos + D(-1, -1),
+                            pos + D(1, -1),
+                            pos + D(2, 0),
+                            pos + D(2, -1),
+                        );
+                    }
+                    if x != width - 1 {
+                        self.single_forbidden_pattern_with_cape(
+                            pos + D(-1, 0),
+                            pos + D(0, 1),
+                            pos + D(-1, 1),
+                            pos + D(1, 1),
+                            pos + D(2, 0),
+                            pos + D(2, 1),
+                        );
+                    }
+                }
+                if x < width - 1 && !self.get_cell(pos + D(0, 1)).is_cape() {
+                    if y != 0 {
+                        self.single_forbidden_pattern_with_cape(
+                            pos + D(0, -1),
+                            pos + D(-1, 0),
+                            pos + D(-1, -1),
+                            pos + D(-1, 1),
+                            pos + D(0, 2),
+                            pos + D(-1, 2),
+                        );
+                    }
+                    if y != height - 1 {
+                        self.single_forbidden_pattern_with_cape(
+                            pos + D(0, -1),
+                            pos + D(1, 0),
+                            pos + D(1, -1),
+                            pos + D(1, 1),
+                            pos + D(0, 2),
+                            pos + D(1, 2),
+                        );
+                    }
+                }
+            }
+        }
+
+        // zigzag pattern
+        for y in 0..(height - 1) {
+            for x in 0..(width - 1) {
+                let pos = P(y, x);
+
+                if !self.get_cell(pos).is_cape() && !self.get_cell(pos + D(1, 1)).is_cape() {
+                    self.single_forbidden_pattern_with_cape(
+                        pos + D(-1, 0),
+                        pos + D(0, 1),
+                        pos + D(-1, 1),
+                        pos + D(1, 0),
+                        pos + D(2, 1),
+                        pos + D(2, 0),
+                    );
+                    self.single_forbidden_pattern_with_cape(
+                        pos + D(0, -1),
+                        pos + D(1, 0),
+                        pos + D(1, -1),
+                        pos + D(0, 1),
+                        pos + D(1, 2),
+                        pos + D(0, 2),
+                    );
+                }
+                if !self.get_cell(pos + D(1, 0)).is_cape()
+                    && !self.get_cell(pos + D(0, 1)).is_cape()
+                {
+                    self.single_forbidden_pattern_with_cape(
+                        pos + D(-1, 1),
+                        pos + D(0, 0),
+                        pos + D(-1, 0),
+                        pos + D(1, 1),
+                        pos + D(2, 0),
+                        pos + D(2, 1),
+                    );
+                    self.single_forbidden_pattern_with_cape(
+                        pos + D(1, -1),
+                        pos + D(0, 0),
+                        pos + D(0, -1),
+                        pos + D(1, 1),
+                        pos + D(0, 2),
+                        pos + D(1, 2),
+                    );
                 }
             }
         }
@@ -479,5 +637,84 @@ mod tests {
         assert_eq!(field.inconsistent(), false);
         assert_eq!(field.fully_solved(), true);
         assert_eq!(field.get_cell(P(3, 2)), Cell::White);
+    }
+
+    #[test]
+    fn test_forbidden_pattern_simple() {
+        // cup
+        {
+            let mut problem = Grid::new(6, 6, None);
+
+            let mut field = Field::new(&problem);
+            field.decide_cell(P(2, 1), Cell::Black);
+            field.decide_cell(P(3, 2), Cell::Black);
+            field.decide_cell(P(2, 4), Cell::Black);
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(3, 3)), Cell::White);
+        }
+
+        // cup disrupted by a cape
+        {
+            let mut problem = Grid::new(6, 6, None);
+            problem[P(2, 2)] = Some(0);
+
+            let mut field = Field::new(&problem);
+            field.decide_cell(P(2, 1), Cell::Black);
+            field.decide_cell(P(3, 2), Cell::Black);
+            field.decide_cell(P(2, 4), Cell::Black);
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(3, 3)), Cell::Undecided);
+        }
+    }
+
+    #[test]
+    fn test_forbidden_pattern_with_cape() {
+        // cup
+        {
+            let mut problem = Grid::new(7, 7, None);
+            problem[P(3, 4)] = Some(0);
+
+            let mut field = Field::new(&problem);
+            field.decide_cell(P(2, 1), Cell::Black);
+            field.decide_cell(P(3, 2), Cell::Black);
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(3, 5)), Cell::Black);
+            assert_eq!(field.get_cell(P(4, 4)), Cell::Black);
+        }
+
+        // cup (partially wall)
+        {
+            let mut problem = Grid::new(7, 7, None);
+            problem[P(3, 6)] = Some(0);
+
+            let mut field = Field::new(&problem);
+            field.decide_cell(P(2, 3), Cell::Black);
+            field.decide_cell(P(3, 4), Cell::Black);
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(4, 6)), Cell::Black);
+        }
+
+        // zigzag
+        {
+            let mut problem = Grid::new(7, 7, None);
+            problem[P(2, 4)] = Some(0);
+
+            let mut field = Field::new(&problem);
+            field.decide_cell(P(2, 1), Cell::Black);
+            field.decide_cell(P(3, 2), Cell::Black);
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(2, 5)), Cell::Black);
+            assert_eq!(field.get_cell(P(1, 4)), Cell::Black);
+        }
     }
 }
