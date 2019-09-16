@@ -208,14 +208,22 @@ impl Field {
     fn single_forbidden_pattern_with_cape(&mut self, a: P, b: P, x: P, c: P, d: P, y: P) {
         if self.is_black_or_outside(a) && self.is_black_or_outside(b) {
             if self.cell.is_valid_p(y) && self.get_cell(y).is_cape() {
-                self.decide_cell(y + (y - c), Cell::Black);
-                self.decide_cell(y + (y - d), Cell::Black);
+                if self.cell.is_valid_p(y + (y - c)) {
+                    self.decide_cell(y + (y - c), Cell::Black);
+                }
+                if self.cell.is_valid_p(y + (y - d)) {
+                    self.decide_cell(y + (y - d), Cell::Black);
+                }
             }
         }
         if self.is_black_or_outside(c) && self.is_black_or_outside(d) {
             if self.cell.is_valid_p(x) && self.get_cell(x).is_cape() {
-                self.decide_cell(x + (x - a), Cell::Black);
-                self.decide_cell(x + (x - b), Cell::Black);
+                if self.cell.is_valid_p(y + (y - a)) {
+                    self.decide_cell(y + (y - a), Cell::Black);
+                }
+                if self.cell.is_valid_p(y + (y - b)) {
+                    self.decide_cell(y + (y - b), Cell::Black);
+                }
             }
         }
     }
