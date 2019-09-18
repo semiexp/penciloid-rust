@@ -218,11 +218,11 @@ impl Field {
         }
         if self.is_black_or_outside(c) && self.is_black_or_outside(d) {
             if self.cell.is_valid_p(x) && self.get_cell(x).is_cape() {
-                if self.cell.is_valid_p(y + (y - a)) {
-                    self.decide_cell(y + (y - a), Cell::Black);
+                if self.cell.is_valid_p(x + (x - a)) {
+                    self.decide_cell(x + (x - a), Cell::Black);
                 }
-                if self.cell.is_valid_p(y + (y - b)) {
-                    self.decide_cell(y + (y - b), Cell::Black);
+                if self.cell.is_valid_p(x + (x - b)) {
+                    self.decide_cell(x + (x - b), Cell::Black);
                 }
             }
         }
