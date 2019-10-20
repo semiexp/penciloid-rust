@@ -5,10 +5,33 @@ use super::*;
 use rand::Rng;
 use FOUR_NEIGHBOURS;
 
+pub struct GeneratorOption {
+    pub disallow_dead_ends: bool,
+    pub disallow_adjacent_clues: bool,
+    pub technique: Technique,
+    pub search_depth: i32,
+    pub clue_lower_bound: Option<i32>,
+    pub clue_upper_bound: Option<i32>,
+}
+
+fn check_clue_range(i: i32, options: &GeneratorOption) -> bool {
+    if let Some(n) = options.clue_lower_bound {
+        if !(n <= i) {
+            return false;
+        }
+    }
+    if let Some(n) = options.clue_upper_bound {
+        if !(i <= n) {
+            return false;
+        }
+    }
+    true
+}
+
 pub fn generate<R: Rng>(
     height: i32,
     width: i32,
-    disallow_dead_ends: bool,
+    options: &GeneratorOption,
     rng: &mut R,
 ) -> Option<Grid<Clue>> {
     let mut problem = Grid::new(height, width, Clue::NoClue);
@@ -24,16 +47,45 @@ pub fn generate<R: Rng>(
         for y in 0..height {
             for x in 0..width {
                 let pos = P(y, x);
-                for i in 1..((y + 3) / 2) {
+
+                if options.disallow_adjacent_clues {
+                    let mut flg = false;
+                    for dy in -1..2 {
+                        for dx in -1..2 {
+                            if (dy != 0 || dx != 0)
+                                && problem.get_or_default_p(pos + D(dy, dx), Clue::NoClue)
+                                    != Clue::NoClue
+                            {
+                                flg = true;
+                            }
+                        }
+                    }
+                    if flg {
+                        continue;
+                    }
+                }
+                for i in 0..((y + 3) / 2) {
+                    if !check_clue_range(i, options) {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Up(i)));
                 }
-                for i in 1..((x + 3) / 2) {
+                for i in 0..((x + 3) / 2) {
+                    if !check_clue_range(i, options) {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Left(i)));
                 }
-                for i in 1..((height - y) / 2) {
+                for i in 0..((height - y) / 2) {
+                    if !check_clue_range(i, options) {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Down(i)));
                 }
-                for i in 1..((width - x + 2) / 2) {
+                for i in 0..((width - x + 2) / 2) {
+                    if !check_clue_range(i, options) {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Right(i)));
                 }
                 if problem[pos] != Clue::NoClue {
@@ -48,7 +100,7 @@ pub fn generate<R: Rng>(
         for &(loc, clue) in &update_cand {
             let previous_clue = problem[loc];
             has_clue[loc] = clue != Clue::NoClue;
-            if disallow_dead_ends && has_dead_end_nearby(loc, &has_clue) {
+            if options.disallow_dead_ends && has_dead_end_nearby(loc, &has_clue) {
                 has_clue[loc] = previous_clue != Clue::NoClue;
                 continue;
             }
@@ -56,7 +108,8 @@ pub fn generate<R: Rng>(
             problem[loc] = clue;
 
             let mut next_field = Field::new(&problem);
-            next_field.trial_and_error(2);
+            next_field.set_technique(options.technique);
+            next_field.trial_and_error(options.search_depth);
 
             let new_n_clues = n_clues - if previous_clue == Clue::NoClue { 0 } else { 1 }
                 + if clue == Clue::NoClue { 0 } else { 1 };
