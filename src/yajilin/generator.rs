@@ -5,9 +5,18 @@ use super::*;
 use rand::Rng;
 use FOUR_NEIGHBOURS;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum ClueConstraint {
+    Fixed(Clue),
+    None,
+    Any,
+}
+
 pub struct GeneratorOption {
+    pub clue_constraint: Option<Grid<ClueConstraint>>,
     pub disallow_dead_ends: bool,
     pub disallow_adjacent_clues: bool,
+    pub disallow_void_clue: bool,
     pub technique: Technique,
     pub search_depth: i32,
     pub clue_lower_bound: Option<i32>,
@@ -42,11 +51,27 @@ pub fn generate<R: Rng>(
     let mut n_clues = 0;
     let mut has_clue = Grid::new(height, width, false);
 
+    if let Some(ref constraint) = options.clue_constraint {
+        for y in 0..height {
+            for x in 0..width {
+                if let ClueConstraint::Fixed(c) = constraint[P(y, x)] {
+                    problem[P(y, x)] = c;
+                }
+            }
+        }
+    }
+
     for _ in 0..n_steps {
         let mut update_cand = vec![];
         for y in 0..height {
             for x in 0..width {
                 let pos = P(y, x);
+
+                if let Some(ref constraint) = options.clue_constraint {
+                    if constraint[pos] != ClueConstraint::Any {
+                        continue;
+                    }
+                }
 
                 if options.disallow_adjacent_clues {
                     let mut flg = false;
@@ -68,10 +93,16 @@ pub fn generate<R: Rng>(
                     if !check_clue_range(i, options) {
                         continue;
                     }
+                    if options.disallow_void_clue && i == 0 && y == 0 {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Up(i)));
                 }
                 for i in 0..((x + 3) / 2) {
                     if !check_clue_range(i, options) {
+                        continue;
+                    }
+                    if options.disallow_void_clue && i == 0 && x == 0 {
                         continue;
                     }
                     update_cand.push((pos, Clue::Left(i)));
@@ -80,10 +111,16 @@ pub fn generate<R: Rng>(
                     if !check_clue_range(i, options) {
                         continue;
                     }
+                    if options.disallow_void_clue && i == 0 && y == height - 1 {
+                        continue;
+                    }
                     update_cand.push((pos, Clue::Down(i)));
                 }
                 for i in 0..((width - x + 2) / 2) {
                     if !check_clue_range(i, options) {
+                        continue;
+                    }
+                    if options.disallow_void_clue && i == 0 && x == width - 1 {
                         continue;
                     }
                     update_cand.push((pos, Clue::Right(i)));
