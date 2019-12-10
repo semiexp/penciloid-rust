@@ -75,6 +75,7 @@ pub struct Technique {
     pub local_parity: bool,
     pub two_rows: bool,
     pub avoid_branching: bool,
+    pub clue_counting: bool,
 }
 
 impl Technique {
@@ -94,6 +95,7 @@ impl Technique {
             local_parity: val,
             two_rows: val,
             avoid_branching: val,
+            clue_counting: val,
         }
     }
 }

@@ -118,6 +118,7 @@ impl Field {
             self.apply_inout_rule_advanced();
             self.check_local_parity();
             self.two_rows_entire_board();
+            self.clue_counting();
             if current_decided_lines == self.grid_loop.num_decided_lines()
                 && current_decided_cells == self.num_decided_cells()
             {
@@ -1174,6 +1175,122 @@ impl Field {
             }
         }
     }
+    fn clue_counting(&mut self) {
+        if !self.technique.clue_counting {
+            return;
+        }
+        for y in 0..self.height() {
+            self.clue_counting_single(y, true);
+        }
+        for x in 0..self.width() {
+            self.clue_counting_single(x, false);
+        }
+    }
+    fn clue_counting_single(&mut self, c: i32, horizontal: bool) {
+        let start;
+        let end;
+        let dir;
+        let cnt;
+        if horizontal {
+            start = P(c, 0);
+            end = P(c, self.width());
+            dir = D(0, 1);
+            cnt = self.width() + 1;
+        } else {
+            start = P(0, c);
+            end = P(self.height(), c);
+            dir = D(1, 0);
+            cnt = self.height() + 1;
+        }
+        let mut warshall_floyd = vec![cnt + 10; (cnt * cnt) as usize];
+        {
+            let mut set_distance = |s, d, v| {
+                let pos = (s * cnt + d) as usize;
+                warshall_floyd[pos] = cmp::min(warshall_floyd[pos], v);
+            };
+            for i in 0..(cnt - 1) {
+                let pos = start + dir * i;
+                let clue = self.clue[pos];
+                match clue {
+                    Clue::Left(n) => {
+                        if horizontal {
+                            set_distance(0, i, n);
+                            set_distance(i, 0, -n);
+                        }
+                    }
+                    Clue::Right(n) => {
+                        if horizontal {
+                            set_distance(i + 1, cnt - 1, n);
+                            set_distance(cnt - 1, i + 1, n);
+                        }
+                    }
+                    Clue::Up(n) => {
+                        if !horizontal {
+                            set_distance(0, i, n);
+                            set_distance(i, 0, -n);
+                        }
+                    }
+                    Clue::Down(n) => {
+                        if !horizontal {
+                            set_distance(i + 1, cnt - 1, n);
+                            set_distance(cnt - 1, i + 1, n);
+                        }
+                    }
+                    _ => (),
+                }
+                let cell = self.get_cell(pos);
+                if cell == Cell::Blocked {
+                    set_distance(i, i + 1, 1);
+                    set_distance(i + 1, i, -1);
+                } else if cell == Cell::Line || cell == Cell::Clue {
+                    set_distance(i, i + 1, 0);
+                    set_distance(i + 1, i, 0);
+                } else {
+                    set_distance(i, i + 1, 1);
+                    set_distance(i + 1, i, 0);
+                }
+                if i < cnt - 2 {
+                    set_distance(i, i + 2, 1);
+                    if (horizontal && self.blocked_either_right[pos])
+                        || (!horizontal && self.blocked_either_down[pos])
+                    {
+                        set_distance(i + 2, i, -1);
+                    }
+                }
+            }
+        }
+        for i in 0..cnt {
+            for j in 0..cnt {
+                for k in 0..cnt {
+                    warshall_floyd[(j * cnt + k) as usize] = cmp::min(
+                        warshall_floyd[(j * cnt + k) as usize],
+                        warshall_floyd[(j * cnt + i) as usize]
+                            + warshall_floyd[(i * cnt + k) as usize],
+                    );
+                }
+            }
+        }
+        for i in 0..(cnt - 1) {
+            let pos = start + dir * i;
+            {
+                let d1 = warshall_floyd[(i * cnt + (i + 1)) as usize];
+                let d2 = warshall_floyd[((i + 1) * cnt + i) as usize];
+                if d1 == 0 && d2 == 0 && self.get_cell(pos) != Cell::Clue {
+                    self.set_cell(pos, Cell::Line);
+                }
+                if d1 == 1 && d2 == -1 {
+                    self.set_cell(pos, Cell::Blocked);
+                }
+            }
+            if i < cnt - 2 {
+                let d1 = warshall_floyd[(i * cnt + (i + 2)) as usize];
+                let d2 = warshall_floyd[((i + 2) * cnt + i) as usize];
+                if d1 == 1 && d2 == -1 {
+                    self.set_blocked_either(pos, pos + dir);
+                }
+            }
+        }
+    }
 }
 
 impl GridLoopField for Field {
@@ -1510,6 +1627,23 @@ mod tests {
 
             assert_eq!(field.inconsistent(), false);
             assert_eq!(field.get_cell(P(5, 6)), Cell::Blocked);
+        }
+    }
+    #[test]
+    fn test_clue_counting() {
+        {
+            let mut problem = Grid::new(8, 8, Clue::NoClue);
+            problem[P(3, 1)] = Clue::Right(1);
+            problem[P(3, 5)] = Clue::Left(2);
+
+            let mut field = Field::new(&problem);
+
+            field.solve();
+
+            assert_eq!(field.inconsistent(), false);
+            assert_eq!(field.get_cell(P(3, 0)), Cell::Blocked);
+            assert_eq!(field.get_cell(P(3, 6)), Cell::Line);
+            assert_eq!(field.get_cell(P(3, 7)), Cell::Line);
         }
     }
 }
