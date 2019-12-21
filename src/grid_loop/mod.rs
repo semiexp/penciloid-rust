@@ -1,3 +1,4 @@
+use super::common::GraphSeparation;
 use super::{FiniteSearchQueue, Grid, D, LP, P};
 use std::iter::IntoIterator;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
@@ -90,7 +91,7 @@ impl GridLoop {
             fully_solved: false,
             decided_line: 0,
             decided_edge: 0,
-            queue: FiniteSearchQueue::new(((height * 2 + 1) * (width * 2 + 1)) as usize),
+            queue: FiniteSearchQueue::new((1 + (height * 2 + 1) * (width * 2 + 1)) as usize),
         };
 
         ret.queue.start();
@@ -358,10 +359,254 @@ impl GridLoop {
         }
     }
 
+    pub fn check_loop_connection<T: GridLoopField>(field: &mut T) {
+        let grid = field.grid_loop();
+        // this method assumes that `self` is not in an inconsistent condition
+        // nor intermediate status
+        if grid.inconsistent() || grid.queue.is_started() {
+            return;
+        }
+
+        let height = grid.height();
+        let width = grid.width();
+
+        // assign cell id
+        let mut cell_ids = Grid::new(height, width, -1);
+        let mut id_last = 0;
+        for y in 0..height {
+            if grid.get_edge(LP(y * 2 + 1, 0)) == Edge::Blank {
+                grid.check_loop_connection_dfs1(P(y, 0), &mut cell_ids, id_last);
+            }
+            if grid.get_edge(LP(y * 2 + 1, width * 2)) == Edge::Blank {
+                grid.check_loop_connection_dfs1(P(y, width - 1), &mut cell_ids, id_last);
+            }
+        }
+        for x in 0..width {
+            if grid.get_edge(LP(0, x * 2 + 1)) == Edge::Blank {
+                grid.check_loop_connection_dfs1(P(0, x), &mut cell_ids, id_last);
+            }
+            if grid.get_edge(LP(height * 2, x * 2 + 1)) == Edge::Blank {
+                grid.check_loop_connection_dfs1(P(height - 1, x), &mut cell_ids, id_last);
+            }
+        }
+        id_last += 1;
+        for y in 0..height {
+            for x in 0..width {
+                let pos = P(y, x);
+                if cell_ids[pos] == -1 {
+                    grid.check_loop_connection_dfs1(pos, &mut cell_ids, id_last);
+                    id_last += 1;
+                }
+            }
+        }
+
+        // enumerate neighbor pairs ((id, id'), edge) for all canonical edges
+        let mut neighbor_pairs = vec![];
+        for y in 0..(height * 2 + 1) {
+            for x in 0..(width * 2 + 1) {
+                if y % 2 == x % 2
+                    || grid.get_edge(LP(y, x)) == Edge::Blank
+                    || !grid.is_root(LP(y, x))
+                {
+                    continue;
+                }
+                let cell1;
+                let cell2;
+                if y % 2 == 0 {
+                    cell1 = P(y / 2 - 1, x / 2);
+                    cell2 = P(y / 2, x / 2);
+                } else {
+                    cell1 = P(y / 2, x / 2 - 1);
+                    cell2 = P(y / 2, x / 2);
+                }
+                let id1 = cell_ids.get_or_default_p(cell1, 0);
+                let id2 = cell_ids.get_or_default_p(cell2, 0);
+                neighbor_pairs.push((if id1 <= id2 { (id1, id2) } else { (id2, id1) }, LP(y, x)));
+            }
+        }
+        neighbor_pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let mut edge_ids = Grid::new(height * 2 + 1, width * 2 + 1, -1);
+        let mut vtx_ids = Grid::new(height + 1, width + 1, -1);
+        let mut id_last = 0;
+        let mut next_id = -1;
+        for i in 1..neighbor_pairs.len() {
+            if neighbor_pairs[i - 1].0 == neighbor_pairs[i].0 {
+                if next_id == -1 {
+                    next_id = id_last;
+                    id_last += 1;
+                    edge_ids[neighbor_pairs[i - 1].1] = next_id;
+                }
+                edge_ids[neighbor_pairs[i].1] = next_id;
+            } else {
+                next_id = -1;
+            }
+        }
+        for y in 0..(height * 2 + 1) {
+            for x in 0..(width * 2 + 1) {
+                if y % 2 != x % 2 {
+                    let lp = LP(y, x);
+                    let lp_root = grid.get_root(lp);
+                    if lp != lp_root && edge_ids[lp_root] != -1 {
+                        edge_ids[lp] = edge_ids[lp_root];
+                    }
+                }
+            }
+        }
+        let edge_count = id_last as usize;
+
+        let mut id_last = 0;
+        for y in 0..(height + 1) {
+            for x in 0..(width + 1) {
+                if vtx_ids[P(y, x)] == -1 {
+                    grid.check_loop_connection_dfs2(P(y, x), &mut vtx_ids, &edge_ids, id_last);
+                    id_last += 1;
+                }
+            }
+        }
+
+        // build graph
+        let mut edges = vec![];
+        let mut weight = vec![0; id_last as usize];
+        let mut total_weight = 0;
+        for y in 0..(height + 1) {
+            for x in 0..(width + 1) {
+                let pos = P(y, x);
+                for &d in &FOUR_NEIGHBOURS {
+                    let edge = LP::of_vertex(pos) + d;
+                    if edge_ids.is_valid_lp(edge)
+                        && edge_ids[edge] != -1
+                        && grid.is_end_of_chain_vertex(
+                            EdgeId(grid.grid.index_lp(edge)),
+                            VtxId(grid.grid.index_lp(LP::of_vertex(pos))),
+                        )
+                    {
+                        let another_end = grid
+                            .grid
+                            .lp(grid
+                                .another_end_id(
+                                    VtxId(grid.grid.index_lp(LP::of_vertex(pos))),
+                                    EdgeId(grid.grid.index_lp(edge)),
+                                )
+                                .0)
+                            .as_vertex();
+                        let id1 = vtx_ids[pos] as usize;
+                        let id2 = vtx_ids[another_end] as usize;
+                        if id1 < id2 {
+                            edges.push(((id1, id2), edge_ids[edge]));
+                        } else {
+                            edges.push(((id2, id1), edge_ids[edge]));
+                        }
+                    }
+                }
+                if grid.get_edge_safe(LP(y * 2, x * 2 + 1)) == Edge::Line
+                    && edge_ids[LP(y * 2, x * 2 + 1)] == -1
+                {
+                    weight[vtx_ids[pos] as usize] += 1;
+                    total_weight += 1;
+                }
+                if grid.get_edge_safe(LP(y * 2 + 1, x * 2)) == Edge::Line
+                    && edge_ids[LP(y * 2 + 1, x * 2)] == -1
+                {
+                    weight[vtx_ids[pos] as usize] += 1;
+                    total_weight += 1;
+                }
+            }
+        }
+        edges.sort();
+
+        let mut graph_separation =
+            GraphSeparation::new(edge_count + id_last as usize, edges.len() * 2);
+        for i in 0..edges.len() {
+            if i == 0 || edges[i] != edges[i - 1] {
+                let ((u, v), e) = edges[i];
+                graph_separation.add_edge(u + edge_count, e as usize);
+                graph_separation.add_edge(v + edge_count, e as usize);
+            }
+        }
+        for i in 0..(id_last as usize) {
+            graph_separation.set_weight(i + edge_count, weight[i]);
+        }
+        graph_separation.build();
+
+        let mut critical_edge = vec![false; edge_count];
+        for i in 0..edge_count {
+            let sep = graph_separation.separate(i);
+            let mut nonzero = 0;
+            for v in sep {
+                if v > 0 {
+                    nonzero += 1;
+                }
+            }
+            if nonzero >= 2 {
+                critical_edge[i] = true;
+            }
+        }
+
+        for y in 0..(height * 2 + 1) {
+            for x in 0..(width * 2 + 1) {
+                if y % 2 != x % 2 {
+                    let id = edge_ids[LP(y, x)];
+                    if id >= 0 && critical_edge[id as usize] {
+                        GridLoop::decide_edge(field, LP(y, x), Edge::Line);
+                    }
+                }
+            }
+        }
+    }
+    fn check_loop_connection_dfs1(&self, pos: P, cell_ids: &mut Grid<i32>, id: i32) {
+        if !(0 <= pos.0
+            && pos.0 < self.height()
+            && 0 <= pos.1
+            && pos.1 < self.width()
+            && cell_ids[pos] == -1)
+        {
+            return;
+        }
+        cell_ids[pos] = id;
+        for &d in &FOUR_NEIGHBOURS {
+            if self.get_edge(LP::of_cell(pos) + d) == Edge::Blank {
+                self.check_loop_connection_dfs1(pos + d, cell_ids, id);
+            }
+        }
+    }
+    fn check_loop_connection_dfs2(
+        &self,
+        pos: P,
+        vtx_ids: &mut Grid<i32>,
+        edge_ids: &Grid<i32>,
+        id: i32,
+    ) {
+        if !(0 <= pos.0
+            && pos.0 <= self.height()
+            && 0 <= pos.1
+            && pos.1 <= self.width()
+            && vtx_ids[pos] == -1)
+        {
+            return;
+        }
+        vtx_ids[pos] = id;
+        for &d in &FOUR_NEIGHBOURS {
+            let lp = LP::of_vertex(pos) + d;
+            if self.get_edge_safe(lp) != Edge::Blank && edge_ids[lp] == -1 {
+                self.check_loop_connection_dfs2(pos + d, vtx_ids, edge_ids, id);
+            }
+        }
+    }
+
     pub fn is_root(&self, edge: LP) -> bool {
         let id = EdgeId(self.grid.index_lp(edge));
         let id2 = self[id].chain_another_end_edge;
         self[id2].chain_another_end_edge == id && id.0 <= id2.0
+    }
+    pub fn get_root(&self, edge: LP) -> LP {
+        let mut id_cand1 = EdgeId(self.grid.index_lp(edge));
+        while self[self[id_cand1].chain_another_end_edge].chain_another_end_edge != id_cand1 {
+            id_cand1 = self[id_cand1].chain_another_end_edge;
+        }
+        let id_cand2 = self[id_cand1].chain_another_end_edge;
+        let id = std::cmp::min(id_cand1.0, id_cand2.0);
+        return self.grid.lp(id);
     }
 
     // private accessor
@@ -375,7 +620,7 @@ impl GridLoop {
     }
     fn is_end_of_chain_vertex(&self, edge: EdgeId, vtx: VtxId) -> bool {
         let ends = self[edge].chain_end_points;
-        ends.0 == vtx || ends.1 == vtx
+        self.is_end_of_chain(edge) && (ends.0 == vtx || ends.1 == vtx)
     }
 
     // private modifier
@@ -742,6 +987,7 @@ mod tests {
                 }
             }
         }
+        GridLoop::check_loop_connection(&mut grid_loop);
 
         let mut expected_decided_edge = 0;
         let mut expected_decided_line = 0;
@@ -990,4 +1236,162 @@ mod tests {
         assert_eq!(field.get_edge(LP(0, 5)), Edge::Line);
         assert_eq!(field.inconsistent(), false);
     }
+
+    #[test]
+    fn test_loop_connection() {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        run_grid_loop_test(
+            &[
+                "+ + +x+ +",
+                "         ",
+                "+ + + + +",
+                "         ",
+                "+ + + + +",
+                "|        ",
+                "+-+ +x+-+",
+            ],
+            &[
+                "+ + +x+ +",
+                "         ",
+                "+ + +-+ +",
+                "      x |",
+                "+ + +-+x+",
+                "|     | |",
+                "+-+ +x+-+",
+            ],
+            false,
+        );
+
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        run_grid_loop_test(
+            &[
+                "+ + + + + + +",
+                "             ",
+                "+ +-+ + + + +",
+                "             ",
+                "+ + + + + + +",
+                "  x x x x x  ",
+                "+ + +x+ + + +",
+                "             ",
+                "+-+ +x+ + + +",
+                "             ",
+                "+ + + + + + +",
+            ],
+            &[
+                "+ + + + + + +",
+                "             ",
+                "+ +-+ + + + +",
+                "             ",
+                "+ + + + + + +",
+                "| x x x x x |",
+                "+ + +x+ + + +",
+                "             ",
+                "+-+ +x+ + + +",
+                "             ",
+                "+ + +-+ + + +",
+            ],
+            false,
+        );
+
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        run_grid_loop_test(
+            &[
+                "+ + + + + + +",
+                "             ",
+                "+ + + + + + +",
+                "             ",
+                "+ + + + + + +",
+                "  x x x x x  ",
+                "+ + +x+ + + +",
+                "             ",
+                "+-+ +x+ + + +",
+                "             ",
+                "+ + + + + + +",
+            ],
+            &[
+                "+ + + + + + +",
+                "             ",
+                "+ + + + + + +",
+                "             ",
+                "+ + + + + + +",
+                "  x x x x x  ",
+                "+ + +x+ + + +",
+                "             ",
+                "+-+ +x+ + + +",
+                "             ",
+                "+ + + + + + +",
+            ],
+            false,
+        );
+
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        run_grid_loop_test(
+            &[
+                "+ + + + + + + + +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+ + +x+x+ +",
+                "|   x       x    ",
+                "+ +x+x+-+ +x+x+ +",
+                "    x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ + + + + + + + +",
+            ],
+            &[
+                "+ +-+-+-+x+x+x+ +",
+                "    x x | x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x | x x    ",
+                "+ +x+x+ + +x+x+ +",
+                "|   x       x    ",
+                "+ +x+x+-+ +x+x+ +",
+                "    x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x x | x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x | x x    ",
+                "+ +-+-+-+x+x+x+ +",
+            ],
+            false,
+        );
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        run_grid_loop_test(
+            &[
+                "+ + + + + + + + +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+ + +x+x+ +",
+                "|   x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ + + + + + + + +",
+            ],
+            &[
+                "+ + + + + + + + +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+ + +x+x+ +",
+                "|   x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x       x    ",
+                "+ +x+x+ + +x+x+ +",
+                "    x x   x x    ",
+                "+ +x+x+x+x+x+x+ +",
+                "    x x   x x    ",
+                "+ + + + + + + + +",
+            ],
+            false,
+        );
+    }
+
 }
