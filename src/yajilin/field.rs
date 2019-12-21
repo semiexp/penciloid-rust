@@ -1082,7 +1082,9 @@ impl Field {
                             || self
                                 .get_cell_safe(cell_cd + d * (i + 1) + dr * (sgn * 2))
                                 .is_blocking())
-                        && (self.get_cell_safe(cell_cd + d * (i + 4) + dr).is_blocking()
+                        && (self
+                            .get_cell_safe(cell_cd + d * (i + 4) + dr * sgn)
+                            .is_blocking()
                             || self
                                 .get_cell_safe(cell_cd + d * (i + 3) + dr * (sgn * 2))
                                 .is_blocking())
