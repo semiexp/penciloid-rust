@@ -164,13 +164,45 @@ impl Field {
             }
         }
     }
-    fn expand_block_size_dfs(
+    fn expand_block_size_dfs1(
         &self,
         pos: P,
         visited: &mut Grid<bool>,
         group: &mut Vec<P>,
-        exclude: Option<P>,
         affinity: &Grid<CellAffinity>,
+        base_color: Color,
+    ) -> i32 {
+        let P(y, x) = pos;
+        if !(0 <= y && y < self.height() && 0 <= x && x < self.width())
+            || visited[pos]
+            || affinity[pos] == CellAffinity::Different
+        {
+            return 0;
+        }
+        visited[pos] = true;
+        let mut ret = 0;
+        if self.color[pos] == base_color {
+            group.push(pos);
+            ret = 1;
+        }
+        for &d in &FOUR_NEIGHBOURS {
+            let pos2 = pos + d;
+            if self.clue.is_valid_p(pos2)
+                && self.border[LP::of_vertex(pos) + d] != Border::Line
+                && !(self.color[pos] != base_color && self.color[pos2] == base_color)
+            {
+                ret += self.expand_block_size_dfs1(pos2, visited, group, affinity, base_color);
+            }
+        }
+        ret
+    }
+    fn expand_block_size_dfs2(
+        &self,
+        pos: P,
+        visited: &mut Grid<bool>,
+        exclude: P,
+        affinity: &Grid<CellAffinity>,
+        base_color: Color,
     ) -> i32 {
         let P(y, x) = pos;
         if !(0 <= y && y < self.height() && 0 <= x && x < self.width())
@@ -181,21 +213,16 @@ impl Field {
         }
         visited[pos] = true;
         let mut ret = 1;
-        if exclude.is_none() {
-            group.push(pos);
-        }
         for &d in &FOUR_NEIGHBOURS {
             let pos2 = pos + d;
-            if let Some(exclude) = exclude {
-                if pos2 == exclude {
-                    continue;
-                }
+            if pos2 == exclude {
+                continue;
             }
             if self.clue.is_valid_p(pos2)
                 && self.border[LP::of_vertex(pos) + d] != Border::Line
-                && self.color[pos] == self.color[pos2]
+                && self.color[pos2] == base_color
             {
-                ret += self.expand_block_size_dfs(pos2, visited, group, exclude, affinity);
+                ret += self.expand_block_size_dfs2(pos2, visited, exclude, affinity, base_color);
             }
         }
         ret
@@ -222,12 +249,12 @@ impl Field {
         let mut visited = Grid::new(height, width, false);
         let mut group = vec![];
 
-        self.expand_block_size_dfs(base, &mut visited, &mut group, None, affinity);
+        self.expand_block_size_dfs1(base, &mut visited, &mut group, affinity, self.color[base]);
 
         for y in 0..height {
             for x in 0..width {
                 let pos = P(y, x);
-                if self.color[pos] == self.color[base] && !visited[pos] {
+                if !visited[pos] {
                     affinity[pos] = CellAffinity::Different;
                 }
             }
@@ -236,13 +263,12 @@ impl Field {
         if size == NO_CLUE {
             return false;
         }
-        let mut dummy = vec![];
         for cand in group {
             if cand == base {
                 continue;
             }
             let mut visited = Grid::new(height, width, false);
-            if self.expand_block_size_dfs(base, &mut visited, &mut dummy, Some(cand), affinity)
+            if self.expand_block_size_dfs2(base, &mut visited, cand, affinity, self.color[base])
                 < size
             {
                 match affinity[cand] {
