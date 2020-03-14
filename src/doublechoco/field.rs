@@ -199,33 +199,43 @@ impl Field {
     fn expand_block_size_dfs2(
         &self,
         pos: P,
-        visited: &mut Grid<bool>,
-        exclude: P,
+        current_depth: i32,
+        depths: &mut Grid<i32>,
+        ans: &mut Grid<i32>,
         affinity: &Grid<CellAffinity>,
         base_color: Color,
-    ) -> i32 {
-        let P(y, x) = pos;
-        if !(0 <= y && y < self.height() && 0 <= x && x < self.width())
-            || visited[pos]
-            || affinity[pos] == CellAffinity::Different
-        {
-            return 0;
-        }
-        visited[pos] = true;
-        let mut ret = 1;
+    ) -> (i32, i32) {
+        depths[pos] = current_depth;
+        let mut lowlink = self.height() * self.width();
+        let mut descendant_size = 1;
+        ans[pos] = -1;
         for &d in &FOUR_NEIGHBOURS {
             let pos2 = pos + d;
-            if pos2 == exclude {
-                continue;
-            }
             if self.clue.is_valid_p(pos2)
                 && self.border[LP::of_vertex(pos) + d] != Border::Line
+                && affinity[pos2] != CellAffinity::Different
                 && self.color[pos2] == base_color
             {
-                ret += self.expand_block_size_dfs2(pos2, visited, exclude, affinity, base_color);
+                if depths[pos2] == -1 {
+                    let (l, d) = self.expand_block_size_dfs2(
+                        pos2,
+                        current_depth + 1,
+                        depths,
+                        ans,
+                        affinity,
+                        base_color,
+                    );
+                    lowlink = lowlink.min(l);
+                    if l >= current_depth {
+                        ans[pos] -= d;
+                    }
+                    descendant_size += d;
+                } else {
+                    lowlink = lowlink.min(depths[pos2]);
+                }
             }
         }
-        ret
+        (lowlink, descendant_size)
     }
     fn expand_block_size(&self, base: P, affinity: &mut Grid<CellAffinity>) -> bool {
         let height = self.height();
@@ -263,14 +273,18 @@ impl Field {
         if size == NO_CLUE {
             return false;
         }
+        let mut depths = Grid::new(height, width, -1);
+        let mut ans = Grid::new(height, width, 0);
+        let (_, g) = self.expand_block_size_dfs2(
+            base,
+            0,
+            &mut depths,
+            &mut ans,
+            &affinity,
+            self.color[base],
+        );
         for cand in group {
-            if cand == base {
-                continue;
-            }
-            let mut visited = Grid::new(height, width, false);
-            if self.expand_block_size_dfs2(base, &mut visited, cand, affinity, self.color[base])
-                < size
-            {
+            if g + ans[cand] < size {
                 match affinity[cand] {
                     CellAffinity::Different => return true,
                     CellAffinity::Undecided => affinity[cand] = CellAffinity::Same,
@@ -278,7 +292,6 @@ impl Field {
                 }
             }
         }
-
         false
     }
     fn find_companion(&self, base: P, affinity: &mut Grid<CellAffinity>) -> bool {
