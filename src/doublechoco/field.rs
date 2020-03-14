@@ -9,6 +9,7 @@ pub struct Field {
     border: Grid<Border>,
     size_low: Grid<i32>,
     size_high: Grid<i32>,
+    frozen: Grid<bool>,
     num_decided_borders: i32,
     inconsistent: bool,
 }
@@ -59,6 +60,7 @@ impl Field {
             border: Grid::new(height * 2 - 1, width * 2 - 1, Border::Undecided),
             size_low,
             size_high,
+            frozen: Grid::new(height, width, false),
             num_decided_borders: 0,
             inconsistent: false,
         }
@@ -431,6 +433,9 @@ impl Field {
         }
     }
     fn inspect(&mut self, base: P) {
+        if self.frozen[base] {
+            return;
+        }
         let height = self.height();
         let width = self.width();
 
@@ -514,12 +519,27 @@ impl Field {
                 }
             }
         }
+        let mut is_frozen = true;
+        for y in 0..height {
+            for x in 0..width {
+                if affinity[P(y, x)] == CellAffinity::Undecided {
+                    is_frozen = false;
+                }
+            }
+        }
         for y in 0..height {
             for x in 0..width {
                 let aff = affinity[P(y, x)];
                 if aff == CellAffinity::Same {
                     self.size_low[P(y, x)] = self.size_low[P(y, x)].max(size_low);
                     self.size_high[P(y, x)] = self.size_high[P(y, x)].max(size_high);
+                    if self.size_low[P(y, x)] > self.size_high[P(y, x)] {
+                        self.set_inconsistent();
+                        return;
+                    }
+                    if is_frozen {
+                        self.frozen[P(y, x)] = true;
+                    }
                 }
                 if y < height - 1 {
                     let aff2 = affinity[P(y + 1, x)];
