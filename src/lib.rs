@@ -5,6 +5,8 @@ mod common;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod dosufuwa;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod doublechoco;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod endview;
@@ -25,6 +27,8 @@ pub mod tapa;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod yajilin;
 
+#[cfg(target_arch = "wasm32")]
+mod dosufuwa;
 #[cfg(target_arch = "wasm32")]
 mod doublechoco;
 #[cfg(target_arch = "wasm32")]
